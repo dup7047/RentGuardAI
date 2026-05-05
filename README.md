@@ -2,16 +2,28 @@
 
 AI-powered NYC rental copilot. Helps renters avoid bad apartments by analyzing listings, buildings, landlords, and leases against NYC public records and tenant law.
 
-This repository follows the phased plan in `RENTGUARD_ROADMAP_v6.md` (kept outside the repo). The current commit implements **Phase 1.1 — Backend scaffold (Hono on Render)**.
+This repository follows the phased plan in `RENTGUARD_ROADMAP_v6.md` (kept outside the repo). Current state: through **Phase 1.2 — Drizzle setup against Supabase Postgres + Supabase CLI for local dev**.
 
 ## Layout
 
 ```
 RentGuardAI/
-├── backend/        # Hono.js API on Render free tier
-│   ├── src/        # app, server, logger, middleware
-│   └── test/       # vitest smoke tests
-├── render.yaml     # Render service definition
+├── backend/                  # Hono.js API on Render free tier
+│   ├── src/
+│   │   ├── app.ts            # Hono app + middleware wiring
+│   │   ├── server.ts         # @hono/node-server entry point
+│   │   ├── logger.ts         # pino instance
+│   │   ├── commit.ts         # git SHA resolution
+│   │   ├── middleware/       # request logger
+│   │   └── db/               # drizzle client + migrate runner + (empty) schema
+│   ├── drizzle/              # migrations folder (committed; tracked by drizzle-kit)
+│   ├── test/                 # vitest unit + integration tests
+│   ├── drizzle.config.ts
+│   └── package.json
+├── supabase/                 # Local Supabase stack config (supabase init)
+│   └── config.toml
+├── .github/workflows/        # CI: typecheck, build, migrate against local Supabase
+├── render.yaml               # Render service definition
 └── README.md
 ```
 
@@ -19,13 +31,32 @@ A `frontend/` (Next.js on Vercel) will land in a later phase.
 
 ## Backend — local development
 
-Requires Node 20+.
+Requires:
+
+- Node 20+
+- Docker Desktop (for the local Supabase stack)
+- Supabase CLI — install via `brew install supabase/tap/supabase` or grab a binary from <https://github.com/supabase/cli/releases>
+
+### First-time setup
 
 ```sh
+# 1. Bring up the local Supabase stack (Postgres on :54322, Studio on :54323)
+supabase start
+
+# 2. Install backend deps + apply migrations
 cd backend
 cp .env.example .env
 npm install
-npm run dev          # tsx watch on http://localhost:8080
+npm run migrate        # applies drizzle/*.sql against local Supabase
+```
+
+### Day-to-day
+
+```sh
+cd backend
+npm run dev            # tsx watch on http://localhost:8080
+npm test               # vitest (skips DB integration tests if DATABASE_URL is unset)
+npm run typecheck      # tsc --noEmit
 ```
 
 Verify the health endpoint:
@@ -35,12 +66,30 @@ curl -s http://localhost:8080/health
 # → {"status":"ok","commit":"<git sha>"}
 ```
 
-Run the test suite:
+### Database changes
+
+Real schema lands in Phase 1.3. The current `src/db/schema.ts` is intentionally empty so `drizzle-kit generate` won't produce noise.
+
+When you add tables in `src/db/schema.ts`:
 
 ```sh
-npm test             # vitest run
-npm run typecheck    # tsc --noEmit
+cd backend
+npm run db:generate    # diffs schema.ts vs the snapshot, writes a new drizzle/NNNN_*.sql
+npm run migrate        # applies pending migrations
 ```
+
+Studio for browsing data: <http://127.0.0.1:54323> (after `supabase start`).
+
+### Pointing at staging or production Supabase
+
+The `migrate` script reads `DATABASE_URL` from the environment. For staging/prod, paste the connection string from the Supabase project's **Settings → Database**:
+
+```sh
+DATABASE_URL='postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres' \
+  npm run migrate
+```
+
+The pg client auto-enables SSL when the URL contains `supabase.co` or `sslmode=require`.
 
 ## Deployment (Render free tier)
 
@@ -54,11 +103,17 @@ To wire it up:
 
 Frontends should retry the first call once on cold start.
 
-## Phase 1.1 acceptance checklist
+## Phase acceptance checklist
 
+### Phase 1.1 — Hono backend scaffold
 - [x] `npm test` passes (smoke test for `/health`)
 - [x] Logs are JSON-structured with a `requestId` per request (method, path, status, durationMs)
 - [x] Render blueprint provisions the service and wires the health check
 - [ ] `curl <render-url>/health` returns 200 — pending first deploy by the operator (Render account access required)
 
-The last item requires the repo owner to connect Render to this GitHub repo; everything else is verified locally and committed.
+### Phase 1.2 — Drizzle + Supabase CLI
+- [x] `supabase start` brings up the local stack (Postgres on :54322 with Supabase's `auth.*` schema pre-populated)
+- [x] `npm run migrate` applies the baseline migration to local Supabase, recording it in `drizzle.__drizzle_migrations`
+- [x] Re-running `npm run migrate` is a no-op (idempotent)
+- [x] CI workflow (`.github/workflows/backend-ci.yml`) boots a local Supabase via `supabase/setup-cli` and runs the migration flow on every PR
+- [ ] `npm run migrate` against staging Supabase succeeds — pending staging Supabase project (Phase 0.2 prerequisite, operator action)

@@ -2,7 +2,7 @@
   "name": "@rentguard/backend",
   "version": "0.1.0",
   "private": true,
-  "description": "RentGuard NYC backend — AI rental copilot API (Phase 1.1 scaffold)",
+  "description": "RentGuard NYC backend — AI rental copilot API",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -13,16 +13,23 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrate": "tsx src/db/migrate.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.38.3",
     "hono": "^4.6.14",
+    "pg": "^8.13.1",
     "pino": "^9.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "drizzle-kit": "^0.30.1",
     "pino-pretty": "^13.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",

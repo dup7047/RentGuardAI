@@ -2,7 +2,7 @@
 
 AI-powered NYC rental copilot. Helps renters avoid bad apartments by analyzing listings, buildings, landlords, and leases against NYC public records and tenant law.
 
-This repository follows the phased plan in `RENTGUARD_ROADMAP_v6.md` (kept outside the repo). Current state: through **Phase 1.2 — Drizzle setup against Supabase Postgres + Supabase CLI for local dev**.
+This repository follows the phased plan in `RENTGUARD_ROADMAP_v6.md` (kept outside the repo). Current state: through **Phase 1.3 — User-table schema + RLS policies**.
 
 ## Layout
 
@@ -68,9 +68,9 @@ curl -s http://localhost:8080/health
 
 ### Database changes
 
-Real schema lands in Phase 1.3. The current `src/db/schema.ts` is intentionally empty so `drizzle-kit generate` won't produce noise.
+Schema lives in `backend/src/db/schema.ts`. Cross-schema FKs into `auth.users` and RLS policies live in hand-written `--custom` migrations alongside the generated ones (the security migration for Phase 1.3 is `drizzle/0002_phase_1_3_security.sql`).
 
-When you add tables in `src/db/schema.ts`:
+To add tables:
 
 ```sh
 cd backend
@@ -117,3 +117,11 @@ Frontends should retry the first call once on cold start.
 - [x] Re-running `npm run migrate` is a no-op (idempotent)
 - [x] CI workflow (`.github/workflows/backend-ci.yml`) boots a local Supabase via `supabase/setup-cli` and runs the migration flow on every PR
 - [ ] `npm run migrate` against staging Supabase succeeds — pending staging Supabase project (Phase 0.2 prerequisite, operator action)
+
+### Phase 1.3 — User tables + RLS
+- [x] `profiles`, `email_lookup_counters`, `building_lookups`, `lease_reviews` migrated via Drizzle
+- [x] `profiles.id` FK → `auth.users(id)` ON DELETE CASCADE; `building_lookups.user_id` and `lease_reviews.user_id` ON DELETE SET NULL — verified by integration tests that delete an `auth.users` row and assert the cascade/null behavior
+- [x] RLS enabled on all four tables; `email_lookup_counters` has no policies (service-role only); `profiles`/`building_lookups`/`lease_reviews` have own-row SELECT policies (and own-row UPDATE on `profiles`)
+- [x] Integration tests cover RLS denial under both `anon` and `authenticated` Postgres roles using `set_config('request.jwt.claims', …, true)` so `auth.uid()` resolves correctly
+- [x] PDF-purge pattern verified: nulling `pdf_storage_path` and `extracted_text` while setting `pdf_deleted_at` preserves the structured `ai_report` (Privacy Policy §6.1)
+- [ ] `npm run migrate` applied against staging Supabase — pending staging project

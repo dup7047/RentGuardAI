@@ -2,7 +2,7 @@
 
 AI-powered NYC rental copilot. Helps renters avoid bad apartments by analyzing listings, buildings, landlords, and leases against NYC public records and tenant law.
 
-This repository follows the phased plan in `RENTGUARD_ROADMAP_v6.md` (kept outside the repo). Current state: through **Phase 1.3 — User-table schema + RLS policies**.
+This repository follows the phased plan in `RENTGUARD_ROADMAP_v6.md` (kept outside the repo). Current state: through **Phase 1.4 — Cache tables (buildings, landlords)**.
 
 ## Layout
 
@@ -124,4 +124,12 @@ Frontends should retry the first call once on cold start.
 - [x] RLS enabled on all four tables; `email_lookup_counters` has no policies (service-role only); `profiles`/`building_lookups`/`lease_reviews` have own-row SELECT policies (and own-row UPDATE on `profiles`)
 - [x] Integration tests cover RLS denial under both `anon` and `authenticated` Postgres roles using `set_config('request.jwt.claims', …, true)` so `auth.uid()` resolves correctly
 - [x] PDF-purge pattern verified: nulling `pdf_storage_path` and `extracted_text` while setting `pdf_deleted_at` preserves the structured `ai_report` (Privacy Policy §6.1)
+- [ ] `npm run migrate` applied against staging Supabase — pending staging project
+
+### Phase 1.4 — Cache tables (buildings, landlords)
+- [x] `buildings` (bbl PK, address, borough, last_fetched_at, raw_data jsonb default `{}`) migrated via Drizzle
+- [x] `landlords` (id PK, registered_owner_name, hpd_corporation_name, watchlist_rank nullable, last_fetched_at) migrated via Drizzle
+- [x] Deferred `building_lookups.building_bbl` FK → `buildings(bbl)` ON DELETE SET NULL added now that `buildings` exists
+- [x] RLS enabled on both cache tables with public-read SELECT policies for `anon` + `authenticated`; no INSERT/UPDATE/DELETE policies, so writes are restricted to the service role (BYPASSRLS)
+- [x] Integration tests cover anon SELECT works on both tables; anon INSERT/UPDATE/DELETE are blocked; the FK rejects orphan `building_lookups`, allows null `building_bbl`, and SET NULLs the column when the cached building is deleted; service-role upsert + default UUID work
 - [ ] `npm run migrate` applied against staging Supabase — pending staging project

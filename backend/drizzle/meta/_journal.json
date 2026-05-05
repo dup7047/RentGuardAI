@@ -22,6 +22,20 @@
       "when": 1778009176906,
       "tag": "0002_phase_1_3_security",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778009817427,
+      "tag": "0003_phase_1_4_cache_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778009827935,
+      "tag": "0004_phase_1_4_security",
+      "breakpoints": true
     }
   ]
 }

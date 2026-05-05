@@ -43,9 +43,8 @@ export const emailLookupCounters = pgTable('email_lookup_counters', {
 
 // Every building lookup the AI summarizes. user_id is null for anonymous
 // flows; anon_token threads multiple anonymous lookups together within a
-// browser session before email is captured.
-//
-// building_bbl will gain an FK to public.buildings(bbl) in Phase 1.4.
+// browser session before email is captured. The building_bbl FK to
+// public.buildings(bbl) is added in drizzle/0003_phase_1_4_security.sql.
 export const buildingLookups = pgTable('building_lookups', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id'),
@@ -56,6 +55,32 @@ export const buildingLookups = pgTable('building_lookups', {
   aiSummary: text('ai_summary'),
   aiCostCents: integer('ai_cost_cents').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Public reference cache: one row per NYC building keyed by BBL
+// (Borough/Block/Lot). Hydrated by the Phase 3 NYC Open Data clients;
+// a 24-hour cache window is enforced in code, not the schema.
+// raw_data holds the latest API payload so future fields can be added
+// without requiring a re-fetch.
+export const buildings = pgTable('buildings', {
+  bbl: text('bbl').primaryKey(),
+  address: text('address').notNull(),
+  borough: text('borough').notNull(),
+  lastFetchedAt: timestamp('last_fetched_at', { withTimezone: true }).defaultNow().notNull(),
+  rawData: jsonb('raw_data').notNull().default({}),
+});
+
+// Public reference cache: registered owner per HPD building registration.
+// Phase 3.4 fills this in; Phase 3.5 sets watchlist_rank from the Public
+// Advocate Worst Landlord Watchlist. Match keys (normalized owner name)
+// are derived in code, not stored as a unique index, so name variants
+// can converge as the matching heuristic improves.
+export const landlords = pgTable('landlords', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  registeredOwnerName: text('registered_owner_name').notNull(),
+  hpdCorporationName: text('hpd_corporation_name'),
+  watchlistRank: integer('watchlist_rank'),
+  lastFetchedAt: timestamp('last_fetched_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 // One row per lease review attempt. PDF + extracted_text are nullable so

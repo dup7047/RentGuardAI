@@ -89,10 +89,11 @@ describeIfDb('Phase 1.3 schema (integration — local Supabase)', () => {
       expect(byName['lease_reviews_user_id_fkey']).toMatch(/REFERENCES auth.users\(id\) ON DELETE SET NULL/);
     });
 
-    it('declares the four expected RLS policies', async () => {
+    it('declares the four expected RLS policies on the user-scoped tables', async () => {
       const { rows } = await pool.query<{ policyname: string; tablename: string }>(
         `SELECT policyname, tablename FROM pg_policies
            WHERE schemaname = 'public'
+             AND tablename IN ('profiles','email_lookup_counters','building_lookups','lease_reviews')
            ORDER BY tablename, policyname`
       );
       expect(rows).toEqual([

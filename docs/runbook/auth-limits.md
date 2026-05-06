@@ -33,9 +33,9 @@ equals 1800 per hour.
 - Email provider: Resend SMTP configured in Supabase Auth SMTP settings.
 - Rate-limit screen matches the Current Values section, or any intentional
   override is recorded here with the date and operator.
-- Template: magic-link email is branded as RentGuard NYC and points to
-  `/auth/callback`.
+- Templates: magic-link and signup-confirmation emails are branded as
+  RentGuard NYC and point to `/auth/confirm` with `token_hash` and `type`.
 - Redirect allow-list includes the staging frontend URL and
-  `<staging-url>/auth/callback`.
+  `<staging-url>/auth/callback` plus `<staging-url>/auth/confirm`.
 - Manual test: `/login` accepts an email, the email arrives through Resend,
   the magic link lands on `/dashboard`, and `Log out` clears the session.

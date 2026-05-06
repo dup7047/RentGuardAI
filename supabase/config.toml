@@ -160,8 +160,16 @@ additional_redirect_urls = [
   "http://localhost:3100/auth/callback",
   "http://127.0.0.1:3000/auth/callback",
   "http://127.0.0.1:3100/auth/callback",
+  "http://localhost:3000/auth/confirm",
+  "http://localhost:3100/auth/confirm",
+  "http://127.0.0.1:3000/auth/confirm",
+  "http://127.0.0.1:3100/auth/confirm",
   "https://rentguard.cc/auth/callback",
+  "https://www.rentguard.cc/auth/callback",
+  "https://rentguard.cc/auth/confirm",
+  "https://www.rentguard.cc/auth/confirm",
   "https://*.vercel.app/auth/callback",
+  "https://*.vercel.app/auth/confirm",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
@@ -238,6 +246,10 @@ otp_expiry = 3600
 [auth.email.template.magic_link]
 subject = "Sign in to RentGuard NYC"
 content_path = "./templates/magic-link.html"
+
+[auth.email.template.confirmation]
+subject = "Confirm your RentGuard account"
+content_path = "./templates/confirmation.html"
 
 # Use a production-ready SMTP server
 # [auth.email.smtp]

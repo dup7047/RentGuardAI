@@ -88,7 +88,8 @@ export default function Home() {
             justifyContent: 'center',
           }}
         >
-          <span
+          <a
+            href="/login"
             style={{
               display: 'inline-block',
               background: 'var(--accent)',
@@ -97,12 +98,10 @@ export default function Home() {
               borderRadius: 8,
               fontWeight: 600,
               fontSize: '1rem',
-              cursor: 'default',
-              opacity: 0.7,
             }}
           >
-            Launching&nbsp;Soon
-          </span>
+            Sign&nbsp;In
+          </a>
         </div>
       </section>
 

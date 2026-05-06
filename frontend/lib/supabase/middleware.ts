@@ -11,11 +11,39 @@ const protectedRoutes = ['/dashboard'];
 const authRoutes = ['/login'];
 
 export async function updateSession(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const isProtectedRoute = protectedRoutes.some((route) =>
+    pathname.startsWith(route),
+  );
+  const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
+
+  if (!isProtectedRoute && !isAuthRoute) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({
     request,
   });
 
-  const supabase = createServerClient(getSupabaseUrl(), getSupabaseAnonKey(), {
+  let supabaseUrl: string;
+  let supabaseAnonKey: string;
+
+  try {
+    supabaseUrl = getSupabaseUrl();
+    supabaseAnonKey = getSupabaseAnonKey();
+  } catch {
+    if (isProtectedRoute) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = '/login';
+      redirectUrl.searchParams.set('redirectTo', pathname);
+
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    return response;
+  }
+
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       flowType: 'pkce',
     },
@@ -47,12 +75,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
-  const isProtectedRoute = protectedRoutes.some((route) =>
-    pathname.startsWith(route),
-  );
-  const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
 
   if (!user && isProtectedRoute) {
     const redirectUrl = request.nextUrl.clone();

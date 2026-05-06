@@ -14,7 +14,19 @@ type FormState =
 
 export function LoginForm() {
   const searchParams = useSearchParams();
-  const supabase = useMemo(() => createClient(), []);
+  const supabaseState = useMemo(() => {
+    try {
+      return { client: createClient(), error: '' };
+    } catch (error) {
+      return {
+        client: null,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Supabase Auth is not configured.',
+      };
+    }
+  }, []);
   const [email, setEmail] = useState('');
   const [formState, setFormState] = useState<FormState>({
     status: 'idle',
@@ -33,6 +45,14 @@ export function LoginForm() {
       message: 'Sending your magic link...',
     });
 
+    if (!supabaseState.client) {
+      setFormState({
+        status: 'error',
+        message: supabaseState.error,
+      });
+      return;
+    }
+
     const callbackUrl = new URL('/auth/callback', window.location.origin);
     const redirectTo = searchParams.get('redirectTo');
 
@@ -40,7 +60,7 @@ export function LoginForm() {
       callbackUrl.searchParams.set('next', redirectTo);
     }
 
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabaseState.client.auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: callbackUrl.toString(),
@@ -97,6 +117,10 @@ export function LoginForm() {
       <button className="primary-button" type="submit" disabled={formState.status === 'loading'}>
         {formState.status === 'loading' ? 'Sending...' : 'Email me a magic link'}
       </button>
+
+      {supabaseState.error ? (
+        <p className="form-message error">{supabaseState.error}</p>
+      ) : null}
 
       {formState.message ? (
         <p className={`form-message ${formState.status}`}>{formState.message}</p>

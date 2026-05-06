@@ -5,6 +5,7 @@ node_modules/
 # Build artifacts
 dist/
 build/
+.next/
 *.tsbuildinfo
 
 # Test artifacts
@@ -34,3 +35,6 @@ pnpm-debug.log*
 .cache/
 .parcel-cache/
 .turbo/
+
+# Onboarding credentials — generated for first-time signup, never committed
+docs/credentials-to-set.md

@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: 'RentGuard NYC — AI Rental Copilot',
   description:
     'Free building risk lookup and AI lease review for NYC renters. Check any address against HPD violations, DOB complaints, and landlord records.',
+  metadataBase: new URL('https://rentguard.cc'),
   openGraph: {
     title: 'RentGuard NYC',
     description: 'AI-powered NYC rental copilot. Avoid bad apartments.',

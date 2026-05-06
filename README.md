@@ -132,7 +132,7 @@ Frontends should retry the first call once on cold start.
 - [x] Deferred `building_lookups.building_bbl` FK → `buildings(bbl)` ON DELETE SET NULL added now that `buildings` exists
 - [x] RLS enabled on both cache tables with public-read SELECT policies for `anon` + `authenticated`; no INSERT/UPDATE/DELETE policies, so writes are restricted to the service role (BYPASSRLS)
 - [x] Integration tests cover anon SELECT works on both tables; anon INSERT/UPDATE/DELETE are blocked; the FK rejects orphan `building_lookups`, allows null `building_bbl`, and SET NULLs the column when the cached building is deleted; service-role upsert + default UUID work
-- [ ] `npm run migrate` applied against staging Supabase — pending staging project
+- [ ] `npm run migrate` applied against staging Supabase — pending staging project (Phase 1.4)
 
 ### Phase 1.5 — Schema: subscriptions, affiliate_clicks, ai_usage, non_nyc_waitlist, refunds
 - [x] `subscriptions` (id, user_id FK → auth.users CASCADE, stripe_subscription_id unique, status enum, current_period_end, created_at) migrated via Drizzle
@@ -142,4 +142,13 @@ Frontends should retry the first call once on cold start.
 - [x] `refunds` (id, user_id nullable → auth.users SET NULL, lease_review_id nullable → lease_reviews SET NULL, subscription_id nullable → subscriptions SET NULL, stripe_refund_id unique, amount_cents, eligibility_reason, created_at) migrated
 - [x] RLS enabled on all five tables; `subscriptions` has an own-row SELECT policy for `authenticated`; the other four are service-role-only (no policies → BYPASSRLS required for all access)
 - [x] Integration tests cover: affiliate click → click-through → conversion lifecycle; ai_usage rows with and without user_id; non_nyc_waitlist insert; refund writeable by service role + user_id SET NULL on account deletion; subscriptions CASCADE delete; RLS denial for anon + authenticated on service-role-only tables; own-row SELECT isolation on subscriptions
-- [ ] `npm run migrate` applied against staging Supabase — pending staging project
+- [ ] `npm run migrate` applied against staging Supabase — pending staging project (Phase 1.5)
+
+### Phase 1.6 — Supabase Storage buckets + policies
+- [x] `lease-pdfs` bucket created (private, 50 MB limit, `application/pdf` MIME only)
+- [x] `firm-logos` bucket created (public, 5 MB limit, image MIME types)
+- [x] `lease_pdfs_select_own` policy: authenticated users can SELECT objects where `auth.uid()::text = (storage.foldername(name))[1]` — own user-ID folder only; anonymous users have no SELECT policy (access via signed URL only)
+- [x] `firm_logos_select_public` policy: anon + authenticated can SELECT all firm-logos objects (public read for B2B Phase 7)
+- [x] No INSERT/UPDATE/DELETE policies on `storage.objects` — all writes are service-role only (BYPASSRLS)
+- [x] 23 integration tests covering: bucket existence + settings, policy shape, service-role HTTP upload (with MIME enforcement), anon download blocked on lease-pdfs, anon download allowed on firm-logos, public `/object/public/` URL, signed download URL generation + unauthenticated access, signed upload URL generation, SQL user isolation (user A can read own, user B cannot, anon cannot), public bucket readable by both roles, anon INSERT blocked
+- [ ] `npm run migrate` applied against staging Supabase — pending staging project (Phase 1.6)

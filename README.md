@@ -152,3 +152,9 @@ Frontends should retry the first call once on cold start.
 - [x] No INSERT/UPDATE/DELETE policies on `storage.objects` — all writes are service-role only (BYPASSRLS)
 - [x] 23 integration tests covering: bucket existence + settings, policy shape, service-role HTTP upload (with MIME enforcement), anon download blocked on lease-pdfs, anon download allowed on firm-logos, public `/object/public/` URL, signed download URL generation + unauthenticated access, signed upload URL generation, SQL user isolation (user A can read own, user B cannot, anon cannot), public bucket readable by both roles, anon INSERT blocked
 - [ ] `npm run migrate` applied against staging Supabase — pending staging project (Phase 1.6)
+
+### Phase 1.7 — Backup verification
+- [x] `backend/RUNBOOK.md` documents backup strategy, local and cloud restore procedures, post-restore verification steps, and RTO/RPO targets
+- [x] `npm run verify:restore` script added — 44 checks across 8 categories (tables, RLS, enums, FKs, migrations, storage buckets + policies, auth schema)
+- [x] Full restore drill performed (2026-05-06): `supabase db reset` wiped local database → `npm run migrate` replayed all 8 migrations → `verify:restore` passed (44/44) → full test suite passed (104/104) in under 5 minutes
+- [x] Findings documented in RUNBOOK §8: seed.sql warning is harmless; storage trigger survives reset; Drizzle migration table is recreated cleanly

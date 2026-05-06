@@ -16,7 +16,11 @@
     "typecheck": "tsc --noEmit",
     "migrate": "tsx src/db/migrate.ts",
     "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "verify:data-sources": "tsx scripts/verify-data-sources.ts",
+    "verify:restore": "tsx scripts/verify-restore.ts",
+    "stripe:setup": "tsx scripts/stripe-setup.ts",
+    "stripe:setup:dry-run": "tsx scripts/stripe-setup.ts --dry-run"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",

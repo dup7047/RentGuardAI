@@ -38,3 +38,4 @@ pnpm-debug.log*
 
 # Onboarding credentials — generated for first-time signup, never committed
 docs/credentials-to-set.md
+.vercel

@@ -9,6 +9,29 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
+// Stripe subscription lifecycle states.
+export const subscriptionStatus = pgEnum('subscription_status', [
+  'active',
+  'canceled',
+  'past_due',
+  'trialing',
+  'unpaid',
+]);
+
+// Affiliate partner identifiers for click/conversion attribution.
+export const affiliatePartner = pgEnum('affiliate_partner', [
+  'lemonade',
+  'bellhop',
+  'moved',
+]);
+
+// Routes that trigger an AI model call, used to bucket cost in ai_usage.
+export const aiRoute = pgEnum('ai_route', [
+  'lookup',
+  'lease_preview',
+  'lease_full',
+]);
+
 // Lifecycle of a single lease review row. Status tracks the processing
 // pipeline; preview_only and first_viewed_at handle the paywall side.
 export const leaseReviewStatus = pgEnum('lease_review_status', [
@@ -81,6 +104,75 @@ export const landlords = pgTable('landlords', {
   hpdCorporationName: text('hpd_corporation_name'),
   watchlistRank: integer('watchlist_rank'),
   lastFetchedAt: timestamp('last_fetched_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Stripe subscription record: one row per Search Pass subscription.
+// Written by the Stripe webhook handler (Phase 4.5). user_id FK →
+// auth.users is added in the security migration so Drizzle doesn't
+// manage Supabase's auth schema.
+export const subscriptions = pgTable('subscriptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull(),
+  stripeSubscriptionId: text('stripe_subscription_id').notNull().unique(),
+  status: subscriptionStatus('status').notNull(),
+  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Every time a user opens an affiliate disclosure modal or clicks through
+// to a partner site. clicked_modal_at is set at modal open; clicked_through_at
+// is set only if the user actually navigated to the partner.
+// The conversion and commission fields are filled by the partner postback webhook.
+export const affiliateClicks = pgTable('affiliate_clicks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id'),
+  anonToken: uuid('anon_token'),
+  partner: affiliatePartner('partner').notNull(),
+  referrerUrl: text('referrer_url').notNull(),
+  clickedModalAt: timestamp('clicked_modal_at', { withTimezone: true }).notNull(),
+  clickedThroughAt: timestamp('clicked_through_at', { withTimezone: true }),
+  convertedAt: timestamp('converted_at', { withTimezone: true }),
+  commissionAmountCents: integer('commission_amount_cents'),
+});
+
+// One row per AI model call. Feeds the Phase 3.7b cost-guardrail system
+// and the founder's monthly cost review in Supabase Studio.
+export const aiUsage = pgTable('ai_usage', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id'),
+  email: text('email'),
+  route: aiRoute('route').notNull(),
+  costCents: integer('cost_cents').notNull(),
+  modelUsed: text('model_used').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Captures email + address when a user tries to look up a non-NYC property.
+// Used to gauge demand for expansion cities and notify early adopters when
+// the city launches.
+export const nonNycWaitlist = pgTable('non_nyc_waitlist', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  attemptedAddress: text('attempted_address').notNull(),
+  requestedCity: text('requested_city').notNull(),
+  requestedState: text('requested_state').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Stripe refund record. Populated by the Phase 4.6b refund-eligibility
+// logic. user_id is nulled on account deletion (Privacy Policy §6.1) but
+// the row is retained for 7 years per payment-record retention rules.
+// lease_review_id and subscription_id are nullable so either flow can
+// produce a refund independently.
+export const refunds = pgTable('refunds', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id'),
+  leaseReviewId: uuid('lease_review_id'),
+  subscriptionId: uuid('subscription_id'),
+  stripeRefundId: text('stripe_refund_id').notNull().unique(),
+  amountCents: integer('amount_cents').notNull(),
+  eligibilityReason: text('eligibility_reason').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 // One row per lease review attempt. PDF + extracted_text are nullable so

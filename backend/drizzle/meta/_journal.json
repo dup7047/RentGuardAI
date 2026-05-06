@@ -36,6 +36,20 @@
       "when": 1778009827935,
       "tag": "0004_phase_1_4_security",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778030691828,
+      "tag": "0005_phase_1_5_billing_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778030700000,
+      "tag": "0006_phase_1_5_security",
+      "breakpoints": true
     }
   ]
 }

@@ -133,3 +133,13 @@ Frontends should retry the first call once on cold start.
 - [x] RLS enabled on both cache tables with public-read SELECT policies for `anon` + `authenticated`; no INSERT/UPDATE/DELETE policies, so writes are restricted to the service role (BYPASSRLS)
 - [x] Integration tests cover anon SELECT works on both tables; anon INSERT/UPDATE/DELETE are blocked; the FK rejects orphan `building_lookups`, allows null `building_bbl`, and SET NULLs the column when the cached building is deleted; service-role upsert + default UUID work
 - [ ] `npm run migrate` applied against staging Supabase — pending staging project
+
+### Phase 1.5 — Schema: subscriptions, affiliate_clicks, ai_usage, non_nyc_waitlist, refunds
+- [x] `subscriptions` (id, user_id FK → auth.users CASCADE, stripe_subscription_id unique, status enum, current_period_end, created_at) migrated via Drizzle
+- [x] `affiliate_clicks` (id, user_id nullable, anon_token nullable, partner enum [lemonade, bellhop, moved], referrer_url, clicked_modal_at, clicked_through_at nullable, converted_at nullable, commission_amount_cents nullable) migrated
+- [x] `ai_usage` (id, user_id nullable, email nullable, route enum [lookup, lease_preview, lease_full], cost_cents, model_used, created_at) migrated
+- [x] `non_nyc_waitlist` (id, email, attempted_address, requested_city, requested_state, created_at) migrated
+- [x] `refunds` (id, user_id nullable → auth.users SET NULL, lease_review_id nullable → lease_reviews SET NULL, subscription_id nullable → subscriptions SET NULL, stripe_refund_id unique, amount_cents, eligibility_reason, created_at) migrated
+- [x] RLS enabled on all five tables; `subscriptions` has an own-row SELECT policy for `authenticated`; the other four are service-role-only (no policies → BYPASSRLS required for all access)
+- [x] Integration tests cover: affiliate click → click-through → conversion lifecycle; ai_usage rows with and without user_id; non_nyc_waitlist insert; refund writeable by service role + user_id SET NULL on account deletion; subscriptions CASCADE delete; RLS denial for anon + authenticated on service-role-only tables; own-row SELECT isolation on subscriptions
+- [ ] `npm run migrate` applied against staging Supabase — pending staging project

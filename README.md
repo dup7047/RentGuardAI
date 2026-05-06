@@ -2,32 +2,37 @@
 
 AI-powered NYC rental copilot. Helps renters avoid bad apartments by analyzing listings, buildings, landlords, and leases against NYC public records and tenant law.
 
-This repository follows the phased plan in `RENTGUARD_ROADMAP_v6.md` (kept outside the repo). Current state: through **Phase 1.4 — Cache tables (buildings, landlords)**.
+This repository follows the phased plan in `RENTGUARD_ROADMAP_v6.md` (kept outside the repo). Current state: foundation complete — backend schema and storage through **Phase 1.7**, identity wired through **Phase 2.1 — Supabase Auth + Next.js client**. Phase 0 prerequisites: NYC Open Data verifier (0.3) and Stripe setup script (0.4) committed; legal docs (0.1) and staging Supabase (0.2 follow-up) still pending.
 
 ## Layout
 
 ```
 RentGuardAI/
 ├── backend/                  # Hono.js API on Render free tier
-│   ├── src/
-│   │   ├── app.ts            # Hono app + middleware wiring
-│   │   ├── server.ts         # @hono/node-server entry point
-│   │   ├── logger.ts         # pino instance
-│   │   ├── commit.ts         # git SHA resolution
-│   │   ├── middleware/       # request logger
-│   │   └── db/               # drizzle client + migrate runner + (empty) schema
+│   ├── src/                  # Hono app, pino logger, commit resolver, db client, middleware
 │   ├── drizzle/              # migrations folder (committed; tracked by drizzle-kit)
 │   ├── test/                 # vitest unit + integration tests
+│   ├── scripts/              # verify-restore, verify-data-sources (0.3), stripe-setup (0.4)
+│   ├── RUNBOOK.md            # backup/restore procedures (Phase 1.7)
 │   ├── drizzle.config.ts
 │   └── package.json
-├── supabase/                 # Local Supabase stack config (supabase init)
-│   └── config.toml
+├── frontend/                 # Next.js 15 on Vercel (Phase 2.1: magic-link auth)
+│   ├── app/                  # /login, /dashboard, /auth/callback, /auth/confirm
+│   ├── lib/supabase/         # browser, server, middleware, config helpers (@supabase/ssr)
+│   ├── middleware.ts         # session refresh + route guards
+│   └── package.json
+├── supabase/
+│   ├── config.toml           # local CLI config (auth templates, redirect URLs)
+│   └── templates/            # branded magic-link.html and confirmation.html
+├── docs/
+│   ├── data-sources.md       # NYC Open Data inventory (Phase 0.3)
+│   ├── nyc-open-data-token.md
+│   ├── stripe-setup.md       # Phase 0.4 manual + scripted setup
+│   └── runbook/auth-limits.md  # Supabase Auth rate-limit doc (Phase 2.1)
 ├── .github/workflows/        # CI: typecheck, build, migrate against local Supabase
 ├── render.yaml               # Render service definition
 └── README.md
 ```
-
-A `frontend/` (Next.js on Vercel) will land in a later phase.
 
 ## Backend — local development
 
@@ -103,6 +108,34 @@ To wire it up:
 
 Frontends should retry the first call once on cold start.
 
+## Frontend — local development
+
+The Next.js 15 app under `frontend/` runs the marketing landing page and the Phase 2.1 Supabase Auth UI (`/login`, `/auth/callback`, `/auth/confirm`, `/dashboard`).
+
+```sh
+cd frontend
+cp .env.example .env.local
+npm install
+npm run dev            # http://localhost:3000
+```
+
+The dev server expects Supabase to be running locally on `http://127.0.0.1:54321` (started with `supabase start` from the repo root). Magic-link emails route to Inbucket at <http://127.0.0.1:54324> for inspection.
+
+Production deploys to Vercel from the `main` branch; project Root Directory must be set to `frontend/`. Supabase env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) are configured under Project Settings → Environment Variables.
+
+## Operational scripts
+
+All run from `backend/`:
+
+```sh
+npm run verify:restore       # 44 post-restore assertions (Phase 1.7)
+npm run verify:data-sources  # hits 8 NYC Open Data endpoints, asserts shape (Phase 0.3)
+npm run stripe:setup         # idempotent Stripe products + prices + portal + webhook (Phase 0.4)
+npm run stripe:setup:dry-run # same, but blocks all writes
+```
+
+The `stripe:setup` script refuses `sk_live_*` keys (test mode only) and outputs the env vars needed for Render.
+
 ## Phase acceptance checklist
 
 ### Phase 1.1 — Hono backend scaffold
@@ -158,3 +191,20 @@ Frontends should retry the first call once on cold start.
 - [x] `npm run verify:restore` script added — 44 checks across 8 categories (tables, RLS, enums, FKs, migrations, storage buckets + policies, auth schema)
 - [x] Full restore drill performed (2026-05-06): `supabase db reset` wiped local database → `npm run migrate` replayed all 8 migrations → `verify:restore` passed (44/44) → full test suite passed (104/104) in under 5 minutes
 - [x] Findings documented in RUNBOOK §8: seed.sql warning is harmless; storage trigger survives reset; Drizzle migration table is recreated cleanly
+
+### Phase 2.1 — Supabase Auth + Next.js client integration
+- [x] `@supabase/ssr` and `@supabase/supabase-js` added to `frontend/package.json`
+- [x] SSR client helpers in `frontend/lib/supabase/`: `browser.ts` (PKCE), `server.ts` (Server Components), `middleware.ts` (session refresh + route guards), `config.ts` (env helpers + cookie options)
+- [x] Custom auth cookie name `rentguard-auth`; `httpOnly` on the server-side variant; `secure` only in production; `sameSite=lax`
+- [x] `frontend/middleware.ts` runs on `/dashboard/:path*` and `/login`; redirects unauthed → `/login?redirectTo=…`; redirects authed away from `/login` → `/dashboard`; falls back gracefully when env vars missing on public routes
+- [x] `frontend/app/login/page.tsx` + `LoginForm.tsx` — `signInWithOtp` with `emailRedirectTo` set to `/auth/callback?next=…`; surfaces success/error states and `redirectTo`/`loggedOut`/`authError` banners
+- [x] `frontend/app/auth/callback/route.ts` — PKCE code exchange via `exchangeCodeForSession`; allowlisted redirect targets only
+- [x] `frontend/app/auth/confirm/route.ts` — token-hash verification via `verifyOtp` for magic-link emails (server-side, more secure than client-side hash exchange)
+- [x] `frontend/app/dashboard/page.tsx` (Server Component) and `actions.ts` (sign-out server action) — auth-gated, redirects to `/login?redirectTo=/dashboard` if no user
+- [x] `supabase/templates/magic-link.html` and `confirmation.html` — branded RentGuard NYC copy; both link to `/auth/confirm?token_hash=…&type=…&next=/dashboard`
+- [x] `supabase/config.toml` — `[auth.email.template.magic_link]` and `[auth.email.template.confirmation]` wired; `additional_redirect_urls` includes localhost (3000+3100), `rentguard.cc`, `www.rentguard.cc`, and `*.vercel.app` for both `/auth/callback` and `/auth/confirm`
+- [x] `docs/runbook/auth-limits.md` — documents Supabase Auth rate-limit defaults and the staging checklist (Resend SMTP, redirect allow-list, branded templates, end-to-end manual test)
+- [x] Landing page (`frontend/app/page.tsx`) replaces "Launching Soon" with a real Sign In CTA pointing at `/login`
+- [ ] Vercel project: `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` set under Project Settings → Environment Variables — pending operator
+- [ ] `[auth.email.smtp]` block in `supabase/config.toml` enabled with Resend creds — pending staging Supabase + RESEND_API_KEY
+- [ ] End-to-end manual test on staging (email → Resend-routed branded email → magic link → dashboard → log out) — pending staging project

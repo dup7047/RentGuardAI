@@ -157,7 +157,9 @@ site_url = "http://localhost:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = [
   "http://localhost:3000/auth/callback",
+  "http://localhost:3100/auth/callback",
   "http://127.0.0.1:3000/auth/callback",
+  "http://127.0.0.1:3100/auth/callback",
   "https://rentguard.cc/auth/callback",
   "https://*.vercel.app/auth/callback",
 ]

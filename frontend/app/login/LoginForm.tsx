@@ -47,8 +47,8 @@ export function LoginForm() {
 
     if (!supabaseState.client) {
       setFormState({
-        status: 'error',
-        message: supabaseState.error,
+        status: 'idle',
+        message: '',
       });
       return;
     }

@@ -80,6 +80,16 @@ export const buildingLookups = pgTable('building_lookups', {
   aiQuestions: jsonb('ai_questions'),
   /** SummaryListingNote[] — verbatim-anchored notes on listing copy (Phase 3.7 follow-up) */
   aiListingNotes: jsonb('ai_listing_notes'),
+  /** Phase 4.5: 2-3 sentence narrative of what the listing offers */
+  aiListingSummary: text('ai_listing_summary'),
+  /** Phase 4.5: AI's explanation of the deterministic score */
+  aiScoreExplanation: text('ai_score_explanation'),
+  /** Phase 4.5: deterministic 0-100 score */
+  aiScore: integer('ai_score'),
+  /** Phase 4.5: band derived from ai_score */
+  aiScoreBand: text('ai_score_band'),
+  /** Phase 4.5: ScoreFactor[] from src/scoring/score.ts */
+  aiScoreFactors: jsonb('ai_score_factors'),
   aiCostCents: integer('ai_cost_cents').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });

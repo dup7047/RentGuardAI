@@ -31,6 +31,11 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
       summary: buildingLookups.aiSummary,
       questions: buildingLookups.aiQuestions,
       listingNotes: buildingLookups.aiListingNotes,
+      listingSummary: buildingLookups.aiListingSummary,
+      scoreExplanation: buildingLookups.aiScoreExplanation,
+      score: buildingLookups.aiScore,
+      scoreBand: buildingLookups.aiScoreBand,
+      scoreFactors: buildingLookups.aiScoreFactors,
     })
     .from(buildingLookups)
     .where(eq(buildingLookups.buildingBbl, bbl))
@@ -98,10 +103,16 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
     bbl,
     address: b.address,
     borough: b.borough,
+    listing_summary: latest?.listingSummary ?? null,
     summary,
+    score_explanation: latest?.scoreExplanation ?? null,
+    score: latest?.score ?? null,
+    score_band: latest?.scoreBand ?? null,
+    score_factors: Array.isArray(latest?.scoreFactors) ? latest!.scoreFactors : [],
     indicators,
     questions_to_ask,
     listing_notes,
+    scraped_listing: null, // SEO route doesn't scrape; only fresh lookups have this
     landlord,
     fare_check: null,
     stats: {

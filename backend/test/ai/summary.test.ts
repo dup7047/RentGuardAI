@@ -206,10 +206,11 @@ describe('generateSummary', () => {
     expect(SYSTEM_PROMPT).toContain('listing_notes');
   });
 
-  it('system prompt forbids verdict words', () => {
-    // Sample of the explicit blacklist — the rule list isn't structured but
-    // these specific words must always appear in the prompt as forbidden.
-    for (const banned of ['scam', 'slumlord', 'avoid', 'recommend']) {
+  it('system prompt forbids slur-style verdict words', () => {
+    // Phase 4.5 narrowed this list — `avoid` / `recommend` were removed because
+    // the deterministic score IS the recommendation. These slur-style words
+    // must always remain banned because they describe an actor, not a score.
+    for (const banned of ['scam', 'slumlord', 'sketchy', 'predatory', 'beware']) {
       expect(SYSTEM_PROMPT.toLowerCase()).toContain(banned);
     }
   });

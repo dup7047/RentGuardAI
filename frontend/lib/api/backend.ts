@@ -35,13 +35,30 @@ export type ScrapedListingPublic = {
   confidence: 'high' | 'medium' | 'low';
 };
 
+export type ScoreBand = 'minimal' | 'moderate' | 'elevated' | 'high';
+
+export type ScoreFactor = {
+  key: string;
+  label: string;
+  impact: number;
+  reason: string;
+};
+
 export type LookupResponse =
   | {
       kind: 'success';
       bbl: string;
       address: string;
       borough: string;
+      /** Phase 4.5: 2-3 sentence narrative of what the listing offers. */
+      listing_summary: string | null;
       summary: string;
+      /** Phase 4.5: AI-narrated explanation of the score. */
+      score_explanation: string | null;
+      /** Phase 4.5: deterministic 0-100 score. */
+      score: number | null;
+      score_band: ScoreBand | null;
+      score_factors: ScoreFactor[];
       indicators: Array<{ key: string; value: string; source_url: string }>;
       /**
        * 3–5 specific factual questions the renter should ask the broker /

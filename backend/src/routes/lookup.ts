@@ -10,6 +10,7 @@ import { geosearch } from '../geo/geosearch.js';
 import { lookupLandlord } from '../data/landlord.js';
 import { checkFare } from '../fare/check.js';
 import { generateSummary, CostCapExceededError } from '../ai/summary.js';
+import { computeScore } from '../scoring/score.js';
 import { getHpdViolations } from '../data/datasets/hpd-violations.js';
 import { getDobComplaints } from '../data/datasets/dob-complaints.js';
 import { getEvictions } from '../data/datasets/evictions.js';
@@ -146,6 +147,21 @@ lookupRoute.post('/lookup', async (c) => {
     scrapedListing?.description ?? listingDescription ?? listingUrl ?? null;
   const fareCheck = listingTextForChecks ? checkFare({ listingText: listingTextForChecks }) : null;
 
+  // ── 6b. Deterministic risk score (Phase 4.5) ────────────────────────────────
+  // Computed in code so it's auditable + reproducible. The AI narrates this
+  // score in its score_explanation but does NOT pick it.
+  const score = computeScore({
+    hpdViolationsOpen: hpdOpen,
+    hpdViolationsClosed: hpdClosed,
+    dobComplaints: dob.length,
+    evictions: evic.length,
+    bedbugReports: bed.length,
+    leadFlags: lead.length,
+    watchlistRank: landlord.watchlist_rank,
+    fareFlag: fareCheck?.flag ?? null,
+    scrapedListing: scrapedListing,
+  });
+
   // ── 7. AI summary (with cost cap) ────────────────────────────────────────────
   const subject = userId
     ? ({ type: 'user_id', value: userId } as const)
@@ -173,6 +189,8 @@ lookupRoute.post('/lookup', async (c) => {
         listingText: scrapedListing?.description ?? listingDescription ?? null,
         fareFlag: fareCheck?.flag ?? null,
         scrapedListing: scrapedListing,
+        // Phase 4.5: deterministic score handed in for narration
+        score,
       },
       subject,
     );
@@ -200,6 +218,12 @@ lookupRoute.post('/lookup', async (c) => {
       // route can return them without re-running the AI on every page view.
       aiQuestions: summary.questions_to_ask,
       aiListingNotes: summary.listing_notes,
+      // Phase 4.5: persist score + AI narration so SEO archive serves them
+      aiListingSummary: summary.listing_summary || null,
+      aiScoreExplanation: summary.score_explanation || null,
+      aiScore: score.score,
+      aiScoreBand: score.band,
+      aiScoreFactors: score.factors,
       aiCostCents: summary.cost_cents,
     })
     .returning({ id: buildingLookups.id });
@@ -214,7 +238,12 @@ lookupRoute.post('/lookup', async (c) => {
     bbl,
     address: canonicalAddress,
     borough,
+    listing_summary: summary.listing_summary,
     summary: summary.summary,
+    score_explanation: summary.score_explanation,
+    score: score.score,
+    score_band: score.band,
+    score_factors: score.factors,
     indicators: summary.indicators,
     questions_to_ask: summary.questions_to_ask,
     listing_notes: summary.listing_notes,

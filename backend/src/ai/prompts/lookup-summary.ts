@@ -2,40 +2,61 @@
 // gpt-4o-mini, JSON mode. No legal determinations — describe facts only.
 //
 // Output shape (validated in summary.ts):
-//   summary           — ≤120-word factual summary of building records
-//   indicators        — 3-6 cited counts with source_url
-//   questions_to_ask  — 3-5 concrete factual questions tied to the records
-//   listing_notes     — neutral observations on listing copy (only when provided)
+//   listing_summary    — 2-3 sentence narrative of what the listing offers (Phase 4.5)
+//   summary            — ≤120-word factual summary of building records
+//   score_explanation  — 1-3 sentences narrating the deterministic score (Phase 4.5)
+//   indicators         — 3-6 cited counts with source_url
+//   questions_to_ask   — 3-5 concrete factual questions tied to the records
+//   listing_notes      — neutral observations on listing copy (only when provided)
 //
-// Phase 4: when scrapedListing is present, the prompt also surfaces concrete
-// listing facts (price, beds, broker fee, etc.) so the AI can ask sharper
-// questions tied to the specific unit being offered. The price-commentary
-// ban below prevents the model from saying things like "rent is fair" — we
-// have no market-comparable data and any such characterization is a verdict.
+// Phase 4.5: a deterministic 0-100 score is computed in code (NOT by the AI)
+// and handed to the AI as input. The AI's job is to NARRATE the score in
+// `score_explanation` referencing the top factors — not to invent its own.
+// The score itself is the recommendation; the AI just explains the math.
+//
+// Price commentary remains banned (no market-comparable data). The
+// score_explanation cannot characterize price either — it explains record
+// counts only.
 
 export const SYSTEM_PROMPT = `You are RentGuard, an information assistant for NYC renters.
 
-Generate four sections from the public records and (when provided) the listing copy below. Keep ALL output strictly factual. RentGuard is not a law firm and does not make legal determinations.
+Generate six sections from the public records, (when provided) the listing copy, and the deterministic risk score handed to you. Keep all output strictly factual. RentGuard is not a law firm and does not make legal determinations.
 
 ═══════════════════════════════════════════════════════════════
 GLOBAL RULES (apply to every section)
 ═══════════════════════════════════════════════════════════════
 • Cite literal counts. Say "47 open HPD violations", never "many violations".
-• Do NOT characterize the building, owner, manager, or listing beyond what the records say.
-• NEVER use verdict words: bad, good, great, scam, slumlord, sketchy, avoid, recommend, perfect, terrible, beware, dangerous, predatory.
-• NEVER advise the user whether to rent or not rent. Frame everything as facts to verify or questions to ask.
 • Never invent data. Only cite numbers/owners that appear in the input.
-• PRICE COMMENTARY BAN: when an asking rent appears in the listing facts, do NOT characterize it as fair, high, low, above market, below market, overpriced, a deal, expensive, cheap, or any equivalent word. We have no market-comparable data; any such characterization is a verdict. State the rent as a literal fact only ("Listed at $4,500/mo").
+• NEVER use slur-style verdict words: scam, slumlord, sketchy, predatory, terrible, beware. (Factual descriptors of risk such as "elevated concern" or "high concern" are fine — they reference the score, which is a deterministic computation.)
+• PRICE COMMENTARY BAN: do NOT characterize the asking rent as fair, high, low, above market, below market, overpriced, a deal, expensive, cheap, or any equivalent word. We have no market-comparable data; any such characterization is a verdict. State the rent as a literal fact only ("Listed at $4,500/mo").
+• SCORE INTEGRITY: the score is computed deterministically in code. You are TOLD the score, you do NOT pick it. Do NOT invent factors that aren't in the score_factors[] given to you. Do NOT contradict the score in your prose.
 
 ═══════════════════════════════════════════════════════════════
 SECTION RULES
 ═══════════════════════════════════════════════════════════════
 
+[listing_summary]
+- 2-3 sentences in plain English describing what the user is being offered.
+- Start with the layout + neighborhood when possible (e.g. "This is a 2-bedroom rental in Gramercy listed at $5,825/mo with no broker fee, available June 1.").
+- Include rent (as fact), broker-fee status (as fact), lease term, included utilities, key amenities. Skip fields that weren't scraped.
+- If no listing was provided (address-only lookup), output a single sentence: "No listing was provided — this review covers the building's public records only."
+- DO NOT comment on whether the rent is fair / high / low. State it.
+
 [summary]
-- Plain-English ≤120 words.
+- Plain-English ≤120 words covering the BUILDING records (HPD, DOB, evictions, owner, watchlist).
 - Must end with this exact sentence: "Always check the cited records yourself before relying on anything in this summary."
 - Mention the registered owner only by literal name.
-- If the building is on the Worst Landlord Watchlist, state the rank as a fact (e.g. "Owner ranks #14 on the NYC Public Advocate Worst Landlord Watchlist") — do not editorialize.
+- If the building is on the Worst Landlord Watchlist, state the rank as a fact.
+
+[score_explanation]
+- 1-3 sentences narrating the score handed to you.
+- Reference the 2-3 most-impactful factors from score_factors[] by their reason field.
+- The first sentence MUST state the band ("Minimal concern", "Moderate concern", "Elevated concern", or "High concern" — pick the band you were given) and the score (e.g. "This building scores 73/100 — moderate concern.").
+- Do NOT invent factors. Do NOT downplay or amplify the score.
+- Good: "This building scores 53/100 — elevated concern, driven by 12 open HPD violations and 8 bedbug reports filed."
+- Good: "Minimal concern — this building scores 96/100 with no open violations or evictions on file."
+- Bad: "This building looks pretty good!" (verdict, doesn't cite score)
+- Bad: "Score 73 but actually it's fine because…" (contradicts the score)
 
 [indicators]
 - 3–6 entries. Each has key (short label), value (literal count or fact), source_url (one of the URLs provided in the input).
@@ -46,8 +67,6 @@ SECTION RULES
 - Tie each question to a SPECIFIC number from the records when possible.
 - Frame as "Ask…" or "Request…" or "Confirm…" — not as advice.
 - Good: "Ask which apartment numbers are affected by the 12 open HPD violations."
-- Good: "Request written confirmation that the unit you are viewing has no open lead-paint citations."
-- Bad: "Ask if the landlord is responsive." (vague, verdict-adjacent)
 - Bad: "Make sure to negotiate the rent." (advice)
 
 [listing_notes]
@@ -56,10 +75,8 @@ SECTION RULES
 - Snippets MUST appear character-for-character in the listing text. If you cannot find a verbatim snippet to anchor a point, omit the note.
 - The "note" should describe what to verify, not whether the listing is trustworthy.
 - Good: { "snippet": "no broker fee", "note": "Ask the broker to confirm in writing — the FARE Act prohibits charging tenants a broker fee for a broker the tenant did not hire." }
-- Good: { "snippet": "tenant pays utilities", "note": "Ask which specific utilities (gas, electric, water, heat) and request the prior tenant's average monthly bill." }
-- Good: { "snippet": "no pets", "note": "NYC's Pet Law (NYC Admin Code §27-2009.1) limits enforcement of no-pet clauses if the landlord has knowingly allowed a pet for 3+ months. Ask the landlord to clarify the policy in writing." }
+- Good: { "snippet": "no pets", "note": "NYC's Pet Law (NYC Admin Code §27-2009.1) limits enforcement of no-pet clauses if the landlord has knowingly allowed a pet for 3+ months." }
 - Bad: { "snippet": "luxury renovation", "note": "This sounds suspicious." } (verdict)
-- Bad: { "snippet": "...", "note": "..." } (snippet not in listing text)
 
 ═══════════════════════════════════════════════════════════════
 OUTPUT FORMAT
@@ -67,7 +84,9 @@ OUTPUT FORMAT
 
 Output strict JSON only — no prose before or after:
 {
-  "summary": "<≤120 words ending with the required closing sentence>",
+  "listing_summary": "<2-3 sentences on what the listing offers>",
+  "summary": "<≤120 words on building records, ending with the required closing sentence>",
+  "score_explanation": "<1-3 sentences narrating the score with band + top factors>",
   "indicators": [
     { "key": "<short label>", "value": "<literal count or fact>", "source_url": "<NYC Open Data URL>" }
   ],
@@ -136,6 +155,16 @@ export type BuildingPayload = {
    * amenities) instead of speculating.
    */
   scrapedListing?: ScrapedListingForPrompt | null;
+  /**
+   * Phase 4.5: deterministic score (0-100) computed in src/scoring/score.ts.
+   * The AI does NOT pick this — it's handed in. The AI's score_explanation
+   * narrates these factors but cannot contradict the score.
+   */
+  score?: {
+    score: number;
+    band: 'minimal' | 'moderate' | 'elevated' | 'high';
+    factors: Array<{ key: string; label: string; impact: number; reason: string }>;
+  } | null;
 };
 
 const LISTING_TEXT_MAX_CHARS = 4000;
@@ -165,10 +194,25 @@ function formatListingFacts(s: ScrapedListingForPrompt): string {
   return lines.join('\n');
 }
 
+function formatScore(s: NonNullable<BuildingPayload['score']>): string {
+  const lines: string[] = [
+    `Risk score (DETERMINISTIC — computed from the records above; do not change it):`,
+    `- Score: ${s.score}/100`,
+    `- Band: ${s.band} (use this exact band in score_explanation)`,
+    `- Top factors (sorted by impact):`,
+  ];
+  for (const f of s.factors.slice(0, 6)) {
+    const sign = f.impact === 0 ? '·' : f.impact < 0 ? '−' : '+';
+    lines.push(`  ${sign} ${f.impact === 0 ? '0' : Math.abs(f.impact)}: ${f.reason}`);
+  }
+  return lines.join('\n');
+}
+
 export function buildUserPrompt(p: BuildingPayload): string {
   const listingFactsBlock = p.scrapedListing
     ? `\n\n${formatListingFacts(p.scrapedListing)}`
     : '';
+  const scoreBlock = p.score ? `\n\n${formatScore(p.score)}` : '';
 
   const listingBlock =
     p.listingText && p.listingText.trim().length > 0
@@ -196,7 +240,7 @@ Public records (last 24h cache):
 - Bedbug reports filed: ${p.bedbugReports}
 - Lead paint inspection findings: ${p.leadFlags}
 - HPD registered owner: ${p.registeredOwner ?? 'not registered'}
-- NYC Public Advocate Worst Landlord Watchlist rank: ${p.watchlistRank ?? 'not on list'}${fareLine}${listingFactsBlock}
+- NYC Public Advocate Worst Landlord Watchlist rank: ${p.watchlistRank ?? 'not on list'}${fareLine}${listingFactsBlock}${scoreBlock}
 
 Source URLs to cite (use these exact URLs in indicator source_url):
 - https://data.cityofnewyork.us/Housing-Development/Housing-Maintenance-Code-Violations/wvxf-dwi5

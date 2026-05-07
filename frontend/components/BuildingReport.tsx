@@ -4,6 +4,7 @@
 import { LegalFraming } from './LegalFraming';
 import { LegalFooter } from './LegalFooter';
 import { ListingFactsCard } from './ListingFactsCard';
+import { ScoreCard } from './ScoreCard';
 import { buildingJsonLd } from '@/lib/seo/structured-data';
 import type { LookupResponse } from '@/lib/api/backend';
 
@@ -14,7 +15,12 @@ export function BuildingReport({ data }: { data: SuccessData }) {
     bbl,
     address,
     borough,
+    listing_summary,
     summary,
+    score_explanation,
+    score,
+    score_band,
+    score_factors,
     indicators,
     questions_to_ask,
     listing_notes,
@@ -43,8 +49,22 @@ export function BuildingReport({ data }: { data: SuccessData }) {
 
       {scraped_listing && <ListingFactsCard data={scraped_listing} />}
 
-      <section className="summary-section" aria-label="AI risk summary">
-        <h2>Risk Summary</h2>
+      <ScoreCard
+        score={score}
+        band={score_band}
+        factors={score_factors ?? []}
+        explanation={score_explanation}
+      />
+
+      {listing_summary && (
+        <section className="listing-summary-section" aria-label="What this listing offers">
+          <h2>What this listing is offering</h2>
+          <p>{listing_summary}</p>
+        </section>
+      )}
+
+      <section className="summary-section" aria-label="AI building summary">
+        <h2>Building records summary</h2>
         <p>{summary}</p>
       </section>
 

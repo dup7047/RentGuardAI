@@ -376,3 +376,76 @@ button:disabled {
   color: #b76e00;
   font-size: 0.9rem;
 }
+
+/* ── Phase 4.5: ScoreCard ────────────────────────────────────────── */
+.score-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin: 1.25rem 0;
+  background: var(--card-bg);
+}
+.score-card-row {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+.score-circle {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 4px solid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-feature-settings: 'tnum';
+}
+.score-number { font-size: 2rem; line-height: 1; font-weight: 700; }
+.score-suffix { font-size: 0.75rem; opacity: 0.7; }
+.score-text { flex: 1; min-width: 200px; }
+.score-band-label { margin: 0 0 0.4rem 0; font-size: 1.1rem; }
+.score-explanation { margin: 0 0 0.4rem 0; font-size: 0.95rem; }
+.score-disclaimer { margin: 0; font-size: 0.78rem; color: var(--muted); font-style: italic; }
+.score-factors-details {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border);
+}
+.score-factors-details summary {
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+.score-factors-list {
+  list-style: none;
+  padding: 0.5rem 0 0 0;
+  margin: 0;
+}
+.score-factor {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.25rem 0;
+  font-size: 0.88rem;
+}
+.score-factor-impact {
+  font-feature-settings: 'tnum';
+  font-weight: 600;
+  min-width: 2.5rem;
+}
+.score-factor.negative .score-factor-impact { color: #c1383b; }
+.score-factor.positive .score-factor-impact { color: #1f8a4c; }
+.score-factor.neutral .score-factor-impact { color: var(--muted); }
+.score-factor-reason { color: inherit; }
+
+.listing-summary-section {
+  margin: 1.25rem 0;
+}
+.listing-summary-section h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem 0;
+}

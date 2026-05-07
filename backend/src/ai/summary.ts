@@ -46,7 +46,12 @@ export type SummaryQuestion = string;
 export type SummaryListingNote = { snippet: string; note: string };
 
 export type SummaryResult = {
+  /** Phase 4.5: 2-3 sentence narrative of what the listing offers. May be empty for address-only lookups. */
+  listing_summary: string;
+  /** Phase 3.7: ≤120-word factual building summary. */
   summary: string;
+  /** Phase 4.5: AI-narrated explanation of the deterministic score. */
+  score_explanation: string;
   indicators: SummaryIndicator[];
   /** Specific factual questions the renter should ask. Always non-empty (3–5). */
   questions_to_ask: SummaryQuestion[];
@@ -90,7 +95,9 @@ export async function generateSummary(
   if (!raw) throw new MalformedAIResponse('empty content');
 
   let parsed: {
+    listing_summary?: string;
     summary?: string;
+    score_explanation?: string;
     indicators?: unknown[];
     questions_to_ask?: unknown[];
     listing_notes?: unknown[];
@@ -102,6 +109,12 @@ export async function generateSummary(
   }
   if (typeof parsed.summary !== 'string') throw new MalformedAIResponse('missing summary');
   if (!Array.isArray(parsed.indicators)) throw new MalformedAIResponse('missing indicators');
+
+  // Phase 4.5: tolerate legacy responses that omit the new sections
+  const listing_summary =
+    typeof parsed.listing_summary === 'string' ? parsed.listing_summary : '';
+  const score_explanation =
+    typeof parsed.score_explanation === 'string' ? parsed.score_explanation : '';
 
   // Forward-compatible: accept legacy responses that omit the new sections.
   // The model SHOULD return both, but tolerate missing fields by defaulting
@@ -152,7 +165,9 @@ export async function generateSummary(
   logger.info({ cost_cents, ai_usage_id: usageId, subject_type: subject.type });
 
   return {
+    listing_summary,
     summary: parsed.summary,
+    score_explanation,
     indicators: parsed.indicators as SummaryIndicator[],
     questions_to_ask,
     listing_notes: verifiedListingNotes,

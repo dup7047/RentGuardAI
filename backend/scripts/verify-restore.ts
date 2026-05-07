@@ -63,7 +63,7 @@ const EXPECTED_STORAGE_POLICIES = [
 const EXPECTED_RLS_TABLES = EXPECTED_PUBLIC_TABLES;
 
 /** Minimum number of Drizzle migrations expected in the tracking table. */
-const MIN_MIGRATION_COUNT = 12;
+const MIN_MIGRATION_COUNT = 13;
 
 // ─── Checker ──────────────────────────────────────────────────────────────────
 

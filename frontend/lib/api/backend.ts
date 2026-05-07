@@ -4,6 +4,37 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = Record<string, any>;
 
+/**
+ * Public-facing shape of the listing scrape result.
+ * Mirrors backend ScrapedListing — kept in sync by hand for now.
+ */
+export type ScrapedListingPublic = {
+  url: string;
+  source: 'streeteasy' | 'zillow' | 'generic';
+  source_kind: 'rental' | 'building' | 'sale' | 'unknown';
+  fetchedAt: string;
+  address: string | null;
+  unit: string | null;
+  monthlyRentCents: number | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  squareFeet: number | null;
+  brokerFeeStated: 'no_fee' | 'fee' | 'unknown';
+  brokerFeeText: string | null;
+  securityDepositText: string | null;
+  leaseTermMonths: number | null;
+  petsPolicy: string | null;
+  utilitiesIncluded: string[];
+  amenities: string[];
+  availabilityDate: string | null;
+  description: string | null;
+  title: string | null;
+  daysOnMarket: number | null;
+  agentName: string | null;
+  brokerage: string | null;
+  confidence: 'high' | 'medium' | 'low';
+};
+
 export type LookupResponse =
   | {
       kind: 'success';
@@ -23,6 +54,11 @@ export type LookupResponse =
        * Empty when the user did not paste a listing description.
        */
       listing_notes: Array<{ snippet: string; note: string }>;
+      /**
+       * Phase 4: structured data scraped from the listing URL the user
+       * pasted. Null when the user pasted only an address.
+       */
+      scraped_listing: ScrapedListingPublic | null;
       landlord: AnyRecord;
       fare_check: AnyRecord | null;
       stats: Record<string, number>;
@@ -36,7 +72,12 @@ export type LookupResponse =
   | { kind: 'cost_cap'; message: string }
   | { kind: 'rate_limited'; message: string }
   | { kind: 'invalid_input'; errors: AnyRecord }
-  | { kind: 'not_found' };
+  | { kind: 'not_found' }
+  // Phase 4: listing-fetch error states from the scrape pipeline
+  | { kind: 'listing_blocked'; message: string | null }
+  | { kind: 'listing_not_found'; message?: string | null }
+  | { kind: 'listing_expired'; message?: string | null }
+  | { kind: 'unsupported_url'; message?: string | null };
 
 // Default by NODE_ENV so prod works without a Vercel-dashboard env var.
 // Local devs override via frontend/.env.local (NEXT_PUBLIC_BACKEND_URL=http://localhost:8080).

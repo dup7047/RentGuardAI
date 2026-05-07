@@ -27,6 +27,8 @@ services:
         sync: false   # https://platform.openai.com/api-keys (after billing top-up)
       - key: NYC_OPEN_DATA_APP_TOKEN
         sync: false   # Optional but recommended (raises rate limit 1k→10k/hr)
+      - key: SCRAPFLY_API_KEY
+        sync: false   # Phase 4 — optional listing-scraping fallback (1000/mo free)
       # Beehiiv is stub-safe — the route returns ok:true without these set.
       # Add only if you want real waitlist enrollment.
       # - key: BEEHIIV_API_KEY

@@ -6,6 +6,12 @@
 //   indicators        — 3-6 cited counts with source_url
 //   questions_to_ask  — 3-5 concrete factual questions tied to the records
 //   listing_notes     — neutral observations on listing copy (only when provided)
+//
+// Phase 4: when scrapedListing is present, the prompt also surfaces concrete
+// listing facts (price, beds, broker fee, etc.) so the AI can ask sharper
+// questions tied to the specific unit being offered. The price-commentary
+// ban below prevents the model from saying things like "rent is fair" — we
+// have no market-comparable data and any such characterization is a verdict.
 
 export const SYSTEM_PROMPT = `You are RentGuard, an information assistant for NYC renters.
 
@@ -19,6 +25,7 @@ GLOBAL RULES (apply to every section)
 • NEVER use verdict words: bad, good, great, scam, slumlord, sketchy, avoid, recommend, perfect, terrible, beware, dangerous, predatory.
 • NEVER advise the user whether to rent or not rent. Frame everything as facts to verify or questions to ask.
 • Never invent data. Only cite numbers/owners that appear in the input.
+• PRICE COMMENTARY BAN: when an asking rent appears in the listing facts, do NOT characterize it as fair, high, low, above market, below market, overpriced, a deal, expensive, cheap, or any equivalent word. We have no market-comparable data; any such characterization is a verdict. State the rent as a literal fact only ("Listed at $4,500/mo").
 
 ═══════════════════════════════════════════════════════════════
 SECTION RULES
@@ -76,6 +83,32 @@ Output strict JSON only — no prose before or after:
 
 export type FareFlag = 'no_indicators' | 'possible_violation' | 'unclear';
 
+/**
+ * Subset of ScrapedListing relevant for the AI prompt — drops raw HTML and
+ * other internal-only fields, keeps the structured listing facts the AI
+ * needs to formulate sharp questions.
+ */
+export type ScrapedListingForPrompt = {
+  url: string;
+  source: string;
+  source_kind: string;
+  address: string | null;
+  unit: string | null;
+  monthlyRentCents: number | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  squareFeet: number | null;
+  brokerFeeStated: 'no_fee' | 'fee' | 'unknown';
+  brokerFeeText: string | null;
+  securityDepositText: string | null;
+  leaseTermMonths: number | null;
+  petsPolicy: string | null;
+  utilitiesIncluded: string[];
+  amenities: string[];
+  availabilityDate: string | null;
+  daysOnMarket: number | null;
+};
+
 export type BuildingPayload = {
   bbl: string;
   address: string;
@@ -97,16 +130,51 @@ export type BuildingPayload = {
    * the AI cross-reference its listing_notes with the deterministic flag.
    */
   fareFlag?: FareFlag | null;
+  /**
+   * Phase 4: structured listing data scraped from the URL the user pasted.
+   * Lets the AI question concrete numbers (price, lease term, broker fee,
+   * amenities) instead of speculating.
+   */
+  scrapedListing?: ScrapedListingForPrompt | null;
 };
 
 const LISTING_TEXT_MAX_CHARS = 4000;
 
+function formatListingFacts(s: ScrapedListingForPrompt): string {
+  const lines: string[] = [`Listing facts (scraped from ${s.url}, source: ${s.source}/${s.source_kind}):`];
+  if (s.monthlyRentCents != null) {
+    const dollars = (s.monthlyRentCents / 100).toLocaleString('en-US');
+    lines.push(`- Asking rent: $${dollars}/mo`);
+  }
+  if (s.bedrooms != null || s.bathrooms != null || s.squareFeet != null) {
+    const parts: string[] = [];
+    if (s.bedrooms != null) parts.push(s.bedrooms === 0 ? 'studio' : `${s.bedrooms} bed`);
+    if (s.bathrooms != null) parts.push(`${s.bathrooms} bath`);
+    if (s.squareFeet != null) parts.push(`${s.squareFeet} sqft`);
+    lines.push(`- Layout: ${parts.join(' / ')}`);
+  }
+  if (s.unit) lines.push(`- Unit: ${s.unit}`);
+  lines.push(`- Broker fee status: ${s.brokerFeeStated}${s.brokerFeeText ? ` ("${s.brokerFeeText}")` : ''}`);
+  if (s.securityDepositText) lines.push(`- Security deposit: ${s.securityDepositText}`);
+  if (s.leaseTermMonths != null) lines.push(`- Lease term: ${s.leaseTermMonths} months`);
+  if (s.petsPolicy) lines.push(`- Pets: ${s.petsPolicy}`);
+  if (s.utilitiesIncluded.length > 0) lines.push(`- Utilities included: ${s.utilitiesIncluded.join(', ')}`);
+  if (s.amenities.length > 0) lines.push(`- Amenities: ${s.amenities.join(', ')}`);
+  if (s.availabilityDate) lines.push(`- Available: ${s.availabilityDate}`);
+  if (s.daysOnMarket != null) lines.push(`- Days on market: ${s.daysOnMarket}`);
+  return lines.join('\n');
+}
+
 export function buildUserPrompt(p: BuildingPayload): string {
+  const listingFactsBlock = p.scrapedListing
+    ? `\n\n${formatListingFacts(p.scrapedListing)}`
+    : '';
+
   const listingBlock =
     p.listingText && p.listingText.trim().length > 0
       ? `
 
-Listing copy provided by the renter (verbatim — anchor every listing_note's "snippet" inside this block):
+Listing copy ${p.scrapedListing ? '(scraped verbatim)' : '(provided by renter)'} — anchor every listing_note's "snippet" inside this block:
 """
 ${p.listingText.trim().slice(0, LISTING_TEXT_MAX_CHARS)}
 """`
@@ -128,7 +196,7 @@ Public records (last 24h cache):
 - Bedbug reports filed: ${p.bedbugReports}
 - Lead paint inspection findings: ${p.leadFlags}
 - HPD registered owner: ${p.registeredOwner ?? 'not registered'}
-- NYC Public Advocate Worst Landlord Watchlist rank: ${p.watchlistRank ?? 'not on list'}${fareLine}
+- NYC Public Advocate Worst Landlord Watchlist rank: ${p.watchlistRank ?? 'not on list'}${fareLine}${listingFactsBlock}
 
 Source URLs to cite (use these exact URLs in indicator source_url):
 - https://data.cityofnewyork.us/Housing-Development/Housing-Maintenance-Code-Violations/wvxf-dwi5
@@ -136,5 +204,5 @@ Source URLs to cite (use these exact URLs in indicator source_url):
 - https://data.cityofnewyork.us/City-Government/Marshal-Evictions/6z8x-wfk4
 - https://advocate.nyc.gov/landlord-watchlist/${listingBlock}
 
-Generate all four sections per the rules above. Output JSON only.`;
+Generate all four sections per the rules above. Output JSON only. Remember: never characterize the rent as fair/high/low/etc.`;
 }

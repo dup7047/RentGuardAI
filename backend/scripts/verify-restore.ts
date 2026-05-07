@@ -35,6 +35,7 @@ const EXPECTED_PUBLIC_TABLES = [
   'non_nyc_waitlist',
   'profiles',
   'refunds',
+  'scraped_listings',
   'subscriptions',
 ];
 
@@ -62,7 +63,7 @@ const EXPECTED_STORAGE_POLICIES = [
 const EXPECTED_RLS_TABLES = EXPECTED_PUBLIC_TABLES;
 
 /** Minimum number of Drizzle migrations expected in the tracking table. */
-const MIN_MIGRATION_COUNT = 11;
+const MIN_MIGRATION_COUNT = 12;
 
 // ─── Checker ──────────────────────────────────────────────────────────────────
 

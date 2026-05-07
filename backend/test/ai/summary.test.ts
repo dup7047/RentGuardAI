@@ -214,6 +214,18 @@ describe('generateSummary', () => {
     }
   });
 
+  it('system prompt enforces the price-commentary ban (Phase 4)', () => {
+    // We can't predict every shape of editorial language, but the prompt must
+    // explicitly call out fair / high / low / above market / below market
+    // / overpriced / a deal — these are the most common failure modes for
+    // gpt-4o-mini when given a price.
+    const lower = SYSTEM_PROMPT.toLowerCase();
+    expect(lower).toContain('price commentary ban');
+    for (const banned of ['fair', 'above market', 'below market', 'overpriced', 'a deal']) {
+      expect(lower).toContain(banned);
+    }
+  });
+
   it('returns questions_to_ask + listing_notes when AI provides them', async () => {
     const listing = 'No broker fee. Tenant pays utilities. No pets.';
     vi.spyOn(global, 'fetch').mockImplementation(async () =>

@@ -3,6 +3,7 @@
 
 import { LegalFraming } from './LegalFraming';
 import { LegalFooter } from './LegalFooter';
+import { ListingFactsCard } from './ListingFactsCard';
 import { buildingJsonLd } from '@/lib/seo/structured-data';
 import type { LookupResponse } from '@/lib/api/backend';
 
@@ -17,6 +18,7 @@ export function BuildingReport({ data }: { data: SuccessData }) {
     indicators,
     questions_to_ask,
     listing_notes,
+    scraped_listing,
     landlord,
     fare_check,
     stats,
@@ -38,6 +40,8 @@ export function BuildingReport({ data }: { data: SuccessData }) {
       </header>
 
       <LegalFraming />
+
+      {scraped_listing && <ListingFactsCard data={scraped_listing} />}
 
       <section className="summary-section" aria-label="AI risk summary">
         <h2>Risk Summary</h2>

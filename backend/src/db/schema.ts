@@ -204,6 +204,26 @@ export const leaseReviews = pgTable('lease_reviews', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Phase 4: per-URL cache for scraped NYC listings. Service-role-only.
+// Keyed by canonical URL (tracking params stripped). 7-day TTL on `data`.
+// `raw_html_gz` is debug-only and dropped after 7d by a future cron.
+export const scrapedListings = pgTable('scraped_listings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  url: text('url').notNull().unique(),
+  source: text('source').notNull(),
+  sourceKind: text('source_kind'),
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).defaultNow().notNull(),
+  fetchMethod: text('fetch_method').notNull(),
+  fetchCostCredits: integer('fetch_cost_credits').default(0),
+  // bytea is stored as Buffer in node-postgres — Drizzle has no first-class
+  // bytea type; we treat it as opaque and access via raw pool.query when needed.
+  // For schema generation purposes, declaring it as text would be wrong; use
+  // a custom column. Until then we omit it from the Drizzle model — cache.ts
+  // uses raw pool.query directly so this is fine.
+  data: jsonb('data').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 // Phase 3.7b: rows inserted by aggregate_costs() pg function when a subject
 // exceeds the $5/30-day cumulative threshold. Service-role-only (RLS enabled,
 // no policies). pg_cron fires aggregate_costs() daily at 04:00 UTC on cloud.

@@ -4,7 +4,8 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseListingUrl } from '../parse/listing-url.js';
+import { scrapeListing } from '../scraping/fetcher.js';
+import type { ScrapedListing } from '../scraping/types.js';
 import { geosearch } from '../geo/geosearch.js';
 import { lookupLandlord } from '../data/landlord.js';
 import { checkFare } from '../fare/check.js';
@@ -43,13 +44,28 @@ lookupRoute.post('/lookup', async (c) => {
   const userId = c.get('userId');
   const userEmail = c.get('userEmail') ?? email;
 
-  // ── 2. URL parse ─────────────────────────────────────────────────────────────
+  // ── 2. URL fetch + extract (Phase 4 — replaces the slug-only parser) ────────
   let resolvedAddress = address;
+  let scrapedListing: ScrapedListing | null = null;
   if (listingUrl && !resolvedAddress) {
-    const r = parseListingUrl(listingUrl);
-    if (r.kind === 'requires_address')
-      return c.json({ kind: 'requires_address', reason: r.reason });
-    resolvedAddress = r.address;
+    const r = await scrapeListing(listingUrl);
+    if (r.kind === 'error') {
+      // 'listing_blocked' is recoverable if the user pasted a description and address
+      if (r.code === 'listing_blocked' && listingDescription && address) {
+        // We have address + description from the user; carry on with no scrape
+        resolvedAddress = address;
+      } else {
+        const status = r.code === 'listing_not_found' ? 404 : 200;
+        return c.json({ kind: r.code, message: r.message ?? null }, status);
+      }
+    } else {
+      scrapedListing = r.data;
+      if (r.data.address) {
+        resolvedAddress = r.data.address;
+      } else {
+        return c.json({ kind: 'requires_address', reason: 'scraped_no_address' });
+      }
+    }
   }
   if (!resolvedAddress)
     return c.json({ kind: 'invalid_input', errors: { address: 'required' } }, 400);
@@ -124,10 +140,11 @@ lookupRoute.post('/lookup', async (c) => {
   const hpdClosed = hpdV.length - hpdOpen;
 
   // ── 6. FARE check ─────────────────────────────────────────────────────────────
-  const fareCheck =
-    listingUrl || listingDescription
-      ? checkFare({ listingText: listingDescription ?? listingUrl })
-      : null;
+  // Prefer the scraped description (verbatim from the listing page) over a
+  // user-pasted description, but fall back as needed.
+  const listingTextForChecks =
+    scrapedListing?.description ?? listingDescription ?? listingUrl ?? null;
+  const fareCheck = listingTextForChecks ? checkFare({ listingText: listingTextForChecks }) : null;
 
   // ── 7. AI summary (with cost cap) ────────────────────────────────────────────
   const subject = userId
@@ -152,8 +169,10 @@ lookupRoute.post('/lookup', async (c) => {
         watchlistRank: landlord.watchlist_rank,
         // Pass listing copy so the AI can generate verbatim listing_notes,
         // and the deterministic FARE flag so it can cross-reference.
-        listingText: listingDescription ?? null,
+        // Scraped description (verbatim from listing page) wins over user-pasted.
+        listingText: scrapedListing?.description ?? listingDescription ?? null,
         fareFlag: fareCheck?.flag ?? null,
+        scrapedListing: scrapedListing,
       },
       subject,
     );
@@ -199,6 +218,7 @@ lookupRoute.post('/lookup', async (c) => {
     indicators: summary.indicators,
     questions_to_ask: summary.questions_to_ask,
     listing_notes: summary.listing_notes,
+    scraped_listing: scrapedListing,
     landlord,
     fare_check: fareCheck,
     stats: {

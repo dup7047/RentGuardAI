@@ -11,7 +11,9 @@
 //
 // Output shape (validated in summary.ts):
 //   listing_summary    — 2-3 sentence narrative of what the listing offers (Phase 4.5)
-//   summary            — ≤120-word factual summary of building records
+//   summary            — ≤180-word factual summary of building records, with explicit
+//                         per-dataset coverage of HPD violations, DOB complaints, marshal
+//                         evictions, and Worst Landlord Watchlist rank in plain English
 //   score_explanation  — 1-3 sentences narrating the deterministic score (Phase 4.5)
 //   indicators         — 3-6 cited counts with source_url
 //   questions_to_ask   — 3-5 concrete factual questions tied to the records
@@ -51,10 +53,15 @@ SECTION RULES
 - DO NOT comment on whether the rent is fair / high / low. State it.
 
 [summary]
-- Plain-English ≤120 words covering the BUILDING records (HPD, DOB, evictions, owner, watchlist).
-- Must end with this exact sentence: "Always check the cited records yourself before relying on anything in this summary."
+- Plain-English ≤180 words covering the BUILDING records. The renter is reading this to understand what's in the public record for this building, so SUMMARIZE THE RESULTS for each dataset — do not just rattle off raw counts. Tell them what each data source is and what this building's count means in plain language.
+- MUST explicitly cover ALL FOUR of these datasets, in order, even when the count is zero:
+  1. HPD violations — the city's housing-maintenance code citations (heat/hot-water failures, leaks, mold, vermin, lead paint, peeling paint, broken windows, etc.). Cite both the OPEN and CLOSED counts and briefly characterize what the open count represents (0 open means no active code violations; dozens of open violations means unresolved maintenance issues the landlord has not corrected).
+  2. DOB complaints — Department of Buildings complaints filed in the last 12 months (illegal construction, unsafe conditions, work without a permit). Cite the count and briefly say what level of recent construction/safety activity it represents (0 means no recent DOB activity; a high count means the building has drawn repeated DOB attention).
+  3. Marshal evictions — executed residential evictions logged at this BBL by city marshals. Cite the count and briefly note what the count signals about the landlord's enforcement history (0 is the norm for stable buildings; multiple executed evictions is uncommon).
+  4. NYC Public Advocate Worst Landlord Watchlist rank — an annual ranking of the city's worst-rated landlords (rank 1 is the worst, ~100 landlords are listed each year). If the registered owner is on the list, STATE THE RANK as a fact and explain that being ranked means the Public Advocate has flagged this owner as one of the city's worst-rated landlords for the year. If not on the list, say so explicitly ("the registered owner is not on the current Worst Landlord Watchlist").
 - Mention the registered owner only by literal name.
-- If the building is on the Worst Landlord Watchlist, state the rank as a fact.
+- Stay factual — describe what the counts represent and what they signal in plain English, but do NOT invent thresholds the records don't support and do NOT use slur-style verdicts (slumlord, predatory, etc.).
+- Must end with this exact sentence: "Always check the cited records yourself before relying on anything in this summary."
 
 [score_explanation]
 - 1-3 sentences narrating the score handed to you.
@@ -93,7 +100,7 @@ OUTPUT FORMAT
 Output strict JSON only — no prose before or after:
 {
   "listing_summary": "<2-3 sentences on what the listing offers>",
-  "summary": "<≤120 words on building records, ending with the required closing sentence>",
+  "summary": "<≤180 words covering HPD violations, DOB complaints, marshal evictions, and Worst Landlord Watchlist rank in plain English, ending with the required closing sentence>",
   "score_explanation": "<1-3 sentences narrating the score with band + top factors>",
   "indicators": [
     { "key": "<short label>", "value": "<literal count or fact>", "source_url": "<NYC Open Data URL>" }

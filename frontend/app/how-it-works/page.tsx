@@ -23,7 +23,7 @@ const STEPS = [
   {
     n: '3',
     t: 'Run a structured AI summary',
-    d: 'A small, audited model (gpt-4o-mini) writes a ~100-word plain-English summary of what we found. It must cite raw counts ("47 open HPD violations") and never characterizes the building, owner, or manager beyond what the records literally say.',
+    d: 'A small, audited model (gpt-4o-mini) writes a ~150-word plain-English summary that walks you through what each public-records dataset means for this building — HPD violations (open vs. closed), DOB complaints, marshal evictions, and the building owner\'s Worst Landlord Watchlist rank. It must cite raw counts ("47 open HPD violations") and never characterizes the building, owner, or manager beyond what the records literally say.',
   },
   {
     n: '4',

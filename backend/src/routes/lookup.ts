@@ -1,8 +1,15 @@
 // POST /v1/lookup — master endpoint for Phase 3.
 // Composes: URL parse → geocode → counter check → data fetch →
 //           FARE check → AI summary (with cost cap) → persist → respond.
+//
+// Phase 6: the pipeline body is extracted into `runLookup(input, ctx, emit)`
+// so two routes can share it:
+//   - POST /v1/lookup        → original JSON-blob response (this file)
+//   - POST /v1/lookup/stream → NDJSON streaming with phase events (this file)
+// Both share the same `runLookup` so behavior never drifts between them.
 
 import { Hono } from 'hono';
+import { stream } from 'hono/streaming';
 import { z } from 'zod';
 import { scrapeListing } from '../scraping/fetcher.js';
 import type { ScrapedListing } from '../scraping/types.js';
@@ -30,20 +37,54 @@ const Body = z
   })
   .refine((d) => d.address || d.listingUrl, { message: 'address or listingUrl required' });
 
-export const lookupRoute = new Hono<{
-  Variables: { anonToken: string; userId?: string; userEmail?: string };
-}>();
+export type LookupPhase = 'parse' | 'geo' | 'hpd' | 'dob' | 'owner' | 'ai';
 
-lookupRoute.post('/lookup', async (c) => {
+export type LookupCtx = {
+  anonToken: string;
+  userId?: string;
+  userEmail?: string;
+};
+
+type LookupStatus = 200 | 400 | 402 | 404;
+export type LookupResult = { status: LookupStatus; body: unknown };
+
+/**
+ * Runs the lookup pipeline. Pure function (no Hono Context coupling) so
+ * both `/v1/lookup` (JSON) and `/v1/lookup/stream` (NDJSON) can call it.
+ *
+ * Errors known to the pipeline are returned as `{ status, body }` results.
+ * Only truly unexpected exceptions (DB outage etc.) throw — the streaming
+ * route catches those and writes a synthetic complete event; the JSON
+ * route lets Hono's default error handler turn them into a 500.
+ *
+ * Phase emit semantics:
+ *   - `parse`  : after scrapeListing succeeds, OR after the listing_blocked
+ *                recovery path sets resolvedAddress, OR immediately for
+ *                requests that don't need scraping (address-only, or
+ *                URL+address from the frontend's listing_blocked retry).
+ *                Skipped on scrape errors that abort the pipeline.
+ *   - `geo`    : after geosearch resolves with a usable BBL (NOT for
+ *                outside_nyc / ambiguous early returns).
+ *   - `hpd`    : when getHpdViolations resolves.
+ *   - `dob`    : when getDobComplaints resolves.
+ *   - `owner`  : when lookupLandlord resolves.
+ *   - `ai`     : immediately BEFORE generateSummary is called (so the user
+ *                sees "AI is now working", not "AI is now done").
+ */
+export async function runLookup(
+  input: unknown,
+  ctx: LookupCtx,
+  emit: (p: LookupPhase) => void = () => {},
+): Promise<LookupResult> {
   // ── 1. Parse + validate body ────────────────────────────────────────────────
-  const parsed = Body.safeParse(await c.req.json().catch(() => ({})));
-  if (!parsed.success)
-    return c.json({ kind: 'invalid_input', errors: parsed.error.flatten() }, 400);
+  const parsed = Body.safeParse(input);
+  if (!parsed.success) {
+    return { status: 400, body: { kind: 'invalid_input', errors: parsed.error.flatten() } };
+  }
 
   const { address, listingUrl, listingDescription, email } = parsed.data;
-  const anonToken = c.get('anonToken');
-  const userId = c.get('userId');
-  const userEmail = c.get('userEmail') ?? email;
+  const { anonToken, userId } = ctx;
+  const userEmail = ctx.userEmail ?? email;
 
   // ── 2. URL fetch + extract (Phase 4 — replaces the slug-only parser) ────────
   let resolvedAddress = address;
@@ -52,24 +93,35 @@ lookupRoute.post('/lookup', async (c) => {
     const r = await scrapeListing(listingUrl);
     if (r.kind === 'error') {
       // 'listing_blocked' is recoverable if the user pasted a description and address
+      // (defensive — the current LookupForm sends address+url together on retry,
+      // which means we don't hit this branch in practice; preserved for safety).
       if (r.code === 'listing_blocked' && listingDescription && address) {
-        // We have address + description from the user; carry on with no scrape
         resolvedAddress = address;
+        emit('parse');
       } else {
-        const status = r.code === 'listing_not_found' ? 404 : 200;
-        return c.json({ kind: r.code, message: r.message ?? null }, status);
+        const status: LookupStatus = r.code === 'listing_not_found' ? 404 : 200;
+        return { status, body: { kind: r.code, message: r.message ?? null } };
       }
     } else {
       scrapedListing = r.data;
+      emit('parse');
       if (r.data.address) {
         resolvedAddress = r.data.address;
       } else {
-        return c.json({ kind: 'requires_address', reason: 'scraped_no_address' });
+        return {
+          status: 200,
+          body: { kind: 'requires_address', reason: 'scraped_no_address' },
+        };
       }
     }
+  } else {
+    // Address-only OR both URL+address (frontend's listing_blocked retry path).
+    // No scrape needed; "parse" is conceptually done immediately.
+    emit('parse');
   }
-  if (!resolvedAddress)
-    return c.json({ kind: 'invalid_input', errors: { address: 'required' } }, 400);
+  if (!resolvedAddress) {
+    return { status: 400, body: { kind: 'invalid_input', errors: { address: 'required' } } };
+  }
 
   // ── 3. Geocode ───────────────────────────────────────────────────────────────
   const g = await geosearch(resolvedAddress);
@@ -85,13 +137,22 @@ lookupRoute.post('/lookup', async (c) => {
         })
         .onConflictDoNothing();
     }
-    return c.json({
-      kind: 'outside_nyc',
-      detected_city: g.detected_city,
-      detected_state: g.detected_state,
-    });
+    return {
+      status: 200,
+      body: {
+        kind: 'outside_nyc',
+        detected_city: g.detected_city,
+        detected_state: g.detected_state,
+      },
+    };
   }
-  if (g.kind === 'ambiguous') return c.json({ kind: 'ambiguous', matches: g.matches });
+  if (g.kind === 'ambiguous') {
+    return { status: 200, body: { kind: 'ambiguous', matches: g.matches } };
+  }
+
+  // Geo succeeded — emit only on the success path. Outside-NYC and ambiguous
+  // are dead-ends; emitting `geo` for them would be misleading on the UI.
+  emit('geo');
 
   const { bbl, address: canonicalAddress, borough } = g;
 
@@ -116,26 +177,49 @@ lookupRoute.post('/lookup', async (c) => {
   if (!userId) {
     if (!userEmail) {
       const n = await countAnonLookups(anonToken);
-      if (n >= LIMITS.FREE_ANON_LIMIT)
-        return c.json({ kind: 'email_gate', message: 'Drop your email to keep looking.' });
+      if (n >= LIMITS.FREE_ANON_LIMIT) {
+        return {
+          status: 200,
+          body: { kind: 'email_gate', message: 'Drop your email to keep looking.' },
+        };
+      }
     } else {
       const n = await countEmailLookups(userEmail);
-      if (n >= LIMITS.FREE_EMAIL_LIMIT_30D)
-        return c.json({
-          kind: 'email_gate',
-          message: 'You have used your 3 free lookups this month.',
-        });
+      if (n >= LIMITS.FREE_EMAIL_LIMIT_30D) {
+        return {
+          status: 200,
+          body: {
+            kind: 'email_gate',
+            message: 'You have used your 3 free lookups this month.',
+          },
+        };
+      }
     }
   }
 
   // ── 5. Fetch all data in parallel ────────────────────────────────────────────
+  // Wrap the three watched datasets so they emit phase events as they
+  // individually resolve. Promise.all still waits for ALL six — we just
+  // hook into the resolution of three of them.
+  const hpdP = getHpdViolations(bbl).then((v) => {
+    emit('hpd');
+    return v;
+  });
+  const dobP = getDobComplaints(bbl).then((v) => {
+    emit('dob');
+    return v;
+  });
+  const ownerP = lookupLandlord(bbl).then((v) => {
+    emit('owner');
+    return v;
+  });
   const [hpdV, dob, evic, bed, lead, landlord] = await Promise.all([
-    getHpdViolations(bbl),
-    getDobComplaints(bbl),
+    hpdP,
+    dobP,
     getEvictions(bbl),
     getBedbugReports(bbl),
     getLeadPaintViolations(bbl),
-    lookupLandlord(bbl),
+    ownerP,
   ]);
   const hpdOpen = hpdV.filter((v: { currentstatus?: string }) => v.currentstatus !== 'CLOSE').length;
   const hpdClosed = hpdV.length - hpdOpen;
@@ -163,6 +247,9 @@ lookupRoute.post('/lookup', async (c) => {
   });
 
   // ── 7. AI summary (with cost cap) ────────────────────────────────────────────
+  // Emit `ai` BEFORE the call so the user sees the AI step activate while
+  // OpenAI is actually working. The final 'complete' event implicitly ends it.
+  emit('ai');
   const subject = userId
     ? ({ type: 'user_id', value: userId } as const)
     : userEmail
@@ -196,10 +283,10 @@ lookupRoute.post('/lookup', async (c) => {
     );
   } catch (e) {
     if (e instanceof CostCapExceededError) {
-      return c.json(
-        { kind: 'cost_cap', message: "We've hit today's free cap — try again tomorrow." },
-        402,
-      );
+      return {
+        status: 402,
+        body: { kind: 'cost_cap', message: "We've hit today's free cap — try again tomorrow." },
+      };
     }
     throw e;
   }
@@ -237,32 +324,86 @@ lookupRoute.post('/lookup', async (c) => {
   if (userEmail && !userId) await incrementEmailCounter(userEmail, anonToken);
 
   // ── 10. Respond ──────────────────────────────────────────────────────────────
-  return c.json({
-    kind: 'success',
-    bbl,
-    address: canonicalAddress,
-    borough,
-    listing_summary: summary.listing_summary,
-    summary: summary.summary,
-    score_explanation: summary.score_explanation,
-    score: score.score,
-    score_band: score.band,
-    score_factors: score.factors,
-    indicators: summary.indicators,
-    questions_to_ask: summary.questions_to_ask,
-    listing_notes: summary.listing_notes,
-    scraped_listing: scrapedListing,
-    landlord,
-    fare_check: fareCheck,
-    stats: {
-      hpd_violations_open: hpdOpen,
-      hpd_violations_closed: hpdClosed,
-      dob_complaints: dob.length,
-      evictions: evic.length,
-      bedbug_reports: bed.length,
-      lead_flags: lead.length,
+  return {
+    status: 200,
+    body: {
+      kind: 'success',
+      bbl,
+      address: canonicalAddress,
+      borough,
+      listing_summary: summary.listing_summary,
+      summary: summary.summary,
+      score_explanation: summary.score_explanation,
+      score: score.score,
+      score_band: score.band,
+      score_factors: score.factors,
+      indicators: summary.indicators,
+      questions_to_ask: summary.questions_to_ask,
+      listing_notes: summary.listing_notes,
+      scraped_listing: scrapedListing,
+      landlord,
+      fare_check: fareCheck,
+      stats: {
+        hpd_violations_open: hpdOpen,
+        hpd_violations_closed: hpdClosed,
+        dob_complaints: dob.length,
+        evictions: evic.length,
+        bedbug_reports: bed.length,
+        lead_flags: lead.length,
+      },
+      lookup_id: row?.id ?? null,
+      building_url: `/building/${bbl}`,
     },
-    lookup_id: row?.id ?? null,
-    building_url: `/building/${bbl}`,
+  };
+}
+
+export const lookupRoute = new Hono<{
+  Variables: { anonToken: string; userId?: string; userEmail?: string };
+}>();
+
+// JSON variant — original behavior, single response. Backed by runLookup.
+lookupRoute.post('/lookup', async (c) => {
+  const input = await c.req.json().catch(() => ({}));
+  const ctx: LookupCtx = {
+    anonToken: c.get('anonToken'),
+    userId: c.get('userId'),
+    userEmail: c.get('userEmail'),
+  };
+  const r = await runLookup(input, ctx);
+  // Hono's c.json type union for status is broad; our status is a narrow
+  // subset of valid codes.
+  return c.json(r.body as object, r.status);
+});
+
+// Streaming variant — same pipeline, NDJSON output with phase events.
+// Each phase boundary emits a line; the final line carries the full response.
+lookupRoute.post('/lookup/stream', async (c) => {
+  const input = await c.req.json().catch(() => ({}));
+  const ctx: LookupCtx = {
+    anonToken: c.get('anonToken'),
+    userId: c.get('userId'),
+    userEmail: c.get('userEmail'),
+  };
+  c.header('Content-Type', 'application/x-ndjson');
+  c.header('Cache-Control', 'no-cache, no-transform');
+  // Disable Render's reverse-proxy buffering so chunks ship immediately.
+  c.header('X-Accel-Buffering', 'no');
+  return stream(c, async (s) => {
+    const writeLine = (obj: object) => s.write(JSON.stringify(obj) + '\n');
+    try {
+      const r = await runLookup(input, ctx, (p) => {
+        // Fire-and-forget: hono/streaming buffers the write internally.
+        writeLine({ event: 'phase', name: p });
+      });
+      await writeLine({ event: 'complete', status: r.status, response: r.body });
+    } catch {
+      // Truly unexpected exception (DB outage etc.). Send a synthetic
+      // complete event so the client always knows the stream ended.
+      await writeLine({
+        event: 'complete',
+        status: 500,
+        response: { kind: 'invalid_input', errors: { _: 'server_error' } },
+      });
+    }
   });
 });

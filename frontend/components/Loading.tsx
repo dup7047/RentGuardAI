@@ -1,9 +1,15 @@
 // 6-step animated loading interstitial. Shown by LookupForm while the
-// /v1/lookup POST is in flight. The steps are visual only — the actual
-// lookup is a single fetch. When the timer reaches the last step it
-// HOLDS there (with the progress bar at 100% and a spinning icon) until
-// the parent unmounts the component, since the backend can take 30s on
-// cold start, longer than the timer's natural ~4s pass.
+// /v1/lookup/stream POST is in flight.
+//
+// Phase 6: this component is now controlled by the parent — `phase` is fed
+// from NDJSON events the backend emits as it works. Each phase event marks
+// the currently-active step. When `phase === 'ai'`, the bar pins at 100%
+// and the icon spins (matches the old "overrun" visual) until the parent
+// unmounts on the final 'complete' event.
+//
+// If `phase` is omitted/undefined, the component falls back to the original
+// self-paced timer (drop-in compatible with any caller that doesn't yet
+// know about phase events).
 
 'use client';
 
@@ -20,22 +26,41 @@ const STEPS = [
   { k: 'ai', label: 'Synthesizing AI summary' },
 ] as const;
 
-export function Loading() {
-  const [idx, setIdx] = useState(0);
+export type LoadingPhase = (typeof STEPS)[number]['k'];
 
+type Props = { phase?: LoadingPhase | null };
+
+export function Loading({ phase }: Props = {}) {
+  const controlled = phase !== undefined;
+
+  // Self-paced timer state — only used when `phase` is not controlled.
+  const [timerIdx, setTimerIdx] = useState(0);
   useEffect(() => {
-    if (idx >= STEPS.length) return; // hold on the last step
-    const delay = idx === 0 ? 380 : 600 + Math.random() * 250;
-    const t = setTimeout(() => setIdx((i) => i + 1), delay);
+    if (controlled) return;
+    if (timerIdx >= STEPS.length) return; // hold on the last step
+    const delay = timerIdx === 0 ? 380 : 600 + Math.random() * 250;
+    const t = setTimeout(() => setTimerIdx((i) => i + 1), delay);
     return () => clearTimeout(t);
-  }, [idx]);
+  }, [timerIdx, controlled]);
 
-  // While idx < STEPS.length, the active step is `idx`.
-  // Once idx === STEPS.length, all are done EXCEPT we visually pin the last
-  // step as still active so the user sees "AI summary in progress".
-  const overrun = idx >= STEPS.length;
+  // In controlled mode, idx is the step the backend is currently working on.
+  // Initial render before any phase event lands defaults to step 0 (parse)
+  // — matches what the user expects after pressing submit.
+  const phaseIdx = phase ? STEPS.findIndex((s) => s.k === phase) : 0;
+  const idx = controlled ? Math.max(0, phaseIdx) : timerIdx;
+
+  // Overrun (timer-only): all steps "done" except step 5 stays active.
+  const overrun = !controlled && timerIdx >= STEPS.length;
   const activeIdx = overrun ? STEPS.length - 1 : idx;
-  const pct = overrun ? 100 : Math.min(100, (idx / STEPS.length) * 100);
+
+  // Progress percent. In controlled mode, weight the bar so `ai` reads 100%
+  // (matches the old overrun visual). In uncontrolled timer mode, keep the
+  // existing formula so visual snapshots don't drift.
+  const pct = controlled
+    ? Math.min(100, ((idx + 1) / STEPS.length) * 100)
+    : overrun
+      ? 100
+      : Math.min(100, (idx / STEPS.length) * 100);
 
   return (
     <div className="loading-wrap screen-fade">
@@ -56,7 +81,7 @@ export function Loading() {
 
         <div className="step-list" role="status" aria-live="polite">
           {STEPS.map((s, i) => {
-            const done = !overrun && i < idx;
+            const done = !overrun && i < activeIdx;
             const active = i === activeIdx && !done;
             return (
               <div

@@ -159,6 +159,65 @@ export async function postLookup(input: {
   return (await res.json()) as LookupResponse;
 }
 
+/**
+ * Phase 6: streaming variant of postLookup. Reads NDJSON phase events from
+ * the backend so the Loading interstitial can advance step-by-step in sync
+ * with what the backend is actually doing.
+ *
+ * Each phase line: {"event":"phase","name":"parse"|"geo"|"hpd"|"dob"|"owner"|"ai"}
+ * Final line:      {"event":"complete","status":number,"response":<LookupResponse>}
+ *
+ * Phase events fire `onPhase(name)`. The function resolves with the final
+ * response. Throws if the stream ends without a complete event (network drop).
+ */
+export type LookupPhase = 'parse' | 'geo' | 'hpd' | 'dob' | 'owner' | 'ai';
+
+export async function postLookupStream(
+  input: {
+    address?: string;
+    listingUrl?: string;
+    listingDescription?: string;
+    email?: string;
+  },
+  onPhase: (name: LookupPhase) => void,
+): Promise<LookupResponse> {
+  const auth = await authHeader();
+  const res = await fetch(`${BASE}/v1/lookup/stream`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...auth },
+    body: JSON.stringify(input),
+  });
+  if (!res.body) {
+    throw new Error('Streaming response missing body');
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  // Drain the stream, parsing one JSON object per newline. Multi-line chunks
+  // and lines split across chunks are both handled by the buffer.
+  while (true) {
+    const { value, done } = await reader.read();
+    if (value) buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n')) !== -1) {
+      const line = buf.slice(0, idx).trim();
+      buf = buf.slice(idx + 1);
+      if (!line) continue;
+      const msg = JSON.parse(line) as
+        | { event: 'phase'; name: LookupPhase }
+        | { event: 'complete'; status: number; response: LookupResponse };
+      if (msg.event === 'phase') {
+        onPhase(msg.name);
+      } else if (msg.event === 'complete') {
+        return msg.response;
+      }
+    }
+    if (done) break;
+  }
+  throw new Error('Lookup stream ended without complete event');
+}
+
 export async function postAffiliateClick(input: {
   partner: 'lemonade' | 'bellhop' | 'moved';
   referrerUrl?: string;

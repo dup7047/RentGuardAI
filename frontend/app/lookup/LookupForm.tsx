@@ -2,10 +2,11 @@
 
 // Lookup landing — Phase 5 visual rebrand.
 // Hero + single-input search card + trust pill + sources strip.
-// Submit logic is preserved: still POSTs to /v1/lookup, still routes the
-// 11 response kinds (success, requires_address, outside_nyc, ambiguous,
-// email_gate, cost_cap, rate_limited, invalid_input, listing_blocked,
-// listing_not_found, listing_expired, unsupported_url).
+//
+// Phase 6: submit POSTs to /v1/lookup/stream (NDJSON) so the Loading
+// animation can advance step-by-step in sync with backend phases.
+// The final response shape is identical to the old /v1/lookup endpoint,
+// so all 11 response-kind branches below are unchanged.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -13,7 +14,11 @@ import { useRouter } from 'next/navigation';
 import { Ambiguous } from '@/components/Ambiguous';
 import { Loading } from '@/components/Loading';
 import { OutsideNyc } from '@/components/OutsideNyc';
-import { postLookup, type LookupResponse } from '@/lib/api/backend';
+import {
+  postLookupStream,
+  type LookupPhase,
+  type LookupResponse,
+} from '@/lib/api/backend';
 
 const SOURCES = [
   { ico: 'H', nm: 'HPD violations', ds: 'Open & closed code violations' },
@@ -28,6 +33,8 @@ export function LookupForm() {
   const [input, setInput] = useState('');
   const [resp, setResp] = useState<LookupResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  // Phase 6: latest backend phase event drives the Loading animation.
+  const [phase, setPhase] = useState<LookupPhase | null>(null);
   const [email, setEmail] = useState('');
   // Fallback paste — only shown when the scrape returns kind: 'listing_blocked'
   const [showFallbackPaste, setShowFallbackPaste] = useState(false);
@@ -37,12 +44,22 @@ export function LookupForm() {
   async function submit(extras: { email?: string; address?: string; listingDescription?: string } = {}) {
     const isUrl = /^https?:\/\//i.test(input);
     setLoading(true);
+    setPhase(null);
     setResp(null);
     setShowFallbackPaste(false);
-    const r = await postLookup({
-      ...(isUrl ? { listingUrl: input } : { address: input }),
-      ...extras,
-    });
+    let r: LookupResponse;
+    try {
+      r = await postLookupStream(
+        {
+          ...(isUrl ? { listingUrl: input } : { address: input }),
+          ...extras,
+        },
+        (p) => setPhase(p),
+      );
+    } catch {
+      // Network drop or stream parse failure — surface as a generic error.
+      r = { kind: 'invalid_input', errors: { _: 'network' } };
+    }
     setLoading(false);
     setResp(r);
     if (r.kind === 'success') {
@@ -56,13 +73,22 @@ export function LookupForm() {
   async function submitFallback() {
     if (!fallbackAddress.trim()) return;
     setLoading(true);
-    const r = await postLookup({
-      listingUrl: input,
-      address: fallbackAddress.trim(),
-      ...(fallbackDescription.trim().length > 0
-        ? { listingDescription: fallbackDescription.trim() }
-        : {}),
-    });
+    setPhase(null);
+    let r: LookupResponse;
+    try {
+      r = await postLookupStream(
+        {
+          listingUrl: input,
+          address: fallbackAddress.trim(),
+          ...(fallbackDescription.trim().length > 0
+            ? { listingDescription: fallbackDescription.trim() }
+            : {}),
+        },
+        (p) => setPhase(p),
+      );
+    } catch {
+      r = { kind: 'invalid_input', errors: { _: 'network' } };
+    }
     setLoading(false);
     setResp(r);
     if (r.kind === 'success') {
@@ -78,7 +104,7 @@ export function LookupForm() {
   }
 
   // Top-level branches — full-screen takeovers
-  if (loading) return <Loading />;
+  if (loading) return <Loading phase={phase} />;
   if (resp?.kind === 'outside_nyc') {
     return (
       <OutsideNyc

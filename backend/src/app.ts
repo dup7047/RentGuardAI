@@ -16,6 +16,7 @@ export function createApp(): Hono {
   app.use('/v1/*', anonTokenMiddleware);
   app.use('/v1/*', authMiddleware);
   app.use('/v1/lookup', rateLimitMiddleware);
+  app.use('/v1/lookup/stream', rateLimitMiddleware);
 
   app.get('/health', (c) => {
     return c.json({ status: 'ok', commit: getCommitSha() });

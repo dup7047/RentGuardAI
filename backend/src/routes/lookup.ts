@@ -24,10 +24,13 @@ import { getEvictions } from '../data/datasets/evictions.js';
 import { getBedbugReports } from '../data/datasets/bedbug.js';
 import { getLeadPaintViolations } from '../data/datasets/lead-paint.js';
 import { getHpdRegistrations } from '../data/datasets/hpd-registrations.js';
+import { getCachedBatch } from '../data/cache.js';
 import { getDb } from '../db/client.js';
 import { buildingLookups, buildings, nonNycWaitlist } from '../db/schema.js';
 import { and, desc, eq, gt, isNotNull, isNull, sql as drizzleSql } from 'drizzle-orm';
 import { LIMITS, countAnonLookups, countEmailLookups, incrementEmailCounter } from '../lib/counters.js';
+import { logger } from '../logger.js';
+import type { Borough } from '../data/types.js';
 
 const Body = z
   .object({
@@ -35,10 +38,64 @@ const Body = z
     listingUrl: z.string().optional(),
     listingDescription: z.string().optional(),
     email: z.string().email().optional(),
+    // Optional pre-resolved BBL from the frontend's autocomplete pick. Lets
+    // us skip the GeoSearch round-trip entirely when the user picked a
+    // suggestion (the suggestion already carries `addendum.pad.bbl` from
+    // NYC Planning Labs). We still validate it loosely (10 digits) and fall
+    // back to geocoding on any inconsistency. Public data, no trust risk.
+    bbl: z.string().regex(/^\d{10}$/).optional(),
   })
   .refine((d) => d.address || d.listingUrl, { message: 'address or listingUrl required' });
 
 export type LookupPhase = 'parse' | 'geo' | 'hpd' | 'dob' | 'owner' | 'ai';
+
+/** Time a single phase of runLookup and emit a structured log line.
+ *  Logger-only — does NOT emit a stream event, so the streaming phase
+ *  contract stays at exactly 6 events (parse, geo, hpd, dob, owner, ai). */
+async function timePhase<T>(phase: string, fn: () => Promise<T>): Promise<T> {
+  const start = performance.now();
+  try {
+    const v = await fn();
+    logger.info(
+      { phase, durationMs: Math.round((performance.now() - start) * 100) / 100 },
+      'lookup phase completed',
+    );
+    return v;
+  } catch (e) {
+    logger.warn(
+      {
+        phase,
+        durationMs: Math.round((performance.now() - start) * 100) / 100,
+        err: String(e),
+      },
+      'lookup phase failed',
+    );
+    throw e;
+  }
+}
+
+/** Race a promise against a deadline. On timeout, resolves with the fallback
+ *  value and `timedOut: true`; the underlying promise keeps running but its
+ *  result is discarded. Used to cap dataset fan-out tail latency. */
+function withDeadline<T>(
+  p: Promise<T>,
+  ms: number,
+  fallback: T,
+): Promise<{ value: T; timedOut: boolean }> {
+  let to: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<{ value: T; timedOut: boolean }>((resolve) => {
+    to = setTimeout(() => resolve({ value: fallback, timedOut: true }), ms);
+  });
+  const settled = p
+    .then((value) => ({ value, timedOut: false }))
+    .catch(() => ({ value: fallback, timedOut: false }));
+  return Promise.race([settled, timeout]).then((r) => {
+    if (to) clearTimeout(to);
+    return r;
+  });
+}
+
+const DATASET_DEADLINE_MS = 5_000;
 
 export type LookupCtx = {
   anonToken: string;
@@ -147,14 +204,16 @@ export async function runLookup(
   input: unknown,
   ctx: LookupCtx,
   emit: (p: LookupPhase) => void = () => {},
+  emitData: (data: object) => void = () => {},
 ): Promise<LookupResult> {
+  const reqStart = performance.now();
   // ── 1. Parse + validate body ────────────────────────────────────────────────
   const parsed = Body.safeParse(input);
   if (!parsed.success) {
     return { status: 400, body: { kind: 'invalid_input', errors: parsed.error.flatten() } };
   }
 
-  const { address, listingUrl, listingDescription, email } = parsed.data;
+  const { address, listingUrl, listingDescription, email, bbl: providedBbl } = parsed.data;
   const { anonToken, userId } = ctx;
   const userEmail = ctx.userEmail ?? email;
 
@@ -162,7 +221,7 @@ export async function runLookup(
   let resolvedAddress = address;
   let scrapedListing: ScrapedListing | null = null;
   if (listingUrl && !resolvedAddress) {
-    const r = await scrapeListing(listingUrl);
+    const r = await timePhase('scrape', () => scrapeListing(listingUrl));
     if (r.kind === 'error') {
       // 'listing_blocked' is recoverable if the user pasted a description and address
       // (defensive — the current LookupForm sends address+url together on retry,
@@ -196,37 +255,57 @@ export async function runLookup(
   }
 
   // ── 3. Geocode ───────────────────────────────────────────────────────────────
-  const g = await geosearch(resolvedAddress);
-  if (g.kind === 'outside_nyc') {
-    if (userEmail) {
-      await getDb()
-        .insert(nonNycWaitlist)
-        .values({
-          email: userEmail,
-          attemptedAddress: resolvedAddress,
-          requestedCity: g.detected_city ?? 'unknown',
-          requestedState: g.detected_state ?? 'unknown',
-        })
-        .onConflictDoNothing();
+  // Fast path: when the frontend forwards a BBL captured from the autocomplete
+  // suggestion, skip the GeoSearch round-trip. We still need a canonical
+  // address + borough for the response and downstream prompt; pull them from
+  // the cached buildings row when present, fall back to user input otherwise.
+  let bbl: string;
+  let canonicalAddress: string;
+  let borough: Borough;
+  if (providedBbl) {
+    bbl = providedBbl;
+    const [b] = await getDb()
+      .select({ address: buildings.address, borough: buildings.borough })
+      .from(buildings)
+      .where(eq(buildings.bbl, providedBbl))
+      .limit(1);
+    canonicalAddress = b?.address && b.address.length > 0 ? b.address : resolvedAddress;
+    borough = ((b?.borough && b.borough.length > 0 ? b.borough : 'MANHATTAN') as Borough);
+    logger.info({ phase: 'geo', durationMs: 0, source: 'bbl_bypass' }, 'lookup phase completed');
+  } else {
+    const g = await timePhase('geo', () => geosearch(resolvedAddress!));
+    if (g.kind === 'outside_nyc') {
+      if (userEmail) {
+        await getDb()
+          .insert(nonNycWaitlist)
+          .values({
+            email: userEmail,
+            attemptedAddress: resolvedAddress,
+            requestedCity: g.detected_city ?? 'unknown',
+            requestedState: g.detected_state ?? 'unknown',
+          })
+          .onConflictDoNothing();
+      }
+      return {
+        status: 200,
+        body: {
+          kind: 'outside_nyc',
+          detected_city: g.detected_city,
+          detected_state: g.detected_state,
+        },
+      };
     }
-    return {
-      status: 200,
-      body: {
-        kind: 'outside_nyc',
-        detected_city: g.detected_city,
-        detected_state: g.detected_state,
-      },
-    };
-  }
-  if (g.kind === 'ambiguous') {
-    return { status: 200, body: { kind: 'ambiguous', matches: g.matches } };
+    if (g.kind === 'ambiguous') {
+      return { status: 200, body: { kind: 'ambiguous', matches: g.matches } };
+    }
+    bbl = g.bbl;
+    canonicalAddress = g.address;
+    borough = g.borough;
   }
 
   // Geo succeeded — emit only on the success path. Outside-NYC and ambiguous
   // are dead-ends; emitting `geo` for them would be misleading on the UI.
   emit('geo');
-
-  const { bbl, address: canonicalAddress, borough } = g;
 
   // ── 3b. Upsert canonical address/borough on buildings row ───────────────────
   // The dataset cache layer (cache.ts) creates the buildings row lazily on the
@@ -248,7 +327,7 @@ export async function runLookup(
   // ── 4. Counter check ─────────────────────────────────────────────────────────
   if (!userId) {
     if (!userEmail) {
-      const n = await countAnonLookups(anonToken);
+      const n = await timePhase('counter_check', () => countAnonLookups(anonToken));
       if (n >= LIMITS.FREE_ANON_LIMIT) {
         return {
           status: 200,
@@ -256,7 +335,7 @@ export async function runLookup(
         };
       }
     } else {
-      const n = await countEmailLookups(userEmail);
+      const n = await timePhase('counter_check', () => countEmailLookups(userEmail));
       if (n >= LIMITS.FREE_EMAIL_LIMIT_30D) {
         return {
           status: 200,
@@ -270,10 +349,15 @@ export async function runLookup(
   }
 
   // ── 5. Fetch all data in parallel ────────────────────────────────────────────
+  // Single read of buildings.raw_data feeds all 6 dataset wrappers — collapses
+  // what was 6 separate `SELECT raw_data ...` round-trips into one. Each
+  // wrapper still owns its own TTL/decision logic via readCachedSlice.
+  const rawData = await timePhase('cache_row_fetch', () => getCachedBatch(bbl));
+
   // Wrap the three watched datasets so they emit phase events as they
-  // individually resolve. Promise.all still waits for ALL six — we just
-  // hook into the resolution of three of them.
-  const hpdP = getHpdViolations(bbl).then((v) => {
+  // individually resolve. Each wrapper is also wrapped in withDeadline so a
+  // single slow Socrata call can't pace the entire pipeline.
+  const hpdP = getHpdViolations(bbl, rawData).then((v) => {
     emit('hpd');
     return v;
   });
@@ -283,62 +367,98 @@ export async function runLookup(
   });
   // HPD registrations carry the BIN; DOB complaints are BIN-keyed (Open Data
   // requires it). Fetch registrations in parallel with HPD violations + owner,
-  // then run DOB once we have a BIN.
-  const [hpdV, evic, bed, lead, landlord, regs] = await Promise.all([
-    hpdP,
-    getEvictions(bbl),
-    getBedbugReports(bbl),
-    getLeadPaintViolations(bbl),
-    ownerP,
-    getHpdRegistrations(bbl),
+  // then run DOB once we have a BIN. findRecentLookup also rides on the same
+  // parallel batch — it has no dependency on the dataset values, so running
+  // it serially after Promise.all just wastes a round-trip.
+  const isAddressOnlyInput = !listingUrl && !listingDescription;
+  const cachedAiP = isAddressOnlyInput ? findRecentLookup(bbl) : Promise.resolve(null);
+  const [hpdR, evicR, bedR, leadR, landlordR, regsR, cached] = await Promise.all([
+    withDeadline(hpdP, DATASET_DEADLINE_MS, []),
+    withDeadline(getEvictions(bbl, rawData), DATASET_DEADLINE_MS, []),
+    withDeadline(getBedbugReports(bbl, rawData), DATASET_DEADLINE_MS, []),
+    withDeadline(getLeadPaintViolations(bbl, rawData), DATASET_DEADLINE_MS, []),
+    withDeadline(ownerP, DATASET_DEADLINE_MS, {
+      registered_owner_name: null,
+      hpd_corporation_name: null,
+      registration_id: null,
+      head_officer_name: null,
+      head_officer_business_address: null,
+      watchlist_rank: null,
+      last_fetched_at: new Date(0).toISOString(),
+    }),
+    withDeadline(getHpdRegistrations(bbl, rawData), DATASET_DEADLINE_MS, []),
+    cachedAiP,
   ]);
+  const hpdV = hpdR.value;
+  const evic = evicR.value;
+  const bed = bedR.value;
+  const lead = leadR.value;
+  const landlord = landlordR.value;
+  const regs = regsR.value;
+  // DOB needs the BIN that comes off HPD registrations / violations — fetch
+  // sequentially after the parallel batch resolves. Still wrapped in
+  // withDeadline so a slow Socrata call here doesn't stall the response.
   const bin = regs[0]?.bin ?? hpdV[0]?.bin ?? null;
-  const dob = await getDobComplaints(bbl, bin ?? undefined).then((v) => {
-    emit('dob');
-    return v;
-  });
+  const dobR = await withDeadline(
+    getDobComplaints(bbl, bin ?? undefined, rawData).then((v) => {
+      emit('dob');
+      return v;
+    }),
+    DATASET_DEADLINE_MS,
+    [],
+  );
+  const dob = dobR.value;
+  const partial: string[] = [];
+  if (hpdR.timedOut) partial.push('hpd');
+  if (dobR.timedOut) partial.push('dob');
+  if (evicR.timedOut) partial.push('evictions');
+  if (bedR.timedOut) partial.push('bedbug');
+  if (leadR.timedOut) partial.push('lead_paint');
+  if (landlordR.timedOut) partial.push('landlord');
+  if (regsR.timedOut) partial.push('hpd_registrations');
+  if (partial.length > 0) {
+    logger.warn({ partial, bbl }, 'one or more datasets timed out — serving partial');
+  }
   const hpdOpen = hpdV.filter((v: { currentstatus?: string }) => v.currentstatus !== 'CLOSE').length;
   const hpdClosed = hpdV.length - hpdOpen;
   const hpdBuildingId = hpdV.find((v) => v.buildingid)?.buildingid ?? regs[0]?.buildingid ?? null;
-
-  // ── 5b. Phase 8: cache-hit short-circuit ────────────────────────────────────
-  // Address-only requests reuse the most recent persisted AI summary for this
-  // BBL when one exists within the TTL. URL-based requests skip this — the
-  // listing context (FARE flag, listing_notes referencing the user's text)
-  // requires fresh AI.
-  const isAddressOnlyInput = !listingUrl && !listingDescription;
-  const cached = isAddressOnlyInput ? await findRecentLookup(bbl) : null;
   if (cached) {
     // Step 6 still emits so the streaming animation runs to completion; the
     // 'complete' event arrives almost immediately after, naturally cutting
     // the visible AI step short.
     emit('ai');
 
-    const persisted = await getDb()
-      .insert(buildingLookups)
-      .values({
-        userId: userId ?? null,
-        email: userEmail ?? null,
-        anonToken,
-        addressInput: resolvedAddress,
-        buildingBbl: bbl,
-        aiSummary: cached.summary,
-        aiQuestions: cached.questions,
-        aiListingNotes: cached.listingNotes,
-        aiListingSummary: cached.listingSummary,
-        aiScoreExplanation: cached.scoreExplanation,
-        aiScore: cached.score,
-        aiScoreBand: cached.scoreBand,
-        aiScoreFactors: cached.scoreFactors,
-        // Address-only request had no scrape — record the lack of one so a
-        // subsequent address-only lookup can still cache-hit on this row.
-        aiScrapedListing: null,
-        // Marker: this row was a cache hit, no AI charge. Used by analytics
-        // and a future "free hit" billing path if we want one.
-        aiCostCents: 0,
-      })
-      .returning({ id: buildingLookups.id });
+    const persisted = await timePhase('persist', () =>
+      getDb()
+        .insert(buildingLookups)
+        .values({
+          userId: userId ?? null,
+          email: userEmail ?? null,
+          anonToken,
+          addressInput: resolvedAddress,
+          buildingBbl: bbl,
+          aiSummary: cached.summary,
+          aiQuestions: cached.questions,
+          aiListingNotes: cached.listingNotes,
+          aiListingSummary: cached.listingSummary,
+          aiScoreExplanation: cached.scoreExplanation,
+          aiScore: cached.score,
+          aiScoreBand: cached.scoreBand,
+          aiScoreFactors: cached.scoreFactors,
+          // Address-only request had no scrape — record the lack of one so a
+          // subsequent address-only lookup can still cache-hit on this row.
+          aiScrapedListing: null,
+          // Marker: this row was a cache hit, no AI charge. Used by analytics
+          // and a future "free hit" billing path if we want one.
+          aiCostCents: 0,
+        })
+        .returning({ id: buildingLookups.id }),
+    );
     if (userEmail && !userId) await incrementEmailCounter(userEmail, anonToken);
+    logger.info(
+      { totalDurationMs: Math.round((performance.now() - reqStart) * 100) / 100, bbl, cacheHit: true },
+      'lookup completed',
+    );
 
     return {
       status: 200,
@@ -370,8 +490,11 @@ export async function runLookup(
           bedbug_reports: bed.length,
           lead_flags: lead.length,
         },
+        partial: partial.length > 0 ? partial : undefined,
         lookup_id: persisted[0]?.id ?? null,
         building_url: `/building/${bbl}`,
+        bin,
+        hpd_building_id: hpdBuildingId,
       },
     };
   }
@@ -386,6 +509,7 @@ export async function runLookup(
   // ── 6b. Deterministic risk score (Phase 4.5) ────────────────────────────────
   // Computed in code so it's auditable + reproducible. The AI narrates this
   // score in its score_explanation but does NOT pick it.
+  const scoreStart = performance.now();
   const score = computeScore({
     hpdViolationsOpen: hpdOpen,
     hpdViolationsClosed: hpdClosed,
@@ -396,6 +520,35 @@ export async function runLookup(
     watchlistRank: landlord.watchlist_rank,
     fareFlag: fareCheck?.flag ?? null,
     scrapedListing: scrapedListing,
+  });
+  logger.info(
+    { phase: 'score', durationMs: Math.round((performance.now() - scoreStart) * 100) / 100 },
+    'lookup phase completed',
+  );
+
+  // ── 6c. Progressive payload — score + stats are ready before AI starts ─────
+  // Streaming clients can render the Overview tab here while OpenAI runs.
+  const stats = {
+    hpd_violations_open: hpdOpen,
+    hpd_violations_closed: hpdClosed,
+    dob_complaints: dob.length,
+    evictions: evic.length,
+    bedbug_reports: bed.length,
+    lead_flags: lead.length,
+  };
+  emitData({
+    bbl,
+    address: canonicalAddress,
+    borough,
+    score: score.score,
+    score_band: score.band,
+    score_factors: score.factors,
+    landlord,
+    fare_check: fareCheck,
+    stats,
+    bin,
+    hpd_building_id: hpdBuildingId,
+    partial: partial.length > 0 ? partial : undefined,
   });
 
   // ── 7. AI summary (with cost cap) ────────────────────────────────────────────
@@ -410,28 +563,30 @@ export async function runLookup(
 
   let summary;
   try {
-    summary = await generateSummary(
-      {
-        bbl,
-        address: canonicalAddress,
-        borough,
-        hpdViolations: { open: hpdOpen, closed: hpdClosed },
-        dobComplaints: dob.length,
-        evictions: evic.length,
-        bedbugReports: bed.length,
-        leadFlags: lead.length,
-        registeredOwner: landlord.registered_owner_name,
-        watchlistRank: landlord.watchlist_rank,
-        // Pass listing copy so the AI can generate verbatim listing_notes,
-        // and the deterministic FARE flag so it can cross-reference.
-        // Scraped description (verbatim from listing page) wins over user-pasted.
-        listingText: scrapedListing?.description ?? listingDescription ?? null,
-        fareFlag: fareCheck?.flag ?? null,
-        scrapedListing: scrapedListing,
-        // Phase 4.5: deterministic score handed in for narration
-        score,
-      },
-      subject,
+    summary = await timePhase('ai_summary', () =>
+      generateSummary(
+        {
+          bbl,
+          address: canonicalAddress,
+          borough,
+          hpdViolations: { open: hpdOpen, closed: hpdClosed },
+          dobComplaints: dob.length,
+          evictions: evic.length,
+          bedbugReports: bed.length,
+          leadFlags: lead.length,
+          registeredOwner: landlord.registered_owner_name,
+          watchlistRank: landlord.watchlist_rank,
+          // Pass listing copy so the AI can generate verbatim listing_notes,
+          // and the deterministic FARE flag so it can cross-reference.
+          // Scraped description (verbatim from listing page) wins over user-pasted.
+          listingText: scrapedListing?.description ?? listingDescription ?? null,
+          fareFlag: fareCheck?.flag ?? null,
+          scrapedListing: scrapedListing,
+          // Phase 4.5: deterministic score handed in for narration
+          score,
+        },
+        subject,
+      ),
     );
   } catch (e) {
     if (e instanceof CostCapExceededError) {
@@ -444,36 +599,43 @@ export async function runLookup(
   }
 
   // ── 8. Persist building_lookups ──────────────────────────────────────────────
-  const lookupRows = await getDb()
-    .insert(buildingLookups)
-    .values({
-      userId: userId ?? null,
-      email: userEmail ?? null,
-      anonToken,
-      addressInput: resolvedAddress,
-      buildingBbl: bbl,
-      aiSummary: summary.summary,
-      // Phase 3.7 follow-up: persist the new sections so the SEO archive
-      // route can return them without re-running the AI on every page view.
-      aiQuestions: summary.questions_to_ask,
-      aiListingNotes: summary.listing_notes,
-      // Phase 4.5: persist score + AI narration so SEO archive serves them
-      aiListingSummary: summary.listing_summary || null,
-      aiScoreExplanation: summary.score_explanation || null,
-      aiScore: score.score,
-      aiScoreBand: score.band,
-      aiScoreFactors: score.factors,
-      // Phase 4.5 follow-up: snapshot the scraped listing so SEO route can
-      // return it on cache hits (the scraped_listings table is keyed by URL,
-      // not BBL, so we can't join cleanly — denormalize instead).
-      aiScrapedListing: scrapedListing,
-      aiCostCents: summary.cost_cents,
-    })
-    .returning({ id: buildingLookups.id });
+  const lookupRows = await timePhase('persist', () =>
+    getDb()
+      .insert(buildingLookups)
+      .values({
+        userId: userId ?? null,
+        email: userEmail ?? null,
+        anonToken,
+        addressInput: resolvedAddress,
+        buildingBbl: bbl,
+        aiSummary: summary.summary,
+        // Phase 3.7 follow-up: persist the new sections so the SEO archive
+        // route can return them without re-running the AI on every page view.
+        aiQuestions: summary.questions_to_ask,
+        aiListingNotes: summary.listing_notes,
+        // Phase 4.5: persist score + AI narration so SEO archive serves them
+        aiListingSummary: summary.listing_summary || null,
+        aiScoreExplanation: summary.score_explanation || null,
+        aiScore: score.score,
+        aiScoreBand: score.band,
+        aiScoreFactors: score.factors,
+        // Phase 4.5 follow-up: snapshot the scraped listing so SEO route can
+        // return it on cache hits (the scraped_listings table is keyed by URL,
+        // not BBL, so we can't join cleanly — denormalize instead).
+        aiScrapedListing: scrapedListing,
+        aiCostCents: summary.cost_cents,
+      })
+      .returning({ id: buildingLookups.id }),
+  );
   const row = lookupRows[0];
 
   // ── 9. Increment email counter (anon tracked implicitly via building_lookups) ─
   if (userEmail && !userId) await incrementEmailCounter(userEmail, anonToken);
+
+  logger.info(
+    { totalDurationMs: Math.round((performance.now() - reqStart) * 100) / 100, bbl, cacheHit: false, partial: partial.length > 0 ? partial : undefined },
+    'lookup completed',
+  );
 
   // ── 10. Respond ──────────────────────────────────────────────────────────────
   return {
@@ -495,14 +657,8 @@ export async function runLookup(
       scraped_listing: scrapedListing,
       landlord,
       fare_check: fareCheck,
-      stats: {
-        hpd_violations_open: hpdOpen,
-        hpd_violations_closed: hpdClosed,
-        dob_complaints: dob.length,
-        evictions: evic.length,
-        bedbug_reports: bed.length,
-        lead_flags: lead.length,
-      },
+      stats,
+      partial: partial.length > 0 ? partial : undefined,
       lookup_id: row?.id ?? null,
       building_url: `/building/${bbl}`,
       bin,
@@ -545,10 +701,20 @@ lookupRoute.post('/lookup/stream', async (c) => {
   return stream(c, async (s) => {
     const writeLine = (obj: object) => s.write(JSON.stringify(obj) + '\n');
     try {
-      const r = await runLookup(input, ctx, (p) => {
-        // Fire-and-forget: hono/streaming buffers the write internally.
-        writeLine({ event: 'phase', name: p });
-      });
+      const r = await runLookup(
+        input,
+        ctx,
+        (p) => {
+          // Fire-and-forget: hono/streaming buffers the write internally.
+          writeLine({ event: 'phase', name: p });
+        },
+        (data) => {
+          // Progressive payload: score + stats are ready before AI starts.
+          // Different `event` value than 'phase' so existing parsers that
+          // only branch on `phase | complete` ignore it.
+          writeLine({ event: 'data_ready', data });
+        },
+      );
       await writeLine({ event: 'complete', status: r.status, response: r.body });
     } catch {
       // Truly unexpected exception (DB outage etc.). Send a synthetic

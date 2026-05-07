@@ -1,5 +1,6 @@
 import { socrataQuery } from '../nyc-client.js';
-import { getCached, setCached } from '../cache.js';
+import { getCached, readCachedSlice, setCached } from '../cache.js';
+import type { CachedData } from '../types.js';
 import { ENDPOINTS } from '../endpoints.js';
 
 export type Eviction = {
@@ -22,8 +23,14 @@ export type Eviction = {
 
 const EP = ENDPOINTS.find((e) => e.key === 'evictions')!;
 
-export async function getEvictions(bbl: string): Promise<Eviction[]> {
-  const cached = await getCached(bbl, 'evictions');
+export async function getEvictions(
+  bbl: string,
+  prefetched?: CachedData | null,
+): Promise<Eviction[]> {
+  const cached =
+    prefetched !== undefined
+      ? readCachedSlice(prefetched, 'evictions')
+      : await getCached(bbl, 'evictions');
   if (cached) return cached as Eviction[];
 
   const rows = await socrataQuery<Eviction>(EP.resourceId, {

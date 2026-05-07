@@ -16,6 +16,12 @@ export function createPool(connectionString: string = getDatabaseUrl()): pg.Pool
   const usesSsl = /sslmode=require|supabase\.co/.test(connectionString);
   return new pg.Pool({
     connectionString,
+    // Supabase free tier supports 60 direct connections; 20 per dyno leaves
+    // headroom for migrations + concurrent dynos.
+    max: 20,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
+    keepAlive: true,
     ...(usesSsl ? { ssl: { rejectUnauthorized: false } } : {}),
   });
 }

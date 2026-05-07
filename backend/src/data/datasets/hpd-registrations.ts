@@ -1,5 +1,6 @@
 import { socrataQuery } from '../nyc-client.js';
-import { getCached, setCached } from '../cache.js';
+import { getCached, readCachedSlice, setCached } from '../cache.js';
+import type { CachedData } from '../types.js';
 import { ENDPOINTS } from '../endpoints.js';
 
 export type HpdRegistration = {
@@ -38,8 +39,14 @@ export function decomposeBbl(bbl: string): { boroid: string; block: string; lot:
   };
 }
 
-export async function getHpdRegistrations(bbl: string): Promise<HpdRegistration[]> {
-  const cached = await getCached(bbl, 'hpd_registrations');
+export async function getHpdRegistrations(
+  bbl: string,
+  prefetched?: CachedData | null,
+): Promise<HpdRegistration[]> {
+  const cached =
+    prefetched !== undefined
+      ? readCachedSlice(prefetched, 'hpd_registrations')
+      : await getCached(bbl, 'hpd_registrations');
   if (cached) return cached as HpdRegistration[];
 
   const parts = decomposeBbl(bbl);

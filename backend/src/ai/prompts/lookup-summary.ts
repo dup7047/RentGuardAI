@@ -1,6 +1,14 @@
 // System prompt + user prompt builder for the building lookup summary.
 // gpt-4o-mini, JSON mode. No legal determinations — describe facts only.
 //
+// PROMPT CACHING INVARIANT: SYSTEM_PROMPT below MUST stay static and contain
+// zero per-request data. OpenAI auto-caches stable prompt prefixes ≥1024
+// tokens; this prompt is ~1200 tokens and lives in the first message slot,
+// so as long as the system content never changes per call, every lookup
+// after the first hits the input-token cache (50% discount, ~80% TTFB win).
+// Dynamic data — BBL, address, dataset stats, score — belongs ONLY in the
+// user prompt built by buildUserPrompt below.
+//
 // Output shape (validated in summary.ts):
 //   listing_summary    — 2-3 sentence narrative of what the listing offers (Phase 4.5)
 //   summary            — ≤120-word factual summary of building records

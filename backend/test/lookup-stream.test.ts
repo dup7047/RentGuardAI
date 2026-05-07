@@ -32,9 +32,19 @@ vi.mock('../src/db/client.js', () => ({
           orderBy: () => ({
             limit: async () => [],
           }),
+          // Single-row variant used by the BBL-bypass branch and getCachedBatch
+          // when called via Drizzle. The dataset wrappers themselves are mocked
+          // separately, so this just needs to satisfy any incidental reads.
+          limit: async () => [],
         }),
       }),
     }),
+  }),
+  // getCachedBatch (src/data/cache.ts) hits the raw pool. The dataset wrappers
+  // are mocked individually so cache.ts is bypassed for them, but lookup.ts
+  // still calls getCachedBatch directly. Returning rows=[] = cache miss.
+  getPool: () => ({
+    query: async () => ({ rows: [] }),
   }),
 }));
 

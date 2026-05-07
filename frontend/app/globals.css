@@ -544,10 +544,14 @@ h1.hero em {
   transform: scale(1.05);
   animation: blip 0.55s ease-out;
 }
+/* Notched ring so the rotation is actually visible — a uniformly-colored
+   border can't show motion. The top arc is the accent color, the rest of
+   the ring is the muted line color. */
 .step.active .ico {
-  border-color: var(--accent);
+  border-color: var(--line);
+  border-top-color: var(--accent);
   color: var(--accent);
-  animation: spin 1s linear infinite;
+  animation: spin 0.85s linear infinite;
 }
 .step.active { color: var(--ink); }
 

@@ -1,19 +1,21 @@
 // 6-step animated loading interstitial. Shown by LookupForm while the
 // /v1/lookup/stream POST is in flight.
 //
-// Phase 6: this component is now controlled by the parent — `phase` is fed
-// from NDJSON events the backend emits as it works. Each phase event marks
-// the currently-active step. When `phase === 'ai'`, the bar pins at 100%
-// and the icon spins (matches the old "overrun" visual) until the parent
-// unmounts on the final 'complete' event.
+// Phase 6.1: the visible animation is decoupled from the raw backend
+// event stream. We track the parent-supplied `phase` as a TARGET (where
+// the backend says we are), and advance the visible step toward it with
+// a minimum dwell time per step. This way:
+//   - cache-hit lookups (5 events in 100 ms) don't flash through;
+//     each visible step lingers ~700 ms so the user sees progress
+//   - long phases (e.g., scrape, AI) just sit on the active step with
+//     the spinner, exactly as before
 //
-// If `phase` is omitted/undefined, the component falls back to the original
-// self-paced timer (drop-in compatible with any caller that doesn't yet
-// know about phase events).
+// If `phase` is omitted/undefined, the component falls back to the
+// original self-paced timer (drop-in compatible).
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Mark } from './Mark';
 
@@ -30,37 +32,73 @@ export type LoadingPhase = (typeof STEPS)[number]['k'];
 
 type Props = { phase?: LoadingPhase | null };
 
+const FIRST_DWELL_MS = 380;
+const MIN_DWELL_MS = 700;
+
 export function Loading({ phase }: Props = {}) {
   const controlled = phase !== undefined;
 
-  // Self-paced timer state — only used when `phase` is not controlled.
-  const [timerIdx, setTimerIdx] = useState(0);
+  // displayIdx is the step currently visible to the user. It only ever
+  // moves forward, gated by min dwell time.
+  const [displayIdx, setDisplayIdx] = useState(0);
+  const lastAdvanceRef = useRef<number>(Date.now());
+
+  // Target: where the backend says we should be. Only used in controlled mode.
+  const targetIdx = useMemo(() => {
+    if (!controlled) return STEPS.length; // unused
+    if (!phase) return 0;
+    const i = STEPS.findIndex((s) => s.k === phase);
+    return i < 0 ? 0 : i;
+  }, [controlled, phase]);
+
+  // Controlled mode: advance displayIdx toward targetIdx, one step at a time,
+  // with minimum dwell between transitions.
+  useEffect(() => {
+    if (!controlled) return;
+    if (displayIdx >= targetIdx) return;
+    const sinceLast = Date.now() - lastAdvanceRef.current;
+    const minDwell = displayIdx === 0 ? FIRST_DWELL_MS : MIN_DWELL_MS;
+    const wait = Math.max(0, minDwell - sinceLast);
+    const t = setTimeout(() => {
+      lastAdvanceRef.current = Date.now();
+      setDisplayIdx((i) => Math.min(i + 1, targetIdx));
+    }, wait);
+    return () => clearTimeout(t);
+  }, [controlled, displayIdx, targetIdx]);
+
+  // Uncontrolled mode: original self-paced timer.
   useEffect(() => {
     if (controlled) return;
-    if (timerIdx >= STEPS.length) return; // hold on the last step
-    const delay = timerIdx === 0 ? 380 : 600 + Math.random() * 250;
-    const t = setTimeout(() => setTimerIdx((i) => i + 1), delay);
+    if (displayIdx >= STEPS.length) return;
+    const delay = displayIdx === 0 ? FIRST_DWELL_MS : 600 + Math.random() * 250;
+    const t = setTimeout(() => setDisplayIdx((i) => i + 1), delay);
     return () => clearTimeout(t);
-  }, [timerIdx, controlled]);
+  }, [controlled, displayIdx]);
 
-  // In controlled mode, idx is the step the backend is currently working on.
-  // Initial render before any phase event lands defaults to step 0 (parse)
-  // — matches what the user expects after pressing submit.
-  const phaseIdx = phase ? STEPS.findIndex((s) => s.k === phase) : 0;
-  const idx = controlled ? Math.max(0, phaseIdx) : timerIdx;
+  // Elapsed-seconds counter — shown under the subtitle so impatient users
+  // have a sense of progress on cold starts (Render can take 25–35 s).
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    const t = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - start) / 1000));
+    }, 500);
+    return () => clearInterval(t);
+  }, []);
 
-  // Overrun (timer-only): all steps "done" except step 5 stays active.
-  const overrun = !controlled && timerIdx >= STEPS.length;
-  const activeIdx = overrun ? STEPS.length - 1 : idx;
+  // Overrun (uncontrolled timer reached the end before parent unmounted):
+  // pin the bar at 100 % and keep step 5 active.
+  const overrun = !controlled && displayIdx >= STEPS.length;
+  const activeIdx = overrun ? STEPS.length - 1 : displayIdx;
 
-  // Progress percent. In controlled mode, weight the bar so `ai` reads 100%
-  // (matches the old overrun visual). In uncontrolled timer mode, keep the
-  // existing formula so visual snapshots don't drift.
+  // Progress percent. In controlled mode, weight the bar so `ai` reads 100 %.
+  // In uncontrolled mode, keep the original formula so the existing visual
+  // is unchanged.
   const pct = controlled
-    ? Math.min(100, ((idx + 1) / STEPS.length) * 100)
+    ? Math.min(100, ((activeIdx + 1) / STEPS.length) * 100)
     : overrun
       ? 100
-      : Math.min(100, (idx / STEPS.length) * 100);
+      : Math.min(100, (displayIdx / STEPS.length) * 100);
 
   return (
     <div className="loading-wrap screen-fade">
@@ -71,7 +109,11 @@ export function Loading({ phase }: Props = {}) {
           </div>
           <div>
             <h3>Reading the listing & public records…</h3>
-            <span>This usually takes a few seconds. Don&apos;t close this tab.</span>
+            <span>
+              {elapsed < 5
+                ? "This usually takes 10–30 seconds. Don't close this tab."
+                : `${elapsed}s elapsed · usually 10–30 seconds.`}
+            </span>
           </div>
         </div>
 

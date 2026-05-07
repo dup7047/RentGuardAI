@@ -79,7 +79,7 @@ export default function Home() {
           />
         </div>
 
-        {/* ── CTA placeholder ────────────────────────────────────── */}
+        {/* ── CTA ────────────────────────────────────────────────── */}
         <div
           style={{
             display: 'flex',
@@ -89,11 +89,26 @@ export default function Home() {
           }}
         >
           <a
-            href="/login"
+            href="/lookup"
             style={{
               display: 'inline-block',
               background: 'var(--accent)',
               color: '#fff',
+              padding: '0.75rem 2rem',
+              borderRadius: 8,
+              fontWeight: 600,
+              fontSize: '1rem',
+            }}
+          >
+            Look up a building &rarr;
+          </a>
+          <a
+            href="/login"
+            style={{
+              display: 'inline-block',
+              background: 'transparent',
+              color: 'var(--accent)',
+              border: '1.5px solid var(--accent)',
               padding: '0.75rem 2rem',
               borderRadius: 8,
               fontWeight: 600,

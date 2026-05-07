@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "tsx scripts/build-disclaimers.ts && next dev",
+    "build": "tsx scripts/build-disclaimers.ts && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "tsx scripts/build-disclaimers.ts && vitest run",
+    "test:watch": "tsx scripts/build-disclaimers.ts && vitest",
+    "build:disclaimers": "tsx scripts/build-disclaimers.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",
@@ -16,10 +19,17 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",
-    "typescript": "^5.7.2"
+    "@vitejs/plugin-react": "^4.7.0",
+    "happy-dom": "^20.9.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
   },
   "overrides": {
     "postcss": "^8.5.10"

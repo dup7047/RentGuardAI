@@ -27,7 +27,7 @@ export default async function DashboardPage() {
           <p className="auth-copy">Signed in as {user.email}</p>
         </div>
         <div className="actions">
-          <Link href="/lookup" className="btn primary">
+          <Link href="/" className="btn primary">
             + New lookup
           </Link>
           <form action={signOut}>
@@ -52,7 +52,7 @@ export default async function DashboardPage() {
           new violations.
         </p>
         <Link
-          href="/lookup"
+          href="/"
           className="btn primary"
           style={{ marginTop: 8 }}
         >

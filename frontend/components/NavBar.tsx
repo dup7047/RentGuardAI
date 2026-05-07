@@ -75,7 +75,7 @@ export async function NavBar() {
               <Link href="/login" className="btn link sm">
                 Sign in
               </Link>
-              <Link href="/lookup" className="btn primary sm">
+              <Link href="/" className="btn primary sm">
                 Get started
               </Link>
             </>

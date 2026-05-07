@@ -1,16 +1,6 @@
-import { Suspense } from 'react';
-import { LookupForm } from './LookupForm';
+import { redirect } from 'next/navigation';
 
-export const metadata = {
-  title: 'Look up a building — RentGuard NYC',
-  description:
-    'Enter an NYC address or listing URL to get an AI-powered risk summary from public records.',
-};
-
+// /lookup is the old entry point — canonical is now /.
 export default function LookupPage() {
-  return (
-    <Suspense fallback={null}>
-      <LookupForm />
-    </Suspense>
-  );
+  redirect('/');
 }

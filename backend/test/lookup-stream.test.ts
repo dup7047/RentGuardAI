@@ -62,6 +62,10 @@ vi.mock('../src/data/datasets/bedbug.js', () => ({
 vi.mock('../src/data/datasets/lead-paint.js', () => ({
   getLeadPaintViolations: vi.fn().mockResolvedValue([]),
 }));
+vi.mock('../src/data/datasets/hpd-registrations.js', () => ({
+  getHpdRegistrations: vi.fn().mockResolvedValue([]),
+  decomposeBbl: () => ({ boroid: '1', block: '1', lot: '1' }),
+}));
 
 vi.mock('../src/ai/summary.js', () => ({
   generateSummary: vi.fn().mockResolvedValue({
@@ -176,9 +180,12 @@ describe('POST /v1/lookup/stream', () => {
     expect(phaseEvents[0]).toBe('parse');
     // geo comes after parse
     expect(phaseEvents[1]).toBe('geo');
-    // hpd/dob/owner can interleave — assert as a Set
-    const dataPhases = new Set(phaseEvents.slice(2, 5));
-    expect(dataPhases).toEqual(new Set(['hpd', 'dob', 'owner']));
+    // hpd and owner run in parallel and can interleave at positions 2-3.
+    // dob is sequenced after them because it needs the BIN from HPD
+    // registrations (DOB Open Data is keyed by BIN, not BBL).
+    const parallelPhases = new Set(phaseEvents.slice(2, 4));
+    expect(parallelPhases).toEqual(new Set(['hpd', 'owner']));
+    expect(phaseEvents[4]).toBe('dob');
     // ai is last
     expect(phaseEvents[5]).toBe('ai');
     // exactly one complete line

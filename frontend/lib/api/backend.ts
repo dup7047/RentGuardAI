@@ -70,6 +70,43 @@ export function getBandLabel(band: ScoreBand | null | undefined): string {
   }
 }
 
+export type HpdViolationRow = {
+  violationid: string;
+  class?: string;
+  novissueddate?: string;
+  inspectiondate?: string;
+  currentstatus?: string;
+  currentstatusdate?: string;
+  novdescription?: string;
+  apartment?: string;
+};
+
+export type DobComplaintRow = {
+  complaint_number: string;
+  complaint_category?: string;
+  date_entered?: string;
+  status?: string;
+  disposition_code?: string;
+  disposition_date?: string;
+};
+
+export type ThreeOneOneRow = {
+  unique_key: string;
+  created_date?: string;
+  agency?: string;
+  complaint_type?: string;
+  descriptor?: string;
+  status?: string;
+};
+
+export type EvictionRow = {
+  court_index_number: string;
+  executed_date?: string;
+  eviction_address?: string;
+  eviction_apt_num?: string;
+  residential_commercial_ind?: string;
+};
+
 export type LookupResponse =
   | {
       kind: 'success';
@@ -107,6 +144,18 @@ export type LookupResponse =
       stats: Record<string, number>;
       lookup_id: string | null;
       building_url: string;
+      bin?: string | null;
+      hpd_building_id?: string | null;
+      violations_rows?: HpdViolationRow[];
+      complaints_rows?: { dob: DobComplaintRow[]; threeoneone: ThreeOneOneRow[] };
+      evictions_rows?: EvictionRow[];
+      total_counts?: {
+        violations: number;
+        dob: number;
+        threeoneone: number;
+        evictions: number;
+      };
+      has_more?: { violations: boolean; dob: boolean; threeoneone: boolean; evictions: boolean };
     }
   | { kind: 'requires_address'; reason: string }
   | { kind: 'outside_nyc'; detected_city: string | null; detected_state: string | null }

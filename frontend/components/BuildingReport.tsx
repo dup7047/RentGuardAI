@@ -11,6 +11,10 @@ import { LegalFooter } from './LegalFooter';
 import { LegalFraming } from './LegalFraming';
 import { Gauge } from './Gauge';
 import { OverviewTab } from './OverviewTab';
+import { ViolationsTab } from './ViolationsTab';
+import { ComplaintsTab } from './ComplaintsTab';
+import { OwnerTab } from './OwnerTab';
+import { SourcesTab } from './SourcesTab';
 import { ShareModal } from './ShareModal';
 import { SignInModal, type SignInReason } from './SignInModal';
 import { buildingJsonLd } from '@/lib/seo/structured-data';
@@ -241,34 +245,10 @@ export function BuildingReport({ data }: { data: SuccessData }) {
         </div>
 
         {tab === 'overview' && <OverviewTab data={data} />}
-        {tab !== 'overview' && (
-          <div
-            className="card"
-            style={{ padding: 36, textAlign: 'center', color: 'var(--ink-2)' }}
-          >
-            <div style={{ fontSize: 14 }}>
-              Detail view for{' '}
-              <b style={{ color: 'var(--ink)' }}>
-                {tab === 'violations'
-                  ? 'HPD violations'
-                  : tab === 'complaints'
-                    ? 'DOB & 311'
-                    : tab === 'owner'
-                      ? 'owner & watchlist'
-                      : 'sources'}
-              </b>{' '}
-              would render here — same data, deeper drill-down. Coming soon.
-            </div>
-            <button
-              type="button"
-              className="btn ghost sm"
-              style={{ marginTop: 14 }}
-              onClick={() => setTab('overview')}
-            >
-              ← Back to overview
-            </button>
-          </div>
-        )}
+        {tab === 'violations' && <ViolationsTab data={data} />}
+        {tab === 'complaints' && <ComplaintsTab data={data} />}
+        {tab === 'owner' && <OwnerTab data={data} />}
+        {tab === 'sources' && <SourcesTab data={data} />}
 
         {/* Have-a-lease CTA strip */}
         <div className="lease-cta">

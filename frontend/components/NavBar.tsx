@@ -47,10 +47,10 @@ export async function NavBar() {
         </Link>
 
         <div className="nav-links">
-          <a href="#how">How it works</a>
-          <a href="#coverage">Coverage</a>
-          <a href="#landlords">For landlords</a>
-          <a href="#pricing">Pricing</a>
+          <Link href="/how-it-works">How it works</Link>
+          <Link href="/coverage">Coverage</Link>
+          <Link href="/for-landlords">For landlords</Link>
+          <Link href="/pricing">Pricing</Link>
         </div>
 
         <div className="nav-cta">

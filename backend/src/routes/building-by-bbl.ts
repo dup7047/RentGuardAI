@@ -12,7 +12,13 @@ import { getDobComplaints } from '../data/datasets/dob-complaints.js';
 import { getEvictions } from '../data/datasets/evictions.js';
 import { getBedbugReports } from '../data/datasets/bedbug.js';
 import { getLeadPaintViolations } from '../data/datasets/lead-paint.js';
+import { get311HousingRequests } from '../data/datasets/three11-housing.js';
+import { getHpdRegistrations } from '../data/datasets/hpd-registrations.js';
 import { generateSummary, CostCapExceededError } from '../ai/summary.js';
+
+const VIOLATIONS_CAP = 100;
+const COMPLAINTS_CAP = 50;
+const EVICTIONS_CAP = 100;
 
 export const buildingByBblRoute = new Hono();
 
@@ -43,16 +49,22 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
     .orderBy(desc(buildingLookups.createdAt))
     .limit(1);
 
-  const [hpdV, dob, evic, bed, lead, landlord] = await Promise.all([
+  // HPD registrations are needed to derive the BIN, which DOB complaints are
+  // keyed by. Without it, DOB returns []. Fetch in parallel with the rest.
+  const [hpdV, evic, bed, lead, landlord, regs, threeoneone] = await Promise.all([
     getHpdViolations(bbl),
-    getDobComplaints(bbl),
     getEvictions(bbl),
     getBedbugReports(bbl),
     getLeadPaintViolations(bbl),
     lookupLandlord(bbl),
+    getHpdRegistrations(bbl),
+    get311HousingRequests(bbl),
   ]);
+  const bin = regs[0]?.bin ?? hpdV[0]?.bin ?? null;
+  const dob = await getDobComplaints(bbl, bin ?? undefined);
   const hpdOpen = hpdV.filter((v: { currentstatus?: string }) => v.currentstatus !== 'CLOSE').length;
   const hpdClosed = hpdV.length - hpdOpen;
+  const hpdBuildingId = hpdV.find((v) => v.buildingid)?.buildingid ?? regs[0]?.buildingid ?? null;
 
   let summary = latest?.summary ?? null;
   let indicators: Array<{ key: string; value: string; source_url: string }> = [];
@@ -127,5 +139,54 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
     },
     lookup_id: '',
     building_url: `/building/${bbl}`,
+    bin,
+    hpd_building_id: hpdBuildingId,
+    violations_rows: hpdV.slice(0, VIOLATIONS_CAP).map((v) => ({
+      violationid: v.violationid,
+      class: v.class,
+      novissueddate: v.novissueddate,
+      inspectiondate: v.inspectiondate,
+      currentstatus: v.currentstatus,
+      currentstatusdate: v.currentstatusdate,
+      novdescription: v.novdescription,
+      apartment: v.apartment,
+    })),
+    complaints_rows: {
+      dob: dob.slice(0, COMPLAINTS_CAP).map((d) => ({
+        complaint_number: d.complaint_number,
+        complaint_category: d.complaint_category,
+        date_entered: d.date_entered,
+        status: d.status,
+        disposition_code: d.disposition_code,
+        disposition_date: d.disposition_date,
+      })),
+      threeoneone: threeoneone.slice(0, COMPLAINTS_CAP).map((t) => ({
+        unique_key: t.unique_key,
+        created_date: t.created_date,
+        agency: t.agency,
+        complaint_type: t.complaint_type,
+        descriptor: t.descriptor,
+        status: t.status,
+      })),
+    },
+    evictions_rows: evic.slice(0, EVICTIONS_CAP).map((e) => ({
+      court_index_number: e.court_index_number,
+      executed_date: e.executed_date,
+      eviction_address: e.eviction_address,
+      eviction_apt_num: e.eviction_apt_num,
+      residential_commercial_ind: e.residential_commercial_ind,
+    })),
+    total_counts: {
+      violations: hpdV.length,
+      dob: dob.length,
+      threeoneone: threeoneone.length,
+      evictions: evic.length,
+    },
+    has_more: {
+      violations: hpdV.length > VIOLATIONS_CAP,
+      dob: dob.length > COMPLAINTS_CAP,
+      threeoneone: threeoneone.length > COMPLAINTS_CAP,
+      evictions: evic.length > EVICTIONS_CAP,
+    },
   });
 });

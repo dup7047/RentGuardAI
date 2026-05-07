@@ -5,29 +5,17 @@
 'use client';
 
 import type { LookupResponse, ScoreFactor } from '@/lib/api/backend';
+import {
+  dobComplaintsUrl,
+  evictionsUrl,
+  hpdViolationsUrl,
+  watchlistUrl,
+} from '@/lib/sources/urls';
 
 import { AnimatedNum } from './AnimatedNum';
 import { RevealText } from './RevealText';
 
 type SuccessData = Extract<LookupResponse, { kind: 'success' }>;
-
-const DATASET_LINKS: Record<string, string> = {
-  hpd: 'https://hpdonline.nyc.gov/hpdonline/',
-  dob: 'https://a810-bisweb.nyc.gov/bisweb/bsqpm01.jsp',
-  evictions: 'https://data.cityofnewyork.us/City-Government/Evictions/6z8x-wfk4',
-  watchlist: 'https://landlordwatchlist.com/',
-};
-
-function findIndicatorUrl(
-  indicators: SuccessData['indicators'],
-  matchKey: string,
-): string | undefined {
-  const lower = matchKey.toLowerCase();
-  for (const ind of indicators) {
-    if (ind.key.toLowerCase().includes(lower)) return ind.source_url;
-  }
-  return undefined;
-}
 
 function findingTone(impact: number): 'good' | 'warn' | 'bad' {
   if (impact < 0) return 'bad';
@@ -59,10 +47,10 @@ const FALLBACK_NEXT_STEPS = [
 
 export function OverviewTab({ data }: { data: SuccessData }) {
   const {
+    bbl,
     listing_summary,
     summary,
     score_factors,
-    indicators,
     questions_to_ask,
     landlord,
     stats,
@@ -71,6 +59,8 @@ export function OverviewTab({ data }: { data: SuccessData }) {
   const factorsForFindings: ScoreFactor[] = (score_factors ?? []).slice(0, 5);
 
   const watchlistRank = landlord?.watchlist_rank as number | null | undefined;
+  const registeredOwnerName = landlord?.registered_owner_name as string | null | undefined;
+
   const indicatorCards: Array<{
     k: string;
     v: string;
@@ -80,27 +70,26 @@ export function OverviewTab({ data }: { data: SuccessData }) {
     {
       k: 'HPD violations · open',
       v: String(stats.hpd_violations_open ?? 0),
-      src: 'HPD dataset',
-      url: findIndicatorUrl(indicators, 'hpd') ?? DATASET_LINKS.hpd,
+      src: 'HPD Online',
+      url: hpdViolationsUrl({ hpdBuildingId: data.hpd_building_id, bbl }),
     },
     {
       k: 'DOB complaints (12 mo)',
       v: String(stats.dob_complaints ?? 0),
-      src: 'DOB dataset',
-      url: findIndicatorUrl(indicators, 'dob') ?? DATASET_LINKS.dob,
+      src: 'DOB BIS',
+      url: dobComplaintsUrl({ bin: data.bin }),
     },
     {
       k: 'Marshal evictions',
       v: String(stats.evictions ?? 0),
       src: 'DOI dataset',
-      url:
-        findIndicatorUrl(indicators, 'eviction') ?? DATASET_LINKS.evictions,
+      url: evictionsUrl({ bbl }),
     },
     {
       k: 'Watchlist rank',
       v: typeof watchlistRank === 'number' ? `#${watchlistRank}` : '—',
       src: 'Public Adv.',
-      url: findIndicatorUrl(indicators, 'watchlist') ?? DATASET_LINKS.watchlist,
+      url: watchlistUrl({ registeredOwnerName, watchlistRank }),
     },
   ];
 

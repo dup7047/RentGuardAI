@@ -10,6 +10,7 @@ build/
 
 # Test artifacts
 coverage/
+!frontend/app/coverage/
 .vitest-cache/
 
 # Env files (never commit secrets)

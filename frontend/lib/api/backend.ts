@@ -44,6 +44,32 @@ export type ScoreFactor = {
   reason: string;
 };
 
+/** Maps the backend's 4-band score onto the design's 3 tone classes
+ *  (the prototype CSS only defines `.pill.good`, `.pill.warn`, `.pill.bad`).
+ *  `minimal` → good · `moderate`/`elevated` → warn · `high` → bad. */
+export type ReportTone = 'good' | 'warn' | 'bad';
+export function getReportTone(band: ScoreBand | null | undefined): ReportTone {
+  if (band === 'minimal') return 'good';
+  if (band === 'high') return 'bad';
+  return 'warn';
+}
+
+/** Human-readable label for a band, used in the address-card pill. */
+export function getBandLabel(band: ScoreBand | null | undefined): string {
+  switch (band) {
+    case 'minimal':
+      return 'Minimal concern';
+    case 'moderate':
+      return 'Moderate concern';
+    case 'elevated':
+      return 'Elevated concern';
+    case 'high':
+      return 'High concern';
+    default:
+      return 'Score unavailable';
+  }
+}
+
 export type LookupResponse =
   | {
       kind: 'success';

@@ -1,3 +1,7 @@
+// Dashboard — auth-gated. Empty-state design for now (saved-buildings
+// backend ships in a separate phase).
+
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { createClient } from '@/lib/supabase/server';
@@ -15,38 +19,46 @@ export default async function DashboardPage() {
   }
 
   return (
-    <main className="dashboard-shell">
-      <section className="dashboard-header">
+    <div className="container screen-fade">
+      <div className="dash-head">
         <div>
           <p className="eyebrow">Dashboard</p>
-          <h1>Welcome back</h1>
-          <p className="auth-copy">{user.email}</p>
+          <h1>Saved buildings</h1>
+          <p className="auth-copy">Signed in as {user.email}</p>
         </div>
-        <form action={signOut}>
-          <button className="secondary-button" type="submit">
-            Log out
-          </button>
-        </form>
-      </section>
+        <div className="actions">
+          <Link href="/lookup" className="btn primary">
+            + New lookup
+          </Link>
+          <form action={signOut}>
+            <button className="btn ghost sm" type="submit">
+              Log out
+            </button>
+          </form>
+        </div>
+      </div>
 
-      <section className="dashboard-grid">
-        <article className="dashboard-card">
-          <p className="eyebrow">Account</p>
-          <h2>Session active</h2>
-          <p>
-            Your Supabase Auth session is available to server components through
-            SSR cookies.
-          </p>
-        </article>
-        <article className="dashboard-card">
-          <p className="eyebrow">Next up</p>
-          <h2>Building lookup</h2>
-          <p>
-            Phase 3 can now use authenticated users for dashboard access and
-            higher lookup limits.
-          </p>
-        </article>
-      </section>
-    </main>
+      <div className="card dashboard-empty">
+        <div className="icn" aria-hidden="true">
+          ★
+        </div>
+        <h2>No saved buildings yet</h2>
+        <p>
+          Run a lookup and tap{' '}
+          <span style={{ color: 'var(--accent)', fontWeight: 600 }}>
+            ★ Save building
+          </span>{' '}
+          on any report — we&apos;ll re-check it every Monday and email you any
+          new violations.
+        </p>
+        <Link
+          href="/lookup"
+          className="btn primary"
+          style={{ marginTop: 8 }}
+        >
+          Run your first lookup →
+        </Link>
+      </div>
+    </div>
   );
 }

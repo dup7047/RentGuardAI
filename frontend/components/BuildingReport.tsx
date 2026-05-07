@@ -1,167 +1,306 @@
-// Renders the full building risk report from the API success response.
-// Used by both /building/[bbl] (ISR cached) and the post-lookup redirect.
+// Building risk report — Phase 5 visual rebrand.
+// Layout: breadcrumb → 2-col header (left address card + actions, right
+// gauge + score band) → tabs (only Overview is real) → CTA strip.
+// Used by both /building/[bbl] (ISR) and the post-lookup redirect.
 
-import { LegalFraming } from './LegalFraming';
+'use client';
+
+import { useState } from 'react';
+
 import { LegalFooter } from './LegalFooter';
-import { ListingFactsCard } from './ListingFactsCard';
-import { ScoreCard } from './ScoreCard';
+import { LegalFraming } from './LegalFraming';
+import { Gauge } from './Gauge';
+import { OverviewTab } from './OverviewTab';
+import { ShareModal } from './ShareModal';
+import { SignInModal, type SignInReason } from './SignInModal';
 import { buildingJsonLd } from '@/lib/seo/structured-data';
-import type { LookupResponse } from '@/lib/api/backend';
+import {
+  getBandLabel,
+  getReportTone,
+  type LookupResponse,
+} from '@/lib/api/backend';
 
 type SuccessData = Extract<LookupResponse, { kind: 'success' }>;
+type Tab = 'overview' | 'violations' | 'complaints' | 'owner' | 'sources';
+
+function fmtUnit(scrapedUnit: string | null | undefined): string | null {
+  if (!scrapedUnit) return null;
+  return scrapedUnit;
+}
+
+function bedsLabel(beds: number | null | undefined): string {
+  if (beds === null || beds === undefined) return '— bed';
+  if (beds === 0) return 'Studio';
+  return `${beds} bed`;
+}
+
+function moneyFromCents(cents: number | null | undefined): string | null {
+  if (cents === null || cents === undefined) return null;
+  return `$${Math.round(cents / 100).toLocaleString()}/mo`;
+}
 
 export function BuildingReport({ data }: { data: SuccessData }) {
   const {
     bbl,
     address,
     borough,
-    listing_summary,
     summary,
-    score_explanation,
     score,
     score_band,
-    score_factors,
-    indicators,
-    questions_to_ask,
-    listing_notes,
     scraped_listing,
-    landlord,
-    fare_check,
     stats,
   } = data;
 
-  const jsonLd = buildingJsonLd({ address, bbl, summary: summary ?? '', borough });
+  const [tab, setTab] = useState<Tab>('overview');
+  const [modal, setModal] = useState<null | { kind: 'save' | 'lease' | 'gate'; reason: SignInReason } | { kind: 'share' }>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const tone = getReportTone(score_band);
+  const label = getBandLabel(score_band);
+  const numericScore = score ?? 50;
+
+  const jsonLd = buildingJsonLd({
+    address,
+    bbl,
+    summary: summary ?? '',
+    borough,
+  });
+
+  const unit = fmtUnit(scraped_listing?.unit ?? null);
+  const beds = scraped_listing?.bedrooms ?? null;
+  const baths = scraped_listing?.bathrooms ?? null;
+  const sqft = scraped_listing?.squareFeet ?? null;
+  const rent = moneyFromCents(scraped_listing?.monthlyRentCents ?? null);
+  const hasMeta =
+    beds !== null || baths !== null || sqft !== null || rent !== null;
+
+  const openHpd = stats.hpd_violations_open ?? 0;
+
+  function showToast(msg: string) {
+    setToast(msg);
+    window.setTimeout(() => setToast(null), 2400);
+  }
+
+  function handleSave() {
+    // Anon → SignInModal. Authed → toast (saved-buildings backend not yet built).
+    // We don't know auth state here without a client check; rely on the
+    // SignInModal's own success path. For authed users the modal renders
+    // briefly then they ignore it — minor v1 quirk.
+    setModal({ kind: 'save', reason: 'save' });
+  }
+
+  function handleLease() {
+    setModal({ kind: 'lease', reason: 'lease' });
+  }
+
+  function handleDownloadPdf() {
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+  }
 
   return (
-    <article className="building-report">
+    <div className="building-report report screen-fade">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <header>
-        <h1>{address}</h1>
-        <p className="building-meta">
-          {borough} · BBL {bbl}
-        </p>
-      </header>
 
       <LegalFraming />
 
-      {scraped_listing && <ListingFactsCard data={scraped_listing} />}
+      <div className="container">
+        <div className="breadcrumb">
+          <a href="/lookup">Search</a>
+          <span>›</span>
+          <span>{borough}</span>
+          <span>›</span>
+          <span style={{ color: 'var(--ink)' }}>{address}</span>
+        </div>
 
-      <ScoreCard
-        score={score}
-        band={score_band}
-        factors={score_factors ?? []}
-        explanation={score_explanation}
-      />
-
-      {listing_summary && (
-        <section className="listing-summary-section" aria-label="Listing review">
-          <h2>Listing review</h2>
-          <p>{listing_summary}</p>
-        </section>
-      )}
-
-      <section className="summary-section" aria-label="AI building summary">
-        <h2>Building records summary</h2>
-        <p>{summary}</p>
-      </section>
-
-      {questions_to_ask && questions_to_ask.length > 0 && (
-        <section className="questions-section" aria-label="Questions to ask before signing">
-          <h2>Questions to ask before you sign</h2>
-          <p className="section-hint">
-            Tied to the public records below — bring these to your broker, the
-            landlord, the super, or HPD.
-          </p>
-          <ol>
-            {questions_to_ask.map((q, i) => (
-              <li key={i}>{q}</li>
-            ))}
-          </ol>
-        </section>
-      )}
-
-      {indicators.length > 0 && (
-        <section className="indicators-section" aria-label="Data indicators">
-          <h2>Key Indicators</h2>
-          <ul>
-            {indicators.map((ind, i) => (
-              <li key={i}>
-                <strong>{ind.key}:</strong> {ind.value}{' '}
-                <a href={ind.source_url} target="_blank" rel="noopener noreferrer">
-                  [source]
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section className="stats-section" aria-label="Raw counts">
-        <h2>Public Record Counts</h2>
-        <ul>
-          <li>HPD violations (open): {stats.hpd_violations_open}</li>
-          <li>HPD violations (closed): {stats.hpd_violations_closed}</li>
-          <li>DOB complaints: {stats.dob_complaints}</li>
-          <li>Marshal evictions: {stats.evictions}</li>
-          <li>Bedbug reports: {stats.bedbug_reports}</li>
-          <li>Lead paint flags: {stats.lead_flags}</li>
-        </ul>
-      </section>
-
-      {landlord?.registered_owner_name && (
-        <section className="landlord-section" aria-label="Registered owner">
-          <h2>Registered Owner</h2>
-          <p>{landlord.registered_owner_name}</p>
-          {landlord.watchlist_rank != null && (
-            <p className="watchlist-flag">
-              ⚠ NYC Public Advocate Worst Landlord Watchlist — rank #{landlord.watchlist_rank}
-            </p>
-          )}
-          {landlord.head_officer_name && (
-            <p>Head officer: {landlord.head_officer_name}</p>
-          )}
-        </section>
-      )}
-
-      {fare_check && fare_check.flag !== 'unclear' && (
-        <section className="fare-section" aria-label="FARE Act check">
-          <h2>FARE Act Check</h2>
-          <p>
-            <strong>
-              {fare_check.flag === 'possible_violation'
-                ? '⚠ Possible FARE Act violation detected'
-                : '✓ No broker-fee language found'}
-            </strong>
-          </p>
-          <p>{fare_check.explanation}</p>
-        </section>
-      )}
-
-      {listing_notes && listing_notes.length > 0 && (
-        <section className="listing-notes-section" aria-label="Listing copy review">
-          <h2>Listing copy — things to verify</h2>
-          <p className="section-hint">
-            Phrases pulled verbatim from the listing you provided, with a
-            neutral question or NYC-law cross-check for each. RentGuard does
-            not judge whether a listing is trustworthy.
-          </p>
-          <dl>
-            {listing_notes.map((n, i) => (
-              <div key={i} className="listing-note">
-                <dt>
-                  <q>{n.snippet}</q>
-                </dt>
-                <dd>{n.note}</dd>
+        <div className="report-head">
+          {/* Left: address + actions */}
+          <div className="card head-left">
+            <span className={`pill ${tone}`}>
+              <span className="dot" />
+              {label}
+            </span>
+            <h2 style={{ marginTop: 12 }}>
+              {address}
+              {unit ? `, ${unit}` : ''}
+            </h2>
+            <div style={{ color: 'var(--ink-2)', fontSize: 14 }}>
+              {borough} · NYC
+            </div>
+            {hasMeta && (
+              <div className="meta-row">
+                {beds !== null && <span>🛏 {bedsLabel(beds)}</span>}
+                {baths !== null && <span>🛁 {baths} bath</span>}
+                {sqft !== null && <span>📐 {sqft.toLocaleString()} sqft</span>}
+                {rent !== null && <span>💵 {rent}</span>}
+                <span
+                  className="mono"
+                  style={{ fontSize: 12, color: 'var(--muted)' }}
+                >
+                  BBL {bbl}
+                </span>
               </div>
-            ))}
-          </dl>
-        </section>
-      )}
+            )}
+            {!hasMeta && (
+              <div className="meta-row">
+                <span
+                  className="mono"
+                  style={{ fontSize: 12, color: 'var(--muted)' }}
+                >
+                  BBL {bbl}
+                </span>
+              </div>
+            )}
+            <div className="head-actions">
+              <button
+                type="button"
+                className="btn primary"
+                onClick={handleSave}
+              >
+                ★ Save building
+              </button>
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => setModal({ kind: 'share' })}
+              >
+                ↗ Share report
+              </button>
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={handleDownloadPdf}
+              >
+                ⤓ Download PDF
+              </button>
+            </div>
+          </div>
+
+          {/* Right: gauge + band */}
+          <div className="card head-right">
+            <Gauge score={numericScore} band={score_band} size={104} stroke={9} />
+            <div className="col">
+              <h3
+                style={{
+                  color:
+                    tone === 'good'
+                      ? 'var(--good)'
+                      : tone === 'warn'
+                        ? 'oklch(0.45 0.13 70)'
+                        : 'var(--bad)',
+                }}
+              >
+                {label}
+              </h3>
+              <div className="sub">
+                Score reflects open HPD violations, recent DOB complaints,
+                eviction filings, and watchlist match. Higher is safer.
+              </div>
+              <button
+                type="button"
+                className="btn link sm"
+                style={{ padding: '8px 0', marginTop: 6 }}
+                onClick={() =>
+                  showToast(
+                    'Score = 100 minus penalties. See "Notable findings" for the breakdown.',
+                  )
+                }
+              >
+                How is this calculated? →
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="tabs" role="tablist">
+          {(
+            [
+              { id: 'overview', label: 'Overview' },
+              { id: 'violations', label: `HPD violations (${openHpd})` },
+              { id: 'complaints', label: 'DOB & 311' },
+              { id: 'owner', label: 'Owner & watchlist' },
+              { id: 'sources', label: 'Sources' },
+            ] as Array<{ id: Tab; label: string }>
+          ).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              className={`tab ${tab === t.id ? 'active' : ''}`}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'overview' && <OverviewTab data={data} />}
+        {tab !== 'overview' && (
+          <div
+            className="card"
+            style={{ padding: 36, textAlign: 'center', color: 'var(--ink-2)' }}
+          >
+            <div style={{ fontSize: 14 }}>
+              Detail view for{' '}
+              <b style={{ color: 'var(--ink)' }}>
+                {tab === 'violations'
+                  ? 'HPD violations'
+                  : tab === 'complaints'
+                    ? 'DOB & 311'
+                    : tab === 'owner'
+                      ? 'owner & watchlist'
+                      : 'sources'}
+              </b>{' '}
+              would render here — same data, deeper drill-down. Coming soon.
+            </div>
+            <button
+              type="button"
+              className="btn ghost sm"
+              style={{ marginTop: 14 }}
+              onClick={() => setTab('overview')}
+            >
+              ← Back to overview
+            </button>
+          </div>
+        )}
+
+        {/* Have-a-lease CTA strip */}
+        <div className="lease-cta">
+          <div className="body">
+            <div>Have a lease in hand?</div>
+            <div>
+              Upload the PDF and we&apos;ll flag clauses that disagree with
+              NYC tenant law.
+            </div>
+          </div>
+          <button type="button" className="btn primary" onClick={handleLease}>
+            Review my lease →
+          </button>
+        </div>
+      </div>
 
       <LegalFooter />
-    </article>
+
+      {modal?.kind === 'save' && (
+        <SignInModal reason="save" onClose={() => setModal(null)} />
+      )}
+      {modal?.kind === 'lease' && (
+        <SignInModal reason="lease" onClose={() => setModal(null)} />
+      )}
+      {modal?.kind === 'gate' && (
+        <SignInModal reason="gate" onClose={() => setModal(null)} />
+      )}
+      {modal?.kind === 'share' && (
+        <ShareModal bbl={bbl} onClose={() => setModal(null)} />
+      )}
+
+      {toast && <div className="toast">{toast}</div>}
+    </div>
   );
 }

@@ -57,6 +57,20 @@
       "when": 1778031000000,
       "tag": "0007_phase_1_6_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778100000000,
+      "tag": "0008_phase_3_4_landlord_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778200000000,
+      "tag": "0009_phase_3_7b_cost_alerts",
+      "breakpoints": true
     }
   ]
 }

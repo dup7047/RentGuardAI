@@ -28,6 +28,7 @@ const EXPECTED_PUBLIC_TABLES = [
   'ai_usage',
   'building_lookups',
   'buildings',
+  'cost_alerts',
   'email_lookup_counters',
   'landlords',
   'lease_reviews',
@@ -61,7 +62,7 @@ const EXPECTED_STORAGE_POLICIES = [
 const EXPECTED_RLS_TABLES = EXPECTED_PUBLIC_TABLES;
 
 /** Minimum number of Drizzle migrations expected in the tracking table. */
-const MIN_MIGRATION_COUNT = 8;
+const MIN_MIGRATION_COUNT = 10;
 
 // ─── Checker ──────────────────────────────────────────────────────────────────
 
@@ -161,6 +162,16 @@ async function runChecks(pool: pg.Pool): Promise<void> {
   } catch (e) {
     fail('drizzle.__drizzle_migrations', `table does not exist or query failed: ${String(e)}`);
   }
+
+  // ── 5b. Phase 3.7b: aggregate_costs function ─────────────────────────────
+  console.log('\n[5b] Phase 3.7b — cost guardrail function');
+  const { rows: fnRows } = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count FROM pg_proc
+       WHERE proname = 'aggregate_costs'
+         AND pronamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')`
+  );
+  if (Number(fnRows[0]?.count ?? 0) > 0) pass('aggregate_costs() function exists');
+  else fail('aggregate_costs()', 'function not found in public schema');
 
   // ── 6. Storage buckets ───────────────────────────────────────────────────
   console.log('\n[6] Storage buckets');

@@ -199,3 +199,17 @@ export const leaseReviews = pgTable('lease_reviews', {
   pdfDeletedAt: timestamp('pdf_deleted_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Phase 3.7b: rows inserted by aggregate_costs() pg function when a subject
+// exceeds the $5/30-day cumulative threshold. Service-role-only (RLS enabled,
+// no policies). pg_cron fires aggregate_costs() daily at 04:00 UTC on cloud.
+export const costAlerts = pgTable('cost_alerts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  subjectType: text('subject_type').notNull(),
+  subjectValue: text('subject_value').notNull(),
+  windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+  windowEnd: timestamp('window_end', { withTimezone: true }).notNull(),
+  totalCostCents: integer('total_cost_cents').notNull(),
+  thresholdCents: integer('threshold_cents').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});

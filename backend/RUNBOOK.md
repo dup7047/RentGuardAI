@@ -14,6 +14,7 @@ This runbook covers backup strategy, restore procedures, and post-restore verifi
 6. [Post-restore verification](#6-post-restore-verification)
 7. [RTO / RPO targets](#7-rto--rpo-targets)
 8. [Clarifications from the Phase 1.7 restore drill](#8-clarifications-from-the-phase-17-restore-drill)
+9. [Cost monitoring (Phase 3.7b)](#9-cost-monitoring-phase-37b)
 
 ---
 
@@ -259,3 +260,53 @@ Free tier is acceptable at zero revenue. Upgrade to Pro ($25/mo) when MRR crosse
 4. **The `drizzle.__drizzle_migrations` table is recreated by `npm run migrate`** after a reset. Drizzle's migration runner re-applies all pending migrations and records them fresh.
 
 5. **No data seeding is needed for the application to start after a restore.** The schema is stateless at start-up; data is inserted by the application at runtime.
+
+---
+
+## 9. Cost monitoring (Phase 3.7b)
+
+RentGuard limits AI spend per subject (anon_token / email / user_id) before each API call via `checkCostCap()` in `backend/src/ai/cost-cap.ts`. A separate PostgreSQL function (`aggregate_costs()`) snapshots 30-day totals into `cost_alerts` for after-the-fact review.
+
+### 9.1 Viewing cost alerts in Supabase Studio
+
+```sql
+-- Open Supabase Studio → SQL Editor, run:
+SELECT subject_type, subject_value, total_cost_cents, threshold_cents, window_start, window_end
+FROM public.cost_alerts
+ORDER BY created_at DESC
+LIMIT 50;
+```
+
+### 9.2 Manually triggering the aggregate function
+
+```sql
+-- Run from Supabase Studio SQL Editor or via psql:
+SELECT public.aggregate_costs();
+```
+
+This inserts rows for any user/email combination that has spent > $5 (500 cents) over the last 30 days. The `UNIQUE` constraint prevents duplicate rows for the same subject + window pair.
+
+### 9.3 Local Supabase note
+
+pg_cron is **disabled** on the local Supabase CLI stack. The `DO $$ IF EXISTS ... END $$` guard in migration 0009 prevents errors on local. To test the schedule locally, call `SELECT public.aggregate_costs()` manually.
+
+Cloud Supabase has pg_cron enabled by default. The cron job runs daily at **04:00 UTC** under the schedule name `rentguard-cost-aggregate`.
+
+### 9.4 Tuning the alert threshold
+
+The $5/30-day threshold is hardcoded in `aggregate_costs()`. To raise or lower it:
+
+1. Edit the `threshold_cents integer := 500;` declaration in the function body.
+2. Apply via a new migration or `CREATE OR REPLACE FUNCTION` in Supabase Studio SQL Editor.
+
+The **real-time cap** (before each API call) is in `COST_CAPS_24H_CENTS` in `backend/src/ai/cost-cap.ts`:
+
+```ts
+export const COST_CAPS_24H_CENTS = {
+  anon_token: 20,  // $0.20 per day
+  email: 50,       // $0.50 per day
+  user_id: 500,    // $5.00 per day
+};
+```
+
+Redeploy the backend after changing these constants.

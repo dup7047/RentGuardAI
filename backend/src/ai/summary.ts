@@ -8,6 +8,7 @@
 
 import { callChat } from './openai-client.js';
 import { SYSTEM_PROMPT, buildUserPrompt, type BuildingPayload } from './prompts/lookup-summary.js';
+import { checkCostCap } from './cost-cap.js';
 import { getDb } from '../db/client.js';
 import { aiUsage } from '../db/schema.js';
 import { logger } from '../logger.js';
@@ -56,6 +57,10 @@ export async function generateSummary(
   payload: BuildingPayload,
   subject: SummarySubject,
 ): Promise<SummaryResult> {
+  // Phase 3.7b: enforce 24h rolling cost cap before incurring any API cost
+  const cap = await checkCostCap({ type: subject.type, value: subject.value });
+  if (!cap.ok) throw new CostCapExceededError(cap.cap_cents, cap.spent_cents);
+
   const userPrompt = buildUserPrompt(payload);
   if (SYSTEM_PROMPT.length + userPrompt.length > MAX_INPUT_CHARS) throw new TokenBudgetError();
 

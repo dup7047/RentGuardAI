@@ -15,7 +15,17 @@ vi.mock('../../src/db/client.js', () => ({
         returning: async () => [{ id: 'usage-uuid-123' }],
       }),
     }),
+    select: () => ({
+      from: () => ({
+        where: async () => [{ s: 0 }],
+      }),
+    }),
   }),
+}));
+
+// ── Cost-cap mock — always ok so summary tests focus on AI logic ──────────────
+vi.mock('../../src/ai/cost-cap.js', () => ({
+  checkCostCap: async () => ({ ok: true }),
 }));
 
 // ── Logger mock ───────────────────────────────────────────────────────────────

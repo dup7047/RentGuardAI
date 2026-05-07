@@ -3,6 +3,7 @@
 
 import { LegalFraming } from './LegalFraming';
 import { LegalFooter } from './LegalFooter';
+import { buildingJsonLd } from '@/lib/seo/structured-data';
 import type { LookupResponse } from '@/lib/api/backend';
 
 type SuccessData = Extract<LookupResponse, { kind: 'success' }>;
@@ -10,8 +11,14 @@ type SuccessData = Extract<LookupResponse, { kind: 'success' }>;
 export function BuildingReport({ data }: { data: SuccessData }) {
   const { bbl, address, borough, summary, indicators, landlord, fare_check, stats } = data;
 
+  const jsonLd = buildingJsonLd({ address, bbl, summary: summary ?? '', borough });
+
   return (
     <article className="building-report">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <header>
         <h1>{address}</h1>
         <p className="building-meta">

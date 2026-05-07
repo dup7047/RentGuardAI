@@ -229,7 +229,21 @@ export function LookupForm() {
     );
   }
   if (resp?.kind === 'ambiguous') {
-    return <Ambiguous matches={resp.matches} onBack={reset} />;
+    return (
+      <Ambiguous
+        matches={resp.matches}
+        onPick={(match) => {
+          // Re-run /v1/lookup with the canonical (borough-qualified) label
+          // so the backend resolves to a single BBL and the FULL pipeline
+          // runs (geosearch → datasets → score → AI → DB upsert). Going
+          // straight to /building/[bbl] would 404 because the SEO archive
+          // route requires a buildings row, which an ambiguous geosearch
+          // never inserts.
+          void submit({ addressOverride: match.address });
+        }}
+        onBack={reset}
+      />
+    );
   }
 
   const activeId =

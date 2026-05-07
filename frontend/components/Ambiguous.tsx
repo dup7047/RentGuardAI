@@ -1,21 +1,27 @@
 // Ambiguous-address picker — shown when the backend returns kind='ambiguous'.
 // Renders the API's `matches` array and lets the user pick which BBL to use.
+//
+// On pick we delegate back to LookupForm via `onPick` so it can re-submit
+// through /v1/lookup with the canonical (borough-qualified) address. This
+// disambiguates server-side AND seeds the buildings table + runs the full
+// scoring/AI pipeline. Navigating directly to /building/[bbl] would 404
+// because the SEO archive route requires the building to already exist.
 
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
-type Match = { bbl: string; address: string; borough: string };
+export type AmbiguousMatch = { bbl: string; address: string; borough: string };
 
 export function Ambiguous({
   matches,
+  onPick,
   onBack,
 }: {
-  matches: Match[];
+  matches: AmbiguousMatch[];
+  onPick: (match: AmbiguousMatch) => void;
   onBack: () => void;
 }) {
-  const router = useRouter();
   const [sel, setSel] = useState<string>(matches[0]?.bbl ?? '');
 
   if (matches.length === 0) {
@@ -65,7 +71,10 @@ export function Ambiguous({
           <button
             className="btn primary full"
             type="button"
-            onClick={() => router.push(`/building/${sel}?fresh=1`)}
+            onClick={() => {
+              const match = matches.find((m) => m.bbl === sel);
+              if (match) onPick(match);
+            }}
             disabled={!sel}
           >
             Generate report →

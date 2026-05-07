@@ -25,7 +25,7 @@ import { getBedbugReports } from '../data/datasets/bedbug.js';
 import { getLeadPaintViolations } from '../data/datasets/lead-paint.js';
 import { getDb } from '../db/client.js';
 import { buildingLookups, buildings, nonNycWaitlist } from '../db/schema.js';
-import { sql as drizzleSql } from 'drizzle-orm';
+import { and, desc, eq, gt, isNotNull, isNull, sql as drizzleSql } from 'drizzle-orm';
 import { LIMITS, countAnonLookups, countEmailLookups, incrementEmailCounter } from '../lib/counters.js';
 
 const Body = z
@@ -47,6 +47,77 @@ export type LookupCtx = {
 
 type LookupStatus = 200 | 400 | 402 | 404;
 export type LookupResult = { status: LookupStatus; body: unknown };
+
+// ── Phase 8: cache-hit short-circuit ──────────────────────────────────────
+// When an address-only lookup arrives for a BBL we already summarized in the
+// last 24 h, skip the OpenAI call and reuse the persisted AI fields. Same TTL
+// as the dataset cache so the cached AI fields and the fresh dataset reads
+// stay internally consistent.
+
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+type CachedRow = {
+  summary: string;
+  questions: unknown;
+  listingNotes: unknown;
+  listingSummary: string | null;
+  scoreExplanation: string | null;
+  score: number;
+  scoreBand: string;
+  scoreFactors: unknown;
+};
+
+/**
+ * Find the most recent address-only `building_lookups` row for a BBL whose AI
+ * fields are all present and within the TTL. Returns null on miss.
+ *
+ * The `isNull(aiScrapedListing)` filter is critical — rows from URL-based
+ * lookups had their score computed via `computeScore` with `scrapedListing`
+ * set, which contributes listing-derived factors. Reusing one of those for a
+ * brand-new address-only request would silently shift the score.
+ */
+async function findRecentLookup(bbl: string): Promise<CachedRow | null> {
+  const cutoff = new Date(Date.now() - CACHE_TTL_MS);
+  const [row] = await getDb()
+    .select({
+      summary: buildingLookups.aiSummary,
+      questions: buildingLookups.aiQuestions,
+      listingNotes: buildingLookups.aiListingNotes,
+      listingSummary: buildingLookups.aiListingSummary,
+      scoreExplanation: buildingLookups.aiScoreExplanation,
+      score: buildingLookups.aiScore,
+      scoreBand: buildingLookups.aiScoreBand,
+      scoreFactors: buildingLookups.aiScoreFactors,
+    })
+    .from(buildingLookups)
+    .where(
+      and(
+        eq(buildingLookups.buildingBbl, bbl),
+        isNotNull(buildingLookups.aiSummary),
+        isNotNull(buildingLookups.aiScore),
+        isNotNull(buildingLookups.aiScoreBand),
+        isNull(buildingLookups.aiScrapedListing),
+        gt(buildingLookups.createdAt, cutoff),
+      ),
+    )
+    .orderBy(desc(buildingLookups.createdAt))
+    .limit(1);
+  // Drizzle's column inference returns nullable types even when the WHERE
+  // clause guarantees NOT NULL — narrow at runtime.
+  if (!row || row.summary == null || row.score == null || row.scoreBand == null) {
+    return null;
+  }
+  return {
+    summary: row.summary,
+    questions: row.questions,
+    listingNotes: row.listingNotes,
+    listingSummary: row.listingSummary,
+    scoreExplanation: row.scoreExplanation,
+    score: row.score,
+    scoreBand: row.scoreBand,
+    scoreFactors: row.scoreFactors,
+  };
+}
 
 /**
  * Runs the lookup pipeline. Pure function (no Hono Context coupling) so
@@ -223,6 +294,81 @@ export async function runLookup(
   ]);
   const hpdOpen = hpdV.filter((v: { currentstatus?: string }) => v.currentstatus !== 'CLOSE').length;
   const hpdClosed = hpdV.length - hpdOpen;
+
+  // ── 5b. Phase 8: cache-hit short-circuit ────────────────────────────────────
+  // Address-only requests reuse the most recent persisted AI summary for this
+  // BBL when one exists within the TTL. URL-based requests skip this — the
+  // listing context (FARE flag, listing_notes referencing the user's text)
+  // requires fresh AI.
+  const isAddressOnlyInput = !listingUrl && !listingDescription;
+  const cached = isAddressOnlyInput ? await findRecentLookup(bbl) : null;
+  if (cached) {
+    // Step 6 still emits so the streaming animation runs to completion; the
+    // 'complete' event arrives almost immediately after, naturally cutting
+    // the visible AI step short.
+    emit('ai');
+
+    const persisted = await getDb()
+      .insert(buildingLookups)
+      .values({
+        userId: userId ?? null,
+        email: userEmail ?? null,
+        anonToken,
+        addressInput: resolvedAddress,
+        buildingBbl: bbl,
+        aiSummary: cached.summary,
+        aiQuestions: cached.questions,
+        aiListingNotes: cached.listingNotes,
+        aiListingSummary: cached.listingSummary,
+        aiScoreExplanation: cached.scoreExplanation,
+        aiScore: cached.score,
+        aiScoreBand: cached.scoreBand,
+        aiScoreFactors: cached.scoreFactors,
+        // Address-only request had no scrape — record the lack of one so a
+        // subsequent address-only lookup can still cache-hit on this row.
+        aiScrapedListing: null,
+        // Marker: this row was a cache hit, no AI charge. Used by analytics
+        // and a future "free hit" billing path if we want one.
+        aiCostCents: 0,
+      })
+      .returning({ id: buildingLookups.id });
+    if (userEmail && !userId) await incrementEmailCounter(userEmail, anonToken);
+
+    return {
+      status: 200,
+      body: {
+        kind: 'success',
+        bbl,
+        address: canonicalAddress,
+        borough,
+        listing_summary: cached.listingSummary,
+        summary: cached.summary,
+        score_explanation: cached.scoreExplanation,
+        score: cached.score,
+        score_band: cached.scoreBand,
+        score_factors: Array.isArray(cached.scoreFactors) ? cached.scoreFactors : [],
+        // AI-generated source links aren't persisted today. OverviewTab falls
+        // back to static dataset URLs when this is empty — same behavior as
+        // the SEO archive route on cache hit.
+        indicators: [],
+        questions_to_ask: Array.isArray(cached.questions) ? cached.questions : [],
+        listing_notes: Array.isArray(cached.listingNotes) ? cached.listingNotes : [],
+        scraped_listing: null,
+        landlord,
+        fare_check: null,
+        stats: {
+          hpd_violations_open: hpdOpen,
+          hpd_violations_closed: hpdClosed,
+          dob_complaints: dob.length,
+          evictions: evic.length,
+          bedbug_reports: bed.length,
+          lead_flags: lead.length,
+        },
+        lookup_id: persisted[0]?.id ?? null,
+        building_url: `/building/${bbl}`,
+      },
+    };
+  }
 
   // ── 6. FARE check ─────────────────────────────────────────────────────────────
   // Prefer the scraped description (verbatim from the listing page) over a

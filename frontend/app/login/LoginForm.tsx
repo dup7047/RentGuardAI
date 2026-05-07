@@ -53,12 +53,13 @@ export function LoginForm() {
       return;
     }
 
+    // Use the bare /auth/callback URL (no query string). Supabase only
+    // accepts URLs that exactly match `additional_redirect_urls` in the
+    // allow-list; if it doesn't match, GoTrue silently strips the path
+    // back to site_url, breaking the round-trip. The /auth/callback route
+    // always redirects to /dashboard, which is the only authenticated page
+    // we currently gate, so a query-string `?next=` isn't actually needed.
     const callbackUrl = new URL('/auth/callback', window.location.origin);
-    const redirectTo = searchParams.get('redirectTo');
-
-    if (redirectTo) {
-      callbackUrl.searchParams.set('next', redirectTo);
-    }
 
     const { error } = await supabaseState.client.auth.signInWithOtp({
       email,

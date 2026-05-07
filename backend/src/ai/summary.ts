@@ -48,7 +48,7 @@ export type SummaryListingNote = { snippet: string; note: string };
 export type SummaryResult = {
   /** Phase 4.5: 2-3 sentence narrative of what the listing offers. May be empty for address-only lookups. */
   listing_summary: string;
-  /** Phase 3.7: ≤120-word factual building summary. */
+  /** Phase 3.7: ≤180-word factual building summary covering HPD violations, DOB complaints, marshal evictions, and Worst Landlord Watchlist rank in plain English. */
   summary: string;
   /** Phase 4.5: AI-narrated explanation of the deterministic score. */
   score_explanation: string;
@@ -83,7 +83,7 @@ export async function generateSummary(
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
     ],
-    // 1500 leaves headroom for: ≤120-word summary + 6 indicators + 5 questions
+    // 1500 leaves headroom for: ≤180-word summary + 6 indicators + 5 questions
     // + 5 listing_notes (each ~50 tokens for snippet+note). Was 1000 when we
     // only asked for summary+indicators.
     max_completion_tokens: 1500,

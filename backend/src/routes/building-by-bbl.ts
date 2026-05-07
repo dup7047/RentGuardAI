@@ -23,9 +23,15 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
   const [b] = await getDb().select().from(buildings).where(eq(buildings.bbl, bbl)).limit(1);
   if (!b) return c.json({ kind: 'not_found' }, 404);
 
-  // Prefer the most recent AI summary already generated for this building
+  // Prefer the most recent AI output already generated for this building.
+  // Also pull the new questions/listing_notes columns (Phase 3.7 follow-up)
+  // so cached pages get the full structured response, not just the summary text.
   const [latest] = await getDb()
-    .select({ summary: buildingLookups.aiSummary })
+    .select({
+      summary: buildingLookups.aiSummary,
+      questions: buildingLookups.aiQuestions,
+      listingNotes: buildingLookups.aiListingNotes,
+    })
     .from(buildingLookups)
     .where(eq(buildingLookups.buildingBbl, bbl))
     .orderBy(desc(buildingLookups.createdAt))
@@ -44,8 +50,14 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
 
   let summary = latest?.summary ?? null;
   let indicators: Array<{ key: string; value: string; source_url: string }> = [];
-  let questions_to_ask: string[] = [];
-  let listing_notes: Array<{ snippet: string; note: string }> = [];
+  // Hydrate cached structured fields when present. JSONB read returns unknown,
+  // so cast through known shapes; defaults to [] for legacy rows missing them.
+  let questions_to_ask: string[] = Array.isArray(latest?.questions)
+    ? (latest!.questions as string[])
+    : [];
+  let listing_notes: Array<{ snippet: string; note: string }> = Array.isArray(latest?.listingNotes)
+    ? (latest!.listingNotes as Array<{ snippet: string; note: string }>)
+    : [];
 
   // If no prior summary, generate one using the SEO anon token (subject to cost cap)
   if (!summary) {

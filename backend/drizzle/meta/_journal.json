@@ -71,6 +71,13 @@
       "when": 1778200000000,
       "tag": "0009_phase_3_7b_cost_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778300000000,
+      "tag": "0010_phase_3_7_ai_questions_listing_notes",
+      "breakpoints": true
     }
   ]
 }

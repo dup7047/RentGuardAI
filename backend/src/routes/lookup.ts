@@ -177,6 +177,10 @@ lookupRoute.post('/lookup', async (c) => {
       addressInput: resolvedAddress,
       buildingBbl: bbl,
       aiSummary: summary.summary,
+      // Phase 3.7 follow-up: persist the new sections so the SEO archive
+      // route can return them without re-running the AI on every page view.
+      aiQuestions: summary.questions_to_ask,
+      aiListingNotes: summary.listing_notes,
       aiCostCents: summary.cost_cents,
     })
     .returning({ id: buildingLookups.id });

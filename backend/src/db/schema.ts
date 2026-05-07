@@ -76,6 +76,10 @@ export const buildingLookups = pgTable('building_lookups', {
   addressInput: text('address_input').notNull(),
   buildingBbl: text('building_bbl'),
   aiSummary: text('ai_summary'),
+  /** SummaryQuestion[] — 3-5 specific questions tied to records (Phase 3.7 follow-up) */
+  aiQuestions: jsonb('ai_questions'),
+  /** SummaryListingNote[] — verbatim-anchored notes on listing copy (Phase 3.7 follow-up) */
+  aiListingNotes: jsonb('ai_listing_notes'),
   aiCostCents: integer('ai_cost_cents').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });

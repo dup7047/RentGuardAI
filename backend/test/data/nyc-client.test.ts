@@ -6,15 +6,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function makeFetch(rows: unknown[], status = 200): typeof fetch {
-  return vi.fn().mockResolvedValue(
-    new Response(JSON.stringify(rows), {
-      status,
-      headers: { 'Content-Type': 'application/json' },
-    }),
-  ) as unknown as typeof fetch;
-}
-
 describe('socrataQuery', () => {
   it('returns parsed rows on success', async () => {
     const spy = vi.spyOn(global, 'fetch').mockResolvedValue(

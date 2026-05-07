@@ -91,6 +91,11 @@ export const buildings = pgTable('buildings', {
   borough: text('borough').notNull(),
   lastFetchedAt: timestamp('last_fetched_at', { withTimezone: true }).defaultNow().notNull(),
   rawData: jsonb('raw_data').notNull().default({}),
+  // Phase 3.4: FK to the registered owner in the landlords cache.
+  registeredOwnerLandlordId: uuid('registered_owner_landlord_id').references(
+    () => landlords.id,
+    { onDelete: 'set null' },
+  ),
 });
 
 // Public reference cache: registered owner per HPD building registration.

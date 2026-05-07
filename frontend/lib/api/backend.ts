@@ -12,6 +12,17 @@ export type LookupResponse =
       borough: string;
       summary: string;
       indicators: Array<{ key: string; value: string; source_url: string }>;
+      /**
+       * 3–5 specific factual questions the renter should ask the broker /
+       * landlord / HPD before signing. Always non-empty for fresh lookups;
+       * may be [] for older cached entries from before the prompt update.
+       */
+      questions_to_ask: string[];
+      /**
+       * Verbatim-anchored neutral observations about the listing copy.
+       * Empty when the user did not paste a listing description.
+       */
+      listing_notes: Array<{ snippet: string; note: string }>;
       landlord: AnyRecord;
       fare_check: AnyRecord | null;
       stats: Record<string, number>;

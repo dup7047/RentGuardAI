@@ -44,6 +44,8 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
 
   let summary = latest?.summary ?? null;
   let indicators: Array<{ key: string; value: string; source_url: string }> = [];
+  let questions_to_ask: string[] = [];
+  let listing_notes: Array<{ snippet: string; note: string }> = [];
 
   // If no prior summary, generate one using the SEO anon token (subject to cost cap)
   if (!summary) {
@@ -60,11 +62,16 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
           leadFlags: lead.length,
           registeredOwner: landlord.registered_owner_name,
           watchlistRank: landlord.watchlist_rank,
+          // SEO archive doesn't have the user's listing copy.
+          listingText: null,
+          fareFlag: null,
         },
         { type: 'anon_token', value: `seo:${bbl}` },
       );
       summary = r.summary;
       indicators = r.indicators;
+      questions_to_ask = r.questions_to_ask;
+      listing_notes = r.listing_notes; // always [] for SEO route (no listingText)
     } catch (e) {
       if (e instanceof CostCapExceededError) {
         summary = 'Summary temporarily unavailable due to daily generation limits.';
@@ -81,6 +88,8 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
     borough: b.borough,
     summary,
     indicators,
+    questions_to_ask,
+    listing_notes,
     landlord,
     fare_check: null,
     stats: {

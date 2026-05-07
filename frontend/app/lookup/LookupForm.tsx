@@ -14,6 +14,8 @@ import { postLookup, postWaitlistEmail, type LookupResponse } from '@/lib/api/ba
 export function LookupForm() {
   const router = useRouter();
   const [input, setInput] = useState('');
+  const [listingDescription, setListingDescription] = useState('');
+  const [showListingPaste, setShowListingPaste] = useState(false);
   const [resp, setResp] = useState<LookupResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -22,8 +24,10 @@ export function LookupForm() {
   async function submit(extras: { email?: string } = {}) {
     setLoading(true);
     const isUrl = /^https?:\/\//i.test(input);
+    const trimmedListing = listingDescription.trim();
     const r = await postLookup({
       ...(isUrl ? { listingUrl: input } : { address: input }),
+      ...(trimmedListing.length > 0 ? { listingDescription: trimmedListing } : {}),
       ...extras,
     });
     setLoading(false);
@@ -48,6 +52,38 @@ export function LookupForm() {
           {loading ? 'Looking up…' : 'Look up'}
         </button>
       </div>
+
+      <div className="lookup-listing-toggle">
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => setShowListingPaste((v) => !v)}
+        >
+          {showListingPaste ? '− Hide listing copy' : '+ Paste listing copy for a critical review (optional)'}
+        </button>
+      </div>
+
+      {showListingPaste && (
+        <div className="lookup-listing-paste">
+          <label htmlFor="listing-description">
+            Paste the listing description (StreetEasy, Zillow, Craigslist, etc.):
+          </label>
+          <textarea
+            id="listing-description"
+            value={listingDescription}
+            onChange={(e) => setListingDescription(e.target.value)}
+            placeholder='Charming 2BR in Manhattan... No broker fee. Tenant pays utilities. No pets. $3,500/mo.'
+            rows={6}
+            maxLength={4000}
+            className="lookup-listing-textarea"
+            aria-describedby="listing-description-hint"
+          />
+          <p id="listing-description-hint" className="lookup-hint">
+            We&apos;ll quote phrases verbatim and flag NYC-law things to verify.
+            We never judge whether a listing is trustworthy. (Up to 4,000 chars.)
+          </p>
+        </div>
+      )}
 
       {resp?.kind === 'requires_address' && (
         <p className="lookup-msg error">

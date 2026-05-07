@@ -198,4 +198,153 @@ describe('generateSummary', () => {
     expect(SYSTEM_PROMPT.length).toBeGreaterThan(100);
     expect(SYSTEM_PROMPT).toContain('Always check the cited records yourself');
   });
+
+  it('system prompt declares all four output sections', () => {
+    expect(SYSTEM_PROMPT).toContain('summary');
+    expect(SYSTEM_PROMPT).toContain('indicators');
+    expect(SYSTEM_PROMPT).toContain('questions_to_ask');
+    expect(SYSTEM_PROMPT).toContain('listing_notes');
+  });
+
+  it('system prompt forbids verdict words', () => {
+    // Sample of the explicit blacklist — the rule list isn't structured but
+    // these specific words must always appear in the prompt as forbidden.
+    for (const banned of ['scam', 'slumlord', 'avoid', 'recommend']) {
+      expect(SYSTEM_PROMPT.toLowerCase()).toContain(banned);
+    }
+  });
+
+  it('returns questions_to_ask + listing_notes when AI provides them', async () => {
+    const listing = 'No broker fee. Tenant pays utilities. No pets.';
+    vi.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary:
+                    'Public records show 5 open HPD violations. Always check the cited records yourself before relying on anything in this summary.',
+                  indicators: [
+                    { key: 'HPD open violations', value: '5', source_url: 'https://x' },
+                  ],
+                  questions_to_ask: [
+                    'Ask which apartment numbers are affected by the 5 open HPD violations.',
+                    'Request written confirmation that no broker fee will be charged.',
+                    'Ask which utilities the tenant is responsible for.',
+                  ],
+                  listing_notes: [
+                    {
+                      snippet: 'No broker fee',
+                      note: 'Ask the broker to confirm in writing — the FARE Act prohibits charging tenants for landlord-hired brokers.',
+                    },
+                    {
+                      snippet: 'No pets',
+                      note: "NYC's Pet Law limits enforcement of no-pet clauses if the landlord knowingly allows a pet for 3+ months.",
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+          usage: { prompt_tokens: 1500, completion_tokens: 400 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const result = await generateSummary({ ...BASE_PAYLOAD, listingText: listing }, SUBJECT);
+    expect(result.questions_to_ask).toHaveLength(3);
+    expect(result.questions_to_ask[0]).toContain('apartment numbers');
+    expect(result.listing_notes).toHaveLength(2);
+    expect(result.listing_notes[0]?.snippet).toBe('No broker fee');
+    expect(result.listing_notes[0]?.note).toContain('FARE Act');
+  });
+
+  it('drops listing_notes whose snippet does NOT appear in the listing (case-insensitive)', async () => {
+    const listing = 'Charming 2BR in Manhattan. No broker fee.';
+    vi.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary:
+                    'Public records summary. Always check the cited records yourself before relying on anything in this summary.',
+                  indicators: [{ key: 'k', value: 'v', source_url: 'https://x' }],
+                  questions_to_ask: ['Ask...'],
+                  listing_notes: [
+                    { snippet: 'No broker fee', note: 'Exact match — kept' },
+                    { snippet: 'no broker fee', note: 'Lowercased version — kept (case-insensitive match)' },
+                    { snippet: 'tenant pays utilities', note: 'Hallucinated — dropped (not in listing)' },
+                  ],
+                }),
+              },
+            },
+          ],
+          usage: { prompt_tokens: 100, completion_tokens: 50 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const result = await generateSummary({ ...BASE_PAYLOAD, listingText: listing }, SUBJECT);
+    expect(result.listing_notes).toHaveLength(2);
+    const snippets = result.listing_notes.map((n) => n.snippet);
+    expect(snippets).toContain('No broker fee');
+    expect(snippets).toContain('no broker fee');
+    // Hallucinated snippet was dropped
+    expect(snippets).not.toContain('tenant pays utilities');
+  });
+
+  it('forces listing_notes to [] when no listingText is supplied', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary: 'Always check the cited records yourself before relying on anything in this summary.',
+                  indicators: [{ key: 'k', value: 'v', source_url: 'https://x' }],
+                  questions_to_ask: ['Ask...'],
+                  // AI tries to invent listing notes despite no input — should be wiped
+                  listing_notes: [{ snippet: 'made up', note: 'invented' }],
+                }),
+              },
+            },
+          ],
+          usage: { prompt_tokens: 100, completion_tokens: 50 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const result = await generateSummary(BASE_PAYLOAD, SUBJECT);
+    expect(result.listing_notes).toEqual([]);
+  });
+
+  it('forward-compat: legacy AI response (no new fields) → questions/notes default to []', async () => {
+    // Cached/older responses that only return summary+indicators must not crash
+    vi.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary: 'Old-shape summary. Always check the cited records yourself before relying on anything in this summary.',
+                  indicators: [{ key: 'k', value: 'v', source_url: 'https://x' }],
+                }),
+              },
+            },
+          ],
+          usage: { prompt_tokens: 100, completion_tokens: 50 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const result = await generateSummary(BASE_PAYLOAD, SUBJECT);
+    expect(result.summary).toContain('Old-shape');
+    expect(result.questions_to_ask).toEqual([]);
+    expect(result.listing_notes).toEqual([]);
+  });
 });

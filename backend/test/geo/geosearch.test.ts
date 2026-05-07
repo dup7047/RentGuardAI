@@ -118,6 +118,16 @@ describe('geosearch', () => {
     }
   });
 
+  it('short-circuits to outside_nyc on non-NYC state token (no GeoSearch call)', async () => {
+    const spy = vi.spyOn(global, 'fetch');
+    const r = await geosearch('1600 Amphitheatre Parkway Mountain View CA');
+    expect(r.kind).toBe('outside_nyc');
+    if (r.kind === 'outside_nyc') {
+      expect(r.detected_state).toBe('CA');
+    }
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   it('returns matched when one BBL dominates duplicates + false positives', async () => {
     // Real-world Pelias response for "350 5th Ave New York NY":
     // 3 features map to the same Manhattan BBL (350, 350A, 350B) and 2 are

@@ -150,6 +150,10 @@ lookupRoute.post('/lookup', async (c) => {
         leadFlags: lead.length,
         registeredOwner: landlord.registered_owner_name,
         watchlistRank: landlord.watchlist_rank,
+        // Pass listing copy so the AI can generate verbatim listing_notes,
+        // and the deterministic FARE flag so it can cross-reference.
+        listingText: listingDescription ?? null,
+        fareFlag: fareCheck?.flag ?? null,
       },
       subject,
     );
@@ -189,6 +193,8 @@ lookupRoute.post('/lookup', async (c) => {
     borough,
     summary: summary.summary,
     indicators: summary.indicators,
+    questions_to_ask: summary.questions_to_ask,
+    listing_notes: summary.listing_notes,
     landlord,
     fare_check: fareCheck,
     stats: {

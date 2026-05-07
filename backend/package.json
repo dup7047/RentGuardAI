@@ -20,7 +20,9 @@
     "verify:data-sources": "tsx scripts/verify-data-sources.ts",
     "verify:restore": "tsx scripts/verify-restore.ts",
     "stripe:setup": "tsx scripts/stripe-setup.ts",
-    "stripe:setup:dry-run": "tsx scripts/stripe-setup.ts --dry-run"
+    "stripe:setup:dry-run": "tsx scripts/stripe-setup.ts --dry-run",
+    "import:watchlist": "tsx scripts/import-watchlist.ts",
+    "import:watchlist:dry-run": "tsx scripts/import-watchlist.ts --dry-run"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",

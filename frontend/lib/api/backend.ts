@@ -88,12 +88,17 @@ export async function postWaitlistEmail(email: string): Promise<void> {
 }
 
 export async function getBuildingByBbl(bbl: string): Promise<LookupResponse> {
+  // 1h revalidation gives the backend a chance to pick up backfilled data on
+  // the buildings table within an hour of any /v1/lookup call. The page-level
+  // `revalidate = 86400` in app/building/[bbl]/page.tsx is the upper bound;
+  // this fetch-level setting is a tighter ceiling on staleness for the API
+  // payload (not the rendered page).
   const res = await fetch(`${BASE}/v1/building/${bbl}`, {
     credentials: 'include',
     cache: 'force-cache',
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore — Next.js extends RequestInit with `next`
-    next: { revalidate: 86400 },
+    next: { revalidate: 3600 },
   });
   return (await res.json()) as LookupResponse;
 }

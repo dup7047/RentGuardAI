@@ -5,7 +5,9 @@ services:
     plan: free
     rootDir: backend
     buildCommand: npm ci && npm run build
-    startCommand: npm start
+    # start:prod runs the compiled migrator first, then the server.
+    # Drizzle migrations are idempotent so re-running on each deploy is safe.
+    startCommand: npm run start:prod
     healthCheckPath: /health
     autoDeploy: true
     envVars:

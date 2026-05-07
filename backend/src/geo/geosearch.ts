@@ -46,6 +46,20 @@ export async function geosearch(input: string): Promise<GeocodeResult> {
   const trimmed = input.trim();
   if (!trimmed) throw new GeocodeError('empty_input', 'empty input');
 
+  // Short-circuit: when the input contains a non-NYC state token (CA, TX, FL, etc.),
+  // skip the GeoSearch API entirely. Pelias will fuzzy-match such inputs to weak
+  // NYC results, which would then trigger expensive downstream work (datasets +
+  // landlord + AI) for an address the user clearly didn't mean to look up.
+  const earlyDet = tryDetectOutsideNyc(trimmed);
+  if (earlyDet.state) {
+    return {
+      kind: 'outside_nyc',
+      detected_city: earlyDet.city,
+      detected_state: earlyDet.state,
+      raw_input: trimmed,
+    };
+  }
+
   const normalized = normalize(trimmed);
   // Note: do NOT restrict by `layers=address`. Many well-known NYC buildings
   // (Empire State, Penn Station, etc.) come back as `layer=venue` and would
@@ -104,7 +118,7 @@ export async function geosearch(input: string): Promise<GeocodeResult> {
 
   // Single distinct BBL → matched, no question
   if (bblCounts.size === 1) {
-    const [bbl] = bblCounts.keys() as IterableIterator<string>;
+    const bbl = bblCounts.keys().next().value as string;
     const top = bblTopFeature.get(bbl)!;
     return {
       kind: 'matched',

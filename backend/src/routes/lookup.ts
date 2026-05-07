@@ -15,7 +15,8 @@ import { getEvictions } from '../data/datasets/evictions.js';
 import { getBedbugReports } from '../data/datasets/bedbug.js';
 import { getLeadPaintViolations } from '../data/datasets/lead-paint.js';
 import { getDb } from '../db/client.js';
-import { buildingLookups, nonNycWaitlist } from '../db/schema.js';
+import { buildingLookups, buildings, nonNycWaitlist } from '../db/schema.js';
+import { sql as drizzleSql } from 'drizzle-orm';
 import { LIMITS, countAnonLookups, countEmailLookups, incrementEmailCounter } from '../lib/counters.js';
 
 const Body = z
@@ -76,6 +77,23 @@ lookupRoute.post('/lookup', async (c) => {
   if (g.kind === 'ambiguous') return c.json({ kind: 'ambiguous', matches: g.matches });
 
   const { bbl, address: canonicalAddress, borough } = g;
+
+  // ── 3b. Upsert canonical address/borough on buildings row ───────────────────
+  // The dataset cache layer (cache.ts) creates the buildings row lazily on the
+  // first dataset write with empty meta. That leaves buildings.address = '' for
+  // the lifetime of the cache, which breaks the SEO archive (/v1/building/:bbl
+  // returns address = '', JSON-LD `name` is empty, OG image fallback to BBL).
+  // After geocoding succeeds we have the canonical address/borough — write it.
+  await getDb()
+    .insert(buildings)
+    .values({ bbl, address: canonicalAddress, borough })
+    .onConflictDoUpdate({
+      target: buildings.bbl,
+      set: {
+        address: drizzleSql`CASE WHEN ${buildings.address} = '' THEN EXCLUDED.address ELSE ${buildings.address} END`,
+        borough: drizzleSql`CASE WHEN ${buildings.borough} = '' THEN EXCLUDED.borough ELSE ${buildings.borough} END`,
+      },
+    });
 
   // ── 4. Counter check ─────────────────────────────────────────────────────────
   if (!userId) {

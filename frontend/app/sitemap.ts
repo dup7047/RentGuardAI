@@ -23,9 +23,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Sitemap generates even if DB is unreachable (empty building list)
   }
 
+  const marketingUrls: MetadataRoute.Sitemap = [
+    'how-it-works',
+    'coverage',
+    'for-landlords',
+    'pricing',
+    'how-we-make-money',
+  ].map((slug) => ({
+    url: `https://www.rentguard.cc/${slug}`,
+    changeFrequency: 'monthly' as const,
+    priority: 0.7,
+  }));
+
   return [
     { url: 'https://www.rentguard.cc/', changeFrequency: 'daily', priority: 1 },
     { url: 'https://www.rentguard.cc/lookup', changeFrequency: 'daily', priority: 0.9 },
+    ...marketingUrls,
     ...buildingUrls,
   ];
 }

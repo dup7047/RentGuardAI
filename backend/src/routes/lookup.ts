@@ -23,6 +23,7 @@ import { getDobComplaints } from '../data/datasets/dob-complaints.js';
 import { getEvictions } from '../data/datasets/evictions.js';
 import { getBedbugReports } from '../data/datasets/bedbug.js';
 import { getLeadPaintViolations } from '../data/datasets/lead-paint.js';
+import { getHpdRegistrations } from '../data/datasets/hpd-registrations.js';
 import { getDb } from '../db/client.js';
 import { buildingLookups, buildings, nonNycWaitlist } from '../db/schema.js';
 import { and, desc, eq, gt, isNotNull, isNull, sql as drizzleSql } from 'drizzle-orm';
@@ -276,24 +277,29 @@ export async function runLookup(
     emit('hpd');
     return v;
   });
-  const dobP = getDobComplaints(bbl).then((v) => {
-    emit('dob');
-    return v;
-  });
   const ownerP = lookupLandlord(bbl).then((v) => {
     emit('owner');
     return v;
   });
-  const [hpdV, dob, evic, bed, lead, landlord] = await Promise.all([
+  // HPD registrations carry the BIN; DOB complaints are BIN-keyed (Open Data
+  // requires it). Fetch registrations in parallel with HPD violations + owner,
+  // then run DOB once we have a BIN.
+  const [hpdV, evic, bed, lead, landlord, regs] = await Promise.all([
     hpdP,
-    dobP,
     getEvictions(bbl),
     getBedbugReports(bbl),
     getLeadPaintViolations(bbl),
     ownerP,
+    getHpdRegistrations(bbl),
   ]);
+  const bin = regs[0]?.bin ?? hpdV[0]?.bin ?? null;
+  const dob = await getDobComplaints(bbl, bin ?? undefined).then((v) => {
+    emit('dob');
+    return v;
+  });
   const hpdOpen = hpdV.filter((v: { currentstatus?: string }) => v.currentstatus !== 'CLOSE').length;
   const hpdClosed = hpdV.length - hpdOpen;
+  const hpdBuildingId = hpdV.find((v) => v.buildingid)?.buildingid ?? regs[0]?.buildingid ?? null;
 
   // ── 5b. Phase 8: cache-hit short-circuit ────────────────────────────────────
   // Address-only requests reuse the most recent persisted AI summary for this
@@ -499,6 +505,8 @@ export async function runLookup(
       },
       lookup_id: row?.id ?? null,
       building_url: `/building/${bbl}`,
+      bin,
+      hpd_building_id: hpdBuildingId,
     },
   };
 }

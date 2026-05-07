@@ -139,6 +139,15 @@ export type LookupResponse =
        * pasted. Null when the user pasted only an address.
        */
       scraped_listing: ScrapedListingPublic | null;
+      /**
+       * True when the user pasted a listing URL but the scraper was blocked
+       * and we fell back to parsing the address out of the URL slug. The
+       * report still has full public-records coverage but listing-specific
+       * fields (rent, beds, broker fee, listing notes) aren't available.
+       * Frontend should surface this so users know the review is
+       * building-only, not listing-specific.
+       */
+      listing_unavailable?: boolean;
       landlord: AnyRecord;
       fare_check: AnyRecord | null;
       stats: Record<string, number>;

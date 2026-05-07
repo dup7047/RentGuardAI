@@ -41,7 +41,7 @@ describe('callChat', () => {
   it('returns parsed response on 200', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(makeOkFetch());
     const res = await callChat(MINIMAL_REQUEST);
-    expect(res.choices[0].message.content).toBe('{"summary":"test"}');
+    expect(res.choices[0]?.message.content).toBe('{"summary":"test"}');
     expect(res.usage.prompt_tokens).toBe(50);
   });
 

@@ -188,20 +188,10 @@ describe('generateSummary', () => {
   });
 
   it('writes ai_usage row with correct fields', async () => {
-    let insertedValues: Record<string, unknown> | null = null;
-    vi.doMock('../../src/db/client.js', () => ({
-      getDb: () => ({
-        insert: () => ({
-          values: (v: Record<string, unknown>) => {
-            insertedValues = v;
-            return { returning: async () => [{ id: 'usage-id' }] };
-          },
-        }),
-      }),
-    }));
     const result = await generateSummary(BASE_PAYLOAD, { type: 'email', value: 'a@b.com' });
-    // The mock is module-cached; check that the result came back at all
+    // Module-level mock returns 'usage-uuid-123'; verify the ID flows through
     expect(result.ai_usage_id).toBe('usage-uuid-123');
+    expect(result.cost_cents).toBeGreaterThanOrEqual(1);
   });
 
   it('system prompt is non-empty and contains closing sentence instruction', () => {

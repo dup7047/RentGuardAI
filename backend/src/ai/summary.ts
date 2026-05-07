@@ -92,7 +92,7 @@ export async function generateSummary(
   const outputCents = (res.usage.completion_tokens * PRICE_OUTPUT_PER_M) / 10_000;
   const cost_cents = Math.max(1, Math.ceil(inputCents + outputCents));
 
-  const [usage] = await getDb()
+  const usageRows = await getDb()
     .insert(aiUsage)
     .values({
       userId: subject.type === 'user_id' ? subject.value : null,
@@ -102,13 +102,14 @@ export async function generateSummary(
       modelUsed: 'gpt-4o-mini',
     })
     .returning({ id: aiUsage.id });
+  const usageId = usageRows[0]?.id ?? 'unknown';
 
-  logger.info({ cost_cents, ai_usage_id: usage.id, subject_type: subject.type });
+  logger.info({ cost_cents, ai_usage_id: usageId, subject_type: subject.type });
 
   return {
     summary: parsed.summary,
     indicators: parsed.indicators as Array<{ key: string; value: string; source_url: string }>,
     cost_cents,
-    ai_usage_id: usage.id,
+    ai_usage_id: usageId,
   };
 }

@@ -7,10 +7,16 @@
 // animation can advance step-by-step in sync with backend phases.
 // The final response shape is identical to the old /v1/lookup endpoint,
 // so all 11 response-kind branches below are unchanged.
+//
+// Phase 7: live address autocomplete. While the user types a non-URL
+// query (≥ 3 chars), we hit NYC Geosearch's /v2/autocomplete and show
+// matching buildings in a dropdown. Picking one fills the input and
+// fires the lookup immediately (Google-Maps-style).
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { AddressSuggestions } from '@/components/AddressSuggestions';
 import { Ambiguous } from '@/components/Ambiguous';
 import { Loading } from '@/components/Loading';
 import { OutsideNyc } from '@/components/OutsideNyc';
@@ -19,6 +25,10 @@ import {
   type LookupPhase,
   type LookupResponse,
 } from '@/lib/api/backend';
+import {
+  getAddressSuggestions,
+  type AddressSuggestion,
+} from '@/lib/api/geosearch';
 
 const SOURCES = [
   { ico: 'H', nm: 'HPD violations', ds: 'Open & closed code violations' },
@@ -27,6 +37,9 @@ const SOURCES = [
   { ico: 'O', nm: 'Owner records', ds: 'HPD registered owner & officer' },
   { ico: 'W', nm: 'Watchlist', ds: 'Public Advocate Worst Landlord' },
 ] as const;
+
+const AUTOCOMPLETE_DEBOUNCE_MS = 180;
+const AUTOCOMPLETE_MIN_LEN = 3;
 
 export function LookupForm() {
   const router = useRouter();
@@ -41,18 +54,81 @@ export function LookupForm() {
   const [fallbackAddress, setFallbackAddress] = useState('');
   const [fallbackDescription, setFallbackDescription] = useState('');
 
-  async function submit(extras: { email?: string; address?: string; listingDescription?: string } = {}) {
-    const isUrl = /^https?:\/\//i.test(input);
+  // Phase 7: autocomplete state.
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // Fetch effect — debounced + cancellable.
+  useEffect(() => {
+    if (/^https?:\/\//i.test(input)) {
+      setShowSuggestions(false);
+      return;
+    }
+    if (input.trim().length < AUTOCOMPLETE_MIN_LEN) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const list = await getAddressSuggestions(input.trim(), ctrl.signal);
+        setSuggestions(list);
+        setActiveIndex(-1);
+        setShowSuggestions(list.length > 0);
+      } catch (e) {
+        // Aborted by a newer keystroke — ignore. (Helper re-throws AbortError;
+        // returns [] for any other failure so we never reach this catch for
+        // network/parse errors.)
+        if ((e as Error).name !== 'AbortError') throw e;
+      }
+    }, AUTOCOMPLETE_DEBOUNCE_MS);
+    return () => {
+      ctrl.abort();
+      clearTimeout(t);
+    };
+  }, [input]);
+
+  // Click-outside effect — closes the dropdown when the user clicks
+  // anywhere outside the search-card wrap.
+  useEffect(() => {
+    if (!showSuggestions) return;
+    const onDocDown = (e: MouseEvent) => {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocDown);
+    return () => document.removeEventListener('mousedown', onDocDown);
+  }, [showSuggestions]);
+
+  async function submit(extras: {
+    email?: string;
+    address?: string;
+    listingDescription?: string;
+    addressOverride?: string;
+  } = {}) {
+    const value = extras.addressOverride ?? input;
+    // Picked-suggestion overrides are always addresses (NYC Geosearch only
+    // returns address features). Otherwise check the input shape.
+    const isUrl = !extras.addressOverride && /^https?:\/\//i.test(value);
     setLoading(true);
     setPhase(null);
     setResp(null);
     setShowFallbackPaste(false);
+    setShowSuggestions(false);
     let r: LookupResponse;
     try {
       r = await postLookupStream(
         {
-          ...(isUrl ? { listingUrl: input } : { address: input }),
-          ...extras,
+          ...(isUrl ? { listingUrl: value } : { address: value }),
+          ...(extras.email ? { email: extras.email } : {}),
+          ...(extras.listingDescription
+            ? { listingDescription: extras.listingDescription }
+            : {}),
         },
         (p) => setPhase(p),
       );
@@ -103,6 +179,44 @@ export function LookupForm() {
     setFallbackDescription('');
   }
 
+  function handlePick(s: AddressSuggestion) {
+    setInput(s.display);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setActiveIndex(-1);
+    // submit() reads `input` from React state, but the setState above
+    // hasn't flushed yet. Pass the value directly via the override path.
+    void submit({ addressOverride: s.display });
+  }
+
+  function onInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (showSuggestions && suggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveIndex((i) => Math.max(i - 1, -1));
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowSuggestions(false);
+        return;
+      }
+      if (e.key === 'Enter' && activeIndex >= 0) {
+        e.preventDefault();
+        const picked = suggestions[activeIndex];
+        if (picked) handlePick(picked);
+        return;
+      }
+    }
+    if (e.key === 'Enter' && input.trim()) {
+      submit();
+    }
+  }
+
   // Top-level branches — full-screen takeovers
   if (loading) return <Loading phase={phase} />;
   if (resp?.kind === 'outside_nyc') {
@@ -117,6 +231,9 @@ export function LookupForm() {
   if (resp?.kind === 'ambiguous') {
     return <Ambiguous matches={resp.matches} onBack={reset} />;
   }
+
+  const activeId =
+    showSuggestions && activeIndex >= 0 ? `addr-opt-${activeIndex}` : undefined;
 
   // Default: landing hero + search card
   return (
@@ -139,24 +256,47 @@ export function LookupForm() {
             Free for renters.
           </p>
 
-          <div className="search-card">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && input.trim()) submit();
-              }}
-              placeholder="Paste a listing URL or NYC address…"
-              aria-label="NYC listing URL or address"
-            />
-            <button
-              type="button"
-              className="btn primary lg"
-              onClick={() => submit()}
-              disabled={!input.trim()}
-            >
-              Look up <span className="arr">→</span>
-            </button>
+          <div className="search-card-wrap" ref={wrapRef}>
+            <div className="search-card">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onInputKeyDown}
+                onFocus={() => {
+                  if (
+                    suggestions.length > 0 &&
+                    !/^https?:\/\//i.test(input)
+                  ) {
+                    setShowSuggestions(true);
+                  }
+                }}
+                placeholder="Paste a listing URL or NYC address…"
+                aria-label="NYC listing URL or address"
+                role="combobox"
+                aria-expanded={showSuggestions}
+                aria-controls="address-suggestions"
+                aria-autocomplete="list"
+                aria-activedescendant={activeId}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                className="btn primary lg"
+                onClick={() => submit()}
+                disabled={!input.trim()}
+              >
+                Look up <span className="arr">→</span>
+              </button>
+            </div>
+            {showSuggestions && suggestions.length > 0 && (
+              <AddressSuggestions
+                suggestions={suggestions}
+                activeIndex={activeIndex}
+                onPick={handlePick}
+                onHover={setActiveIndex}
+              />
+            )}
           </div>
 
           {/* Inline error banners */}

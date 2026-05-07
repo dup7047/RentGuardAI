@@ -21,12 +21,35 @@ export type HpdRegistration = {
 
 const EP = ENDPOINTS.find((e) => e.key === 'hpd_registrations')!;
 
+/**
+ * Parse a 10-digit BBL into its component parts for HPD-Registrations queries.
+ * The dataset doesn't expose `bbl` as a queryable column (HTTP 400 if used);
+ * it stores boroid/block/lot as separate columns with no leading zeros.
+ *
+ * BBL format: <1 borough digit><5 block digits><4 lot digits>
+ * e.g. 1008350041 → { boroid: '1', block: '835', lot: '41' }
+ */
+export function decomposeBbl(bbl: string): { boroid: string; block: string; lot: string } | null {
+  if (!/^\d{10}$/.test(bbl)) return null;
+  return {
+    boroid: bbl.slice(0, 1),
+    block: String(parseInt(bbl.slice(1, 6), 10)),
+    lot: String(parseInt(bbl.slice(6, 10), 10)),
+  };
+}
+
 export async function getHpdRegistrations(bbl: string): Promise<HpdRegistration[]> {
   const cached = await getCached(bbl, 'hpd_registrations');
   if (cached) return cached as HpdRegistration[];
 
+  const parts = decomposeBbl(bbl);
+  if (!parts) {
+    await setCached(bbl, 'hpd_registrations', []);
+    return [];
+  }
+
   const rows = await socrataQuery<HpdRegistration>(EP.resourceId, {
-    $where: `bbl='${bbl}'`,
+    $where: `boroid='${parts.boroid}' AND block='${parts.block}' AND lot='${parts.lot}'`,
     $limit: '10',
     $order: 'lastregistrationdate DESC',
   });

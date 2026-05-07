@@ -23,10 +23,13 @@ export async function getBedbugReports(bbl: string): Promise<BedbugReport[]> {
   const cached = await getCached(bbl, 'bedbug');
   if (cached) return cached as BedbugReport[];
 
+  // Note: actual column is `filing_period_start_date` (the dataset has a typo
+  // counterpart `filling_period_end_date` we don't use). `filing_period` does
+  // not exist — using it returns HTTP 400.
   const rows = await socrataQuery<BedbugReport>(EP.resourceId, {
     $where: `bbl='${bbl}'`,
     $limit: '20',
-    $order: 'filing_period DESC',
+    $order: 'filing_period_start_date DESC',
   });
 
   await setCached(bbl, 'bedbug', rows);

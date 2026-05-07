@@ -47,7 +47,11 @@ export async function geosearch(input: string): Promise<GeocodeResult> {
   if (!trimmed) throw new GeocodeError('empty_input', 'empty input');
 
   const normalized = normalize(trimmed);
-  const url = `https://geosearch.planninglabs.nyc/v2/search?text=${encodeURIComponent(normalized)}&size=5&layers=address`;
+  // Note: do NOT restrict by `layers=address`. Many well-known NYC buildings
+  // (Empire State, Penn Station, etc.) come back as `layer=venue` and would
+  // be filtered out, falling through to a false outside_nyc. We accept any
+  // layer; non-NYC results are filtered by `addendum.pad.bbl` presence below.
+  const url = `https://geosearch.planninglabs.nyc/v2/search?text=${encodeURIComponent(normalized)}&size=5`;
 
   let res: Response;
   try {
@@ -74,45 +78,69 @@ export async function geosearch(input: string): Promise<GeocodeResult> {
     };
   }
 
-  const top = feats[0]!;
-  const bbl = top.properties.addendum?.pad?.bbl;
-  const conf = top.properties.confidence ?? 0;
-  const borough = (top.properties.borough?.toUpperCase() ?? 'MANHATTAN') as Borough;
+  // Group features by BBL — dedupe before deciding ambiguous.
+  // Pelias often returns the same building multiple times (e.g. 350, 350A, 350B
+  // all map to the same BBL) plus weak fuzzy matches in other boroughs.
+  // Without dedupe, even a clean address comes back as ambiguous.
+  const bblCounts = new Map<string, number>();
+  const bblTopFeature = new Map<string, GeoFeature>();
+  for (const f of feats) {
+    const b = f.properties.addendum?.pad?.bbl;
+    if (!b) continue;
+    bblCounts.set(b, (bblCounts.get(b) ?? 0) + 1);
+    if (!bblTopFeature.has(b)) bblTopFeature.set(b, f);
+  }
 
-  // Multiple distinct BBLs → ambiguous
-  const distinctBbls = new Set(
-    feats.map((f) => f.properties.addendum?.pad?.bbl).filter(Boolean),
-  );
-  if (distinctBbls.size > 1) {
+  // No BBL in any result → outside_nyc
+  if (bblCounts.size === 0) {
+    const det = tryDetectOutsideNyc(trimmed);
     return {
-      kind: 'ambiguous',
-      matches: feats
-        .filter((f) => f.properties.addendum?.pad?.bbl)
-        .map((f) => ({
-          bbl: f.properties.addendum!.pad!.bbl!,
-          address: f.properties.label ?? '',
-          borough: (f.properties.borough?.toUpperCase() ?? 'MANHATTAN') as Borough,
-        })),
+      kind: 'outside_nyc',
+      detected_city: det.city,
+      detected_state: det.state,
+      raw_input: trimmed,
     };
   }
 
-  // Single result with a BBL
-  if (bbl) {
+  // Single distinct BBL → matched, no question
+  if (bblCounts.size === 1) {
+    const [bbl] = bblCounts.keys() as IterableIterator<string>;
+    const top = bblTopFeature.get(bbl)!;
     return {
       kind: 'matched',
       bbl,
       address: top.properties.label ?? trimmed,
-      borough,
-      confidence: conf,
+      borough: (top.properties.borough?.toUpperCase() ?? 'MANHATTAN') as Borough,
+      confidence: top.properties.confidence ?? 0,
     };
   }
 
-  // No BBL in any result → outside_nyc
-  const det = tryDetectOutsideNyc(trimmed);
+  // Multiple distinct BBLs — check if one is dominant (appears strictly more
+  // often than every other). If so, treat as matched.
+  const sortedBbls = [...bblCounts.entries()].sort((a, b) => b[1] - a[1]);
+  const [topBbl, topCount] = sortedBbls[0]!;
+  const [, secondCount] = sortedBbls[1] ?? ['', 0];
+  if (topCount > secondCount) {
+    const top = bblTopFeature.get(topBbl)!;
+    return {
+      kind: 'matched',
+      bbl: topBbl,
+      address: top.properties.label ?? trimmed,
+      borough: (top.properties.borough?.toUpperCase() ?? 'MANHATTAN') as Borough,
+      confidence: top.properties.confidence ?? 0,
+    };
+  }
+
+  // Tie → genuinely ambiguous. Return deduplicated matches.
   return {
-    kind: 'outside_nyc',
-    detected_city: det.city,
-    detected_state: det.state,
-    raw_input: trimmed,
+    kind: 'ambiguous',
+    matches: [...bblCounts.keys()].map((b) => {
+      const f = bblTopFeature.get(b)!;
+      return {
+        bbl: b,
+        address: f.properties.label ?? '',
+        borough: (f.properties.borough?.toUpperCase() ?? 'MANHATTAN') as Borough,
+      };
+    }),
   };
 }

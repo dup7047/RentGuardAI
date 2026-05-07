@@ -96,4 +96,69 @@ describe('geosearch', () => {
   it('trims whitespace-only input before checking empty', async () => {
     await expect(geosearch('   ')).rejects.toMatchObject({ code: 'empty_input' });
   });
+
+  it('matches venue-layer features (e.g. Empire State Building)', async () => {
+    // Regression: well-known buildings come back as layer=venue, not layer=address.
+    // The handler must accept any layer as long as a BBL is present.
+    const venueFeat = {
+      properties: {
+        confidence: 0.8,
+        label: '350 5 AVENUE, New York, NY, USA',
+        borough: 'Manhattan',
+        layer: 'venue',
+        addendum: { pad: { bbl: '1008350041' } },
+      },
+    };
+    mockGeo([venueFeat]);
+    const r = await geosearch('350 5th Ave New York NY');
+    expect(r.kind).toBe('matched');
+    if (r.kind === 'matched') {
+      expect(r.bbl).toBe('1008350041');
+      expect(r.borough).toBe('MANHATTAN');
+    }
+  });
+
+  it('returns matched when one BBL dominates duplicates + false positives', async () => {
+    // Real-world Pelias response for "350 5th Ave New York NY":
+    // 3 features map to the same Manhattan BBL (350, 350A, 350B) and 2 are
+    // weaker Brooklyn matches with different BBLs. Dominant BBL wins.
+    mockGeo([
+      makeFeature('1008350041', 0.8, 'Manhattan'), // 350 5 Ave Manhattan
+      makeFeature('3009810111', 0.8, 'Brooklyn'),  // 350 5 Ave Brooklyn (false positive)
+      makeFeature('1008350041', 0.8, 'Manhattan'), // 350A 5 Ave (same BBL)
+      makeFeature('1008350041', 0.8, 'Manhattan'), // 350B 5 Ave (same BBL)
+      makeFeature('3009880011', 0.8, 'Brooklyn'),  // 350 5 St Brooklyn (different street)
+    ]);
+    const r = await geosearch('350 5th Ave New York NY');
+    expect(r.kind).toBe('matched');
+    if (r.kind === 'matched') {
+      expect(r.bbl).toBe('1008350041');
+    }
+  });
+
+  it('returns ambiguous (deduplicated) on a true tie — equal-count BBLs', async () => {
+    mockGeo([
+      makeFeature('1008440007', 0.8, 'Manhattan'),
+      makeFeature('1008440007', 0.8, 'Manhattan'), // same BBL twice
+      makeFeature('3009810111', 0.8, 'Brooklyn'),
+      makeFeature('3009810111', 0.8, 'Brooklyn'), // tied 2-2
+    ]);
+    const r = await geosearch('500 Pine St');
+    expect(r.kind).toBe('ambiguous');
+    if (r.kind === 'ambiguous') {
+      // dedupe → 2 unique matches, not 4
+      expect(r.matches.length).toBe(2);
+      const bbls = r.matches.map((m) => m.bbl).sort();
+      expect(bbls).toEqual(['1008440007', '3009810111']);
+    }
+  });
+
+  it('does not request a layers filter (must accept venue + address layers)', async () => {
+    const spy = vi.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ features: [] }), { status: 200 }),
+    );
+    await geosearch('350 5th Ave New York NY');
+    const calledUrl = (spy.mock.calls[0]?.[0] as URL | string).toString();
+    expect(calledUrl).not.toMatch(/layers=/i);
+  });
 });

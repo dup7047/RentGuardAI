@@ -13,6 +13,8 @@ import { stream } from 'hono/streaming';
 import { z } from 'zod';
 import { scrapeListing } from '../scraping/fetcher.js';
 import type { ScrapedListing } from '../scraping/types.js';
+import { detectListingHost, canonicalizeListingUrl } from '../scraping/url-canonicalize.js';
+import { parseAddressFromUrl } from '../scraping/slug-parse.js';
 import { geosearch } from '../geo/geosearch.js';
 import { lookupLandlord } from '../data/landlord.js';
 import { checkFare } from '../fare/check.js';
@@ -213,7 +215,12 @@ export async function runLookup(
     return { status: 400, body: { kind: 'invalid_input', errors: parsed.error.flatten() } };
   }
 
-  const { address, listingUrl, listingDescription, email, bbl: providedBbl } = parsed.data;
+  // `listingUrl` is `let` because the slug-parse fallback in step 2 clears it
+  // so the rest of the pipeline (cache short-circuit, persistence) treats the
+  // request as address-only when we couldn't actually scrape the page.
+  // eslint-disable-next-line prefer-const -- intentional mutation below
+  let { listingUrl } = parsed.data;
+  const { address, listingDescription, email, bbl: providedBbl } = parsed.data;
   const { anonToken, userId } = ctx;
   const userEmail = ctx.userEmail ?? email;
 
@@ -221,7 +228,10 @@ export async function runLookup(
   let resolvedAddress = address;
   let scrapedListing: ScrapedListing | null = null;
   if (listingUrl && !resolvedAddress) {
-    const r = await timePhase('scrape', () => scrapeListing(listingUrl));
+    // Capture in a const so the closure passed to timePhase doesn't see the
+    // post-slug-parse `listingUrl = undefined` reassignment below.
+    const scrapeUrl = listingUrl;
+    const r = await timePhase('scrape', () => scrapeListing(scrapeUrl));
     if (r.kind === 'error') {
       // 'listing_blocked' is recoverable if the user pasted a description and address
       // (defensive — the current LookupForm sends address+url together on retry,
@@ -229,6 +239,31 @@ export async function runLookup(
       if (r.code === 'listing_blocked' && listingDescription && address) {
         resolvedAddress = address;
         emit('parse');
+      } else if (r.code === 'listing_blocked' || r.code === 'listing_expired') {
+        // Slug-parse fallback: the address is already in the URL path for
+        // most Zillow / StreetEasy listings. Pull it out and route as
+        // address-only — user gets a building report instead of the
+        // manual-paste fallback. We lose listing-specific fields but
+        // those are unrecoverable when the scraper is blocked anyway.
+        const detect = detectListingHost(listingUrl);
+        const canonical = canonicalizeListingUrl(listingUrl);
+        const fromSlug = detect ? parseAddressFromUrl(canonical, detect.source) : null;
+        if (fromSlug) {
+          logger.info(
+            { source: detect!.source, url: canonical, parsedAddress: fromSlug },
+            'slug-parse fallback hit — routing as address-only',
+          );
+          resolvedAddress = fromSlug;
+          // Drop listingUrl from the rest of the pipeline so the AI cache
+          // short-circuit (which keys on `!listingUrl && !listingDescription`)
+          // sees this as an address-only lookup. Also: scrapedListing stays
+          // null, so cache hits remain eligible for future cache hits.
+          listingUrl = undefined;
+          emit('parse');
+        } else {
+          const status: LookupStatus = 200;
+          return { status, body: { kind: r.code, message: r.message ?? null } };
+        }
       } else {
         const status: LookupStatus = r.code === 'listing_not_found' ? 404 : 200;
         return { status, body: { kind: r.code, message: r.message ?? null } };

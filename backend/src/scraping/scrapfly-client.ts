@@ -8,6 +8,17 @@ import { logger } from '../logger.js';
 const SCRAPFLY_BASE = 'https://api.scrapfly.io/scrape';
 const TIMEOUT_MS = 35_000;
 
+// Set to true the first time we see ERR::SCRAPE::QUOTA_EXCEEDED. Stays true
+// for the remainder of the process so subsequent lookups skip ScrapFly via
+// `isScrapflyAvailable()` instead of burning a request to confirm what we
+// already know. Reset only by restart (good enough for monthly cycle).
+let scrapflyQuotaExhausted = false;
+
+/** Test-only — reset the in-process quota flag between test cases. */
+export function __resetScrapflyQuotaFlag(): void {
+  scrapflyQuotaExhausted = false;
+}
+
 export class ScrapflyError extends Error {
   constructor(
     message: string,
@@ -73,6 +84,9 @@ export async function scrapflyFetch(
   };
   if (!res.ok) {
     const code = body.code === 'ERR::SCRAPE::QUOTA_EXCEEDED' ? 'quota_exceeded' : 'http_error';
+    if (code === 'quota_exceeded') {
+      scrapflyQuotaExhausted = true;
+    }
     logger.warn(
       { scrapfly_status: res.status, code: body.code, message: body.message },
       'ScrapFly error',
@@ -97,5 +111,6 @@ export async function scrapflyFetch(
 }
 
 export function isScrapflyAvailable(): boolean {
+  if (scrapflyQuotaExhausted) return false;
   return Boolean(process.env.SCRAPFLY_API_KEY && process.env.SCRAPFLY_API_KEY.length > 0);
 }

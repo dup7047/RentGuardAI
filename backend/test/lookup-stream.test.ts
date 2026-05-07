@@ -22,6 +22,19 @@ vi.mock('../src/db/client.js', () => ({
         returning: async () => [{ id: 'fake-lookup-id' }],
       }),
     }),
+    // Phase 8: findRecentLookup queries building_lookups for a recent row.
+    // The streaming tests want CACHE-MISS behavior (full pipeline runs), so
+    // the chained select returns []. The dedicated lookup-cache.test.ts file
+    // overrides this mock to return a populated row when testing the hit path.
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: async () => [],
+          }),
+        }),
+      }),
+    }),
   }),
 }));
 

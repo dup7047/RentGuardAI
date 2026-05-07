@@ -24,6 +24,8 @@ type GeoFeature = {
     confidence?: number;
     label?: string;
     borough?: string;
+    /** Pelias-extracted street number, e.g. "350" or "350A" or "100-12". */
+    housenumber?: string;
     addendum?: {
       pad?: { bbl?: string };
     };
@@ -31,6 +33,17 @@ type GeoFeature = {
 };
 
 type GeoResponse = { features: GeoFeature[] };
+
+/**
+ * Strip housenumber down to its leading digit run (e.g., "350A" → "350",
+ * "100-12" → "100"). Used to recognize when two features describe the same
+ * physical address with letter/dash variants. Returns "" if the housenumber
+ * is missing or doesn't start with a digit.
+ */
+function housenumberDigits(h: string | undefined): string {
+  if (!h) return '';
+  return h.match(/^\d+/)?.[0] ?? '';
+}
 
 /**
  * Geocode a user-supplied address string to a BBL using the NYC Planning
@@ -92,13 +105,26 @@ export async function geosearch(input: string): Promise<GeocodeResult> {
     };
   }
 
+  // Filter to features whose housenumber matches the top result's housenumber
+  // (compared by leading digits, so "350" / "350A" / "350B" are siblings but
+  // "350" and "3501" are not). Without this filter, Pelias's fuzzy fillers
+  // can outvote the exact match: e.g., a search for "3007 3rd Ave" returns
+  // [3007 (1×), 2850 (1×), 2856 (1×)] where 2850 and 2856 share one BBL
+  // (count 2 after dedup) and incorrectly dominate the actual exact-match
+  // BBL of 3007.
+  const firstWithBbl = feats.find((f) => f.properties.addendum?.pad?.bbl);
+  const targetDigits = housenumberDigits(firstWithBbl?.properties.housenumber);
+  const candidates = targetDigits
+    ? feats.filter((f) => housenumberDigits(f.properties.housenumber) === targetDigits)
+    : feats;
+
   // Group features by BBL — dedupe before deciding ambiguous.
   // Pelias often returns the same building multiple times (e.g. 350, 350A, 350B
   // all map to the same BBL) plus weak fuzzy matches in other boroughs.
   // Without dedupe, even a clean address comes back as ambiguous.
   const bblCounts = new Map<string, number>();
   const bblTopFeature = new Map<string, GeoFeature>();
-  for (const f of feats) {
+  for (const f of candidates) {
     const b = f.properties.addendum?.pad?.bbl;
     if (!b) continue;
     bblCounts.set(b, (bblCounts.get(b) ?? 0) + 1);

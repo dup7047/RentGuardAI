@@ -16,6 +16,23 @@ function makeFeature(bbl: string, conf: number, borough = 'Manhattan'): object {
       confidence: conf,
       label: `350 5th Ave, ${borough}, New York, NY 10118, USA`,
       borough,
+      housenumber: '350',
+      addendum: { pad: { bbl } },
+    },
+  };
+}
+
+/**
+ * Like makeFeature but parameterizes the housenumber so we can simulate the
+ * "Pelias returns nearby fuzzy fillers with different street numbers" case.
+ */
+function makeNumberedFeature(housenumber: string, bbl: string, borough = 'Bronx'): object {
+  return {
+    properties: {
+      confidence: 0.8,
+      label: `${housenumber} 3 AVENUE, ${borough}, NY, USA`,
+      borough,
+      housenumber,
       addendum: { pad: { bbl } },
     },
   };
@@ -140,6 +157,46 @@ describe('geosearch', () => {
       makeFeature('3009880011', 0.8, 'Brooklyn'),  // 350 5 St Brooklyn (different street)
     ]);
     const r = await geosearch('350 5th Ave New York NY');
+    expect(r.kind).toBe('matched');
+    if (r.kind === 'matched') {
+      expect(r.bbl).toBe('1008350041');
+    }
+  });
+
+  it('does not let nearby fuzzy fillers outvote the exact-housenumber match', async () => {
+    // Real-world Pelias response for "3007 3rd Ave Bronx NY 10455":
+    // - feature[0] is the exact match (3007 → BBL X, count 1)
+    // - features[1..2] are nearby fuzzy buildings 2850 + 2856 sharing one BBL Y
+    //   (count 2 after dedup — would dominate without the housenumber filter)
+    // - features[3..4] are other 3rd Ave addresses with their own BBLs
+    // The fix filters by leading digits of features[0].housenumber ("3007")
+    // before counting, so only the exact match survives the filter.
+    mockGeo([
+      makeNumberedFeature('3007', '2023760049'), // exact match
+      makeNumberedFeature('2850', '2022940002'), // fuzzy filler (shares BBL with 2856)
+      makeNumberedFeature('2856', '2022940002'), // fuzzy filler (same BBL as 2850)
+      makeNumberedFeature('2754', '2023070008'),
+      makeNumberedFeature('2772', '2023070037'),
+    ]);
+    const r = await geosearch('3007 3rd Ave Bronx NY 10455');
+    expect(r.kind).toBe('matched');
+    if (r.kind === 'matched') {
+      expect(r.bbl).toBe('2023760049');
+    }
+  });
+
+  it('still recognizes 350 / 350A / 350B as variants of the same building', async () => {
+    // Mirror of the existing dominance test, with explicit housenumbers.
+    // Variants like 350A / 350B share leading digits "350" with the first
+    // feature, so they remain in the candidate set and the dominance logic
+    // still picks the BBL that all three resolve to.
+    mockGeo([
+      makeNumberedFeature('350', '1008350041', 'Manhattan'),
+      makeNumberedFeature('350', '3009810111', 'Brooklyn'), // false-positive borough
+      makeNumberedFeature('350A', '1008350041', 'Manhattan'),
+      makeNumberedFeature('350B', '1008350041', 'Manhattan'),
+    ]);
+    const r = await geosearch('350 5 Ave Manhattan');
     expect(r.kind).toBe('matched');
     if (r.kind === 'matched') {
       expect(r.bbl).toBe('1008350041');

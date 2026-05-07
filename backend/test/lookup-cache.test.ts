@@ -82,6 +82,10 @@ vi.mock('../src/data/datasets/bedbug.js', () => ({
 vi.mock('../src/data/datasets/lead-paint.js', () => ({
   getLeadPaintViolations: vi.fn().mockResolvedValue([]),
 }));
+vi.mock('../src/data/datasets/hpd-registrations.js', () => ({
+  getHpdRegistrations: vi.fn().mockResolvedValue([]),
+  decomposeBbl: () => ({ boroid: '1', block: '1', lot: '1' }),
+}));
 
 vi.mock('../src/ai/summary.js', () => ({
   generateSummary: mocks.generateSummaryFn,

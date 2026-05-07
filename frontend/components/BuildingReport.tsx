@@ -57,8 +57,8 @@ export function BuildingReport({ data }: { data: SuccessData }) {
       />
 
       {listing_summary && (
-        <section className="listing-summary-section" aria-label="What this listing offers">
-          <h2>What this listing is offering</h2>
+        <section className="listing-summary-section" aria-label="Listing review">
+          <h2>Listing review</h2>
           <p>{listing_summary}</p>
         </section>
       )}

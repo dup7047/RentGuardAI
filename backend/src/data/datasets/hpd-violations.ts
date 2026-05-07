@@ -1,5 +1,6 @@
 import { socrataQuery } from '../nyc-client.js';
-import { getCached, setCached } from '../cache.js';
+import { getCached, readCachedSlice, setCached } from '../cache.js';
+import type { CachedData } from '../types.js';
 import { ENDPOINTS } from '../endpoints.js';
 
 export type HpdViolation = {
@@ -25,8 +26,14 @@ export type HpdViolation = {
 
 const EP = ENDPOINTS.find((e) => e.key === 'hpd_violations')!;
 
-export async function getHpdViolations(bbl: string): Promise<HpdViolation[]> {
-  const cached = await getCached(bbl, 'hpd_violations');
+export async function getHpdViolations(
+  bbl: string,
+  prefetched?: CachedData | null,
+): Promise<HpdViolation[]> {
+  const cached =
+    prefetched !== undefined
+      ? readCachedSlice(prefetched, 'hpd_violations')
+      : await getCached(bbl, 'hpd_violations');
   if (cached) return cached as HpdViolation[];
 
   const rows = await socrataQuery<HpdViolation>(EP.resourceId, {

@@ -49,6 +49,11 @@ export function LookupForm() {
   // Phase 6: latest backend phase event drives the Loading animation.
   const [phase, setPhase] = useState<LookupPhase | null>(null);
   const [email, setEmail] = useState('');
+  // BBL captured when the user picks an autocomplete suggestion. Forwarded
+  // to the backend so it can skip the GeoSearch round-trip — the suggestion
+  // already carried the BBL from NYC Planning Labs. Cleared whenever the
+  // input changes so a manual edit falls back to server-side geocoding.
+  const [pickedBbl, setPickedBbl] = useState<string | null>(null);
   // Fallback paste — only shown when the scrape returns kind: 'listing_blocked'
   const [showFallbackPaste, setShowFallbackPaste] = useState(false);
   const [fallbackAddress, setFallbackAddress] = useState('');
@@ -110,11 +115,16 @@ export function LookupForm() {
     address?: string;
     listingDescription?: string;
     addressOverride?: string;
+    bblOverride?: string;
   } = {}) {
     const value = extras.addressOverride ?? input;
     // Picked-suggestion overrides are always addresses (NYC Geosearch only
     // returns address features). Otherwise check the input shape.
     const isUrl = !extras.addressOverride && /^https?:\/\//i.test(value);
+    // Forward the pre-resolved BBL when the user picked a suggestion (or when
+    // the caller supplies one explicitly). Skipped for URL submissions —
+    // scrapeListing always derives the address from the page.
+    const bblToForward = extras.bblOverride ?? (!isUrl ? pickedBbl : null);
     setLoading(true);
     setPhase(null);
     setResp(null);
@@ -129,6 +139,7 @@ export function LookupForm() {
           ...(extras.listingDescription
             ? { listingDescription: extras.listingDescription }
             : {}),
+          ...(bblToForward ? { bbl: bblToForward } : {}),
         },
         (p) => setPhase(p),
       );
@@ -181,12 +192,14 @@ export function LookupForm() {
 
   function handlePick(s: AddressSuggestion) {
     setInput(s.display);
+    setPickedBbl(s.bbl);
     setShowSuggestions(false);
     setSuggestions([]);
     setActiveIndex(-1);
     // submit() reads `input` from React state, but the setState above
     // hasn't flushed yet. Pass the value directly via the override path.
-    void submit({ addressOverride: s.display });
+    // Same for the BBL — pickedBbl hasn't flushed yet either.
+    void submit({ addressOverride: s.display, bblOverride: s.bbl });
   }
 
   function onInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -274,7 +287,12 @@ export function LookupForm() {
             <div className="search-card">
               <input
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  // Manual edit invalidates any previously picked BBL — fall
+                  // back to server-side geocoding.
+                  if (pickedBbl) setPickedBbl(null);
+                }}
                 onKeyDown={onInputKeyDown}
                 onFocus={() => {
                   if (

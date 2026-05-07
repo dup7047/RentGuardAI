@@ -1,5 +1,6 @@
 import { socrataQuery } from '../nyc-client.js';
-import { getCached, setCached } from '../cache.js';
+import { getCached, readCachedSlice, setCached } from '../cache.js';
+import type { CachedData } from '../types.js';
 import { ENDPOINTS } from '../endpoints.js';
 
 export type BedbugReport = {
@@ -19,8 +20,14 @@ export type BedbugReport = {
 
 const EP = ENDPOINTS.find((e) => e.key === 'bedbug')!;
 
-export async function getBedbugReports(bbl: string): Promise<BedbugReport[]> {
-  const cached = await getCached(bbl, 'bedbug');
+export async function getBedbugReports(
+  bbl: string,
+  prefetched?: CachedData | null,
+): Promise<BedbugReport[]> {
+  const cached =
+    prefetched !== undefined
+      ? readCachedSlice(prefetched, 'bedbug')
+      : await getCached(bbl, 'bedbug');
   if (cached) return cached as BedbugReport[];
 
   // Note: actual column is `filing_period_start_date` (the dataset has a typo

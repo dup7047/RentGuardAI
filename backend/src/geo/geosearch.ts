@@ -80,11 +80,12 @@ export async function geosearch(input: string): Promise<GeocodeResult> {
   // layer; non-NYC results are filtered by `addendum.pad.bbl` presence below.
   const url = `https://geosearch.planninglabs.nyc/v2/search?text=${encodeURIComponent(normalized)}&size=5`;
 
+  const start = Date.now();
   let res: Response;
   try {
     res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   } catch (e) {
-    logger.warn({ err: String(e) }, 'GeoSearch unavailable');
+    logger.warn({ err: String(e), durationMs: Date.now() - start }, 'GeoSearch unavailable');
     throw new GeocodeError('unavailable', 'geosearch unavailable');
   }
 
@@ -93,6 +94,10 @@ export async function geosearch(input: string): Promise<GeocodeResult> {
   }
 
   const json = (await res.json()) as GeoResponse;
+  logger.info(
+    { status: res.status, durationMs: Date.now() - start, featureCount: json.features?.length ?? 0 },
+    'geosearch completed',
+  );
   const feats = json.features ?? [];
 
   if (feats.length === 0) {

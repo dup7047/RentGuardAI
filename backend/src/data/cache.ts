@@ -18,12 +18,38 @@ export async function getCached(bbl: string, key: DatasetKey): Promise<unknown[]
   );
   const row = res.rows[0];
   if (!row) return null;
+  return readCachedSlice(row.raw_data, key);
+}
 
-  const fetchedAt = row.raw_data._meta?.[`${key}_fetched_at`];
+/**
+ * Single-fetch variant — returns the entire raw_data row for a BBL with one
+ * query so callers can derive multiple dataset slices without re-reading.
+ *
+ * Pair with `readCachedSlice` to extract individual datasets while honoring
+ * the same TTL semantics as `getCached`.
+ *
+ * Returns null when the row doesn't exist; returns the parsed row otherwise
+ * (even if no datasets are cached yet — slice extraction handles that).
+ */
+export async function getCachedBatch(bbl: string): Promise<CachedData | null> {
+  const pool = getPool();
+  const res = await pool.query<{ raw_data: CachedData }>(
+    `SELECT raw_data FROM buildings WHERE bbl = $1 LIMIT 1`,
+    [bbl],
+  );
+  return res.rows[0]?.raw_data ?? null;
+}
+
+/**
+ * Extract a fresh dataset slice from a pre-fetched raw_data row, applying the
+ * same TTL check as `getCached`. Returns null on miss or stale.
+ */
+export function readCachedSlice(raw: CachedData | null, key: DatasetKey): unknown[] | null {
+  if (!raw) return null;
+  const fetchedAt = raw._meta?.[`${key}_fetched_at`];
   if (!fetchedAt) return null;
   if (Date.now() - new Date(fetchedAt).getTime() > TTL_MS) return null;
-
-  const data = row.raw_data[key];
+  const data = raw[key];
   return Array.isArray(data) ? (data as unknown[]) : null;
 }
 

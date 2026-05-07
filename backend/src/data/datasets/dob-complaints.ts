@@ -2,7 +2,8 @@
 // BBL→BIN mapping comes from HPD registrations. Falls back to empty array if no BIN.
 
 import { socrataQuery } from '../nyc-client.js';
-import { getCached, setCached } from '../cache.js';
+import { getCached, readCachedSlice, setCached } from '../cache.js';
+import type { CachedData } from '../types.js';
 import { ENDPOINTS } from '../endpoints.js';
 
 export type DobComplaint = {
@@ -27,8 +28,15 @@ const EP = ENDPOINTS.find((e) => e.key === 'dob_complaints')!;
  * @param bbl  10-digit BBL (used as cache key)
  * @param bin  7-digit Building Identification Number (used for Socrata filter)
  */
-export async function getDobComplaints(bbl: string, bin?: string): Promise<DobComplaint[]> {
-  const cached = await getCached(bbl, 'dob_complaints');
+export async function getDobComplaints(
+  bbl: string,
+  bin?: string,
+  prefetched?: CachedData | null,
+): Promise<DobComplaint[]> {
+  const cached =
+    prefetched !== undefined
+      ? readCachedSlice(prefetched, 'dob_complaints')
+      : await getCached(bbl, 'dob_complaints');
   if (cached) return cached as DobComplaint[];
 
   // DOB complaints are indexed by BIN, not BBL. Return empty if no BIN.

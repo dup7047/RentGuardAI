@@ -197,6 +197,7 @@ export async function postLookup(input: {
   listingUrl?: string;
   listingDescription?: string;
   email?: string;
+  bbl?: string;
 }): Promise<LookupResponse> {
   const auth = await authHeader();
   const res = await fetch(`${BASE}/v1/lookup`, {
@@ -227,6 +228,10 @@ export async function postLookupStream(
     listingUrl?: string;
     listingDescription?: string;
     email?: string;
+    /** Optional pre-resolved BBL from the autocomplete suggestion the user
+     *  picked. Lets the backend skip the GeoSearch round-trip on the
+     *  type-then-pick flow. Drop when the user edits the input. */
+    bbl?: string;
   },
   onPhase: (name: LookupPhase) => void,
 ): Promise<LookupResponse> {
@@ -255,12 +260,16 @@ export async function postLookupStream(
       if (!line) continue;
       const msg = JSON.parse(line) as
         | { event: 'phase'; name: LookupPhase }
+        | { event: 'data_ready'; data: unknown }
         | { event: 'complete'; status: number; response: LookupResponse };
       if (msg.event === 'phase') {
         onPhase(msg.name);
       } else if (msg.event === 'complete') {
         return msg.response;
       }
+      // 'data_ready' is a progressive-payload event for future UI use; the
+      // current loading screen drives off `onPhase` only, so we ignore it
+      // here. Adding an `onDataReady` callback later is forward-compatible.
     }
     if (done) break;
   }

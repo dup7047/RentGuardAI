@@ -1,5 +1,6 @@
 import { socrataQuery } from '../nyc-client.js';
-import { getCached, setCached } from '../cache.js';
+import { getCached, readCachedSlice, setCached } from '../cache.js';
+import type { CachedData } from '../types.js';
 import { ENDPOINTS } from '../endpoints.js';
 
 export type LeadPaintViolation = {
@@ -23,8 +24,14 @@ export type LeadPaintViolation = {
 
 const EP = ENDPOINTS.find((e) => e.key === 'lead_paint')!;
 
-export async function getLeadPaintViolations(bbl: string): Promise<LeadPaintViolation[]> {
-  const cached = await getCached(bbl, 'lead_paint');
+export async function getLeadPaintViolations(
+  bbl: string,
+  prefetched?: CachedData | null,
+): Promise<LeadPaintViolation[]> {
+  const cached =
+    prefetched !== undefined
+      ? readCachedSlice(prefetched, 'lead_paint')
+      : await getCached(bbl, 'lead_paint');
   if (cached) return cached as LeadPaintViolation[];
 
   const rows = await socrataQuery<LeadPaintViolation>(EP.resourceId, {

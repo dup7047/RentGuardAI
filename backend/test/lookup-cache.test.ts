@@ -39,9 +39,17 @@ vi.mock('../src/db/client.js', () => ({
           orderBy: () => ({
             limit: async () => (mocks.cachedRow ? [mocks.cachedRow] : []),
           }),
+          // Single-row variant for the BBL-bypass branch — not exercised in
+          // these tests but provided so the chain doesn't blow up if reached.
+          limit: async () => [],
         }),
       }),
     }),
+  }),
+  // getCachedBatch hits the raw pool. Dataset wrappers are mocked separately,
+  // so this just needs to satisfy lookup.ts's call. rows=[] = cache miss.
+  getPool: () => ({
+    query: async () => ({ rows: [] }),
   }),
 }));
 

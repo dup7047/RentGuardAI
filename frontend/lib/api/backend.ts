@@ -27,7 +27,13 @@ export type LookupResponse =
   | { kind: 'invalid_input'; errors: AnyRecord }
   | { kind: 'not_found' };
 
-const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8080';
+// Default by NODE_ENV so prod works without a Vercel-dashboard env var.
+// Local devs override via frontend/.env.local (NEXT_PUBLIC_BACKEND_URL=http://localhost:8080).
+const PROD_BACKEND_URL = 'https://rentguardai.onrender.com';
+const DEV_BACKEND_URL = 'http://localhost:8080';
+const BASE =
+  process.env.NEXT_PUBLIC_BACKEND_URL ??
+  (process.env.NODE_ENV === 'production' ? PROD_BACKEND_URL : DEV_BACKEND_URL);
 
 async function authHeader(): Promise<HeadersInit> {
   try {

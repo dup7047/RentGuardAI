@@ -36,6 +36,7 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
       score: buildingLookups.aiScore,
       scoreBand: buildingLookups.aiScoreBand,
       scoreFactors: buildingLookups.aiScoreFactors,
+      scrapedListing: buildingLookups.aiScrapedListing,
     })
     .from(buildingLookups)
     .where(eq(buildingLookups.buildingBbl, bbl))
@@ -112,7 +113,8 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
     indicators,
     questions_to_ask,
     listing_notes,
-    scraped_listing: null, // SEO route doesn't scrape; only fresh lookups have this
+    // Phase 4.5 follow-up: hydrate from the snapshotted column when present
+    scraped_listing: latest?.scrapedListing ?? null,
     landlord,
     fare_check: null,
     stats: {

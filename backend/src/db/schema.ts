@@ -90,6 +90,8 @@ export const buildingLookups = pgTable('building_lookups', {
   aiScoreBand: text('ai_score_band'),
   /** Phase 4.5: ScoreFactor[] from src/scoring/score.ts */
   aiScoreFactors: jsonb('ai_score_factors'),
+  /** Phase 4.5 follow-up: ScrapedListing snapshot so SEO route returns it on cache hits */
+  aiScrapedListing: jsonb('ai_scraped_listing'),
   aiCostCents: integer('ai_cost_cents').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });

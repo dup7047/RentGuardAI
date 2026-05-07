@@ -224,6 +224,10 @@ lookupRoute.post('/lookup', async (c) => {
       aiScore: score.score,
       aiScoreBand: score.band,
       aiScoreFactors: score.factors,
+      // Phase 4.5 follow-up: snapshot the scraped listing so SEO route can
+      // return it on cache hits (the scraped_listings table is keyed by URL,
+      // not BBL, so we can't join cleanly — denormalize instead).
+      aiScrapedListing: scrapedListing,
       aiCostCents: summary.cost_cents,
     })
     .returning({ id: buildingLookups.id });

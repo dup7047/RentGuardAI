@@ -156,18 +156,28 @@ export async function postWaitlistEmail(email: string): Promise<void> {
   });
 }
 
-export async function getBuildingByBbl(bbl: string): Promise<LookupResponse> {
-  // 1h revalidation gives the backend a chance to pick up backfilled data on
-  // the buildings table within an hour of any /v1/lookup call. The page-level
-  // `revalidate = 86400` in app/building/[bbl]/page.tsx is the upper bound;
-  // this fetch-level setting is a tighter ceiling on staleness for the API
-  // payload (not the rendered page).
-  const res = await fetch(`${BASE}/v1/building/${bbl}`, {
+export async function getBuildingByBbl(
+  bbl: string,
+  opts: { noStore?: boolean } = {},
+): Promise<LookupResponse> {
+  // Default: 1h revalidation gives the backend a chance to surface backfilled
+  // data without thrashing the cache. The page-level `revalidate = 86400` in
+  // app/building/[bbl]/page.tsx is the upper bound.
+  //
+  // When `noStore: true` (e.g. right after a fresh lookup with ?fresh=1),
+  // bypass the data cache entirely so users see their freshly-generated
+  // score / listing_summary / scraped_listing without waiting for revalidation.
+  const init: RequestInit = {
     credentials: 'include',
-    cache: 'force-cache',
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore — Next.js extends RequestInit with `next`
-    next: { revalidate: 3600 },
-  });
+    ...(opts.noStore
+      ? { cache: 'no-store' as RequestCache }
+      : {
+          cache: 'force-cache' as RequestCache,
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore — Next.js extends RequestInit with `next`
+          next: { revalidate: 3600 },
+        }),
+  };
+  const res = await fetch(`${BASE}/v1/building/${bbl}`, init);
   return (await res.json()) as LookupResponse;
 }

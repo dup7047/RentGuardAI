@@ -24,10 +24,15 @@ export function MetricInfoModal({
   }, [onClose]);
 
   return (
-    <div className="modal-veil" onClick={onClose} role="presentation">
+    <div
+      className="modal-veil"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="presentation"
+    >
       <div
         className="modal"
-        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="metric-modal-title"

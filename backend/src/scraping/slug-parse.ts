@@ -59,24 +59,41 @@ function parseZillowUrl(url: string): string | null {
   const beforeState = (zipMatch ?? noZipMatch)![1]!;
   const zip = zipMatch ? zipMatch[2]! : null;
 
-  // Last city token in what remains
-  const cityMatch = beforeState.match(ZILLOW_CITY_RE);
-  if (!cityMatch) return null;
-  const cityIdx = beforeState.lastIndexOf(cityMatch[0]);
-  const beforeCity = beforeState.slice(0, cityIdx).replace(/-+$/, '');
-  const city = cityMatch[0].replace(/-/g, ' ');
+  let beforeCity: string;
+  let cityRaw: string | null = null;
 
-  // Strip optional unit segment (-APT-XX or -UNIT-XX) from end of address part
-  const noUnit = beforeCity.replace(/-(?:APT|UNIT|#)-[A-Z0-9-]+$/i, '');
+  // APT-aware split — when there's a -(APT|UNIT|#)-<unit> segment, treat that
+  // as the address/city boundary. Lets us handle NYC neighborhoods that
+  // aren't borough names (Ridgewood, Astoria, Williamsburg, Bushwick, etc.)
+  // without enumerating them. Anything between the unit and the state suffix
+  // is the city/neighborhood, passed straight to the geocoder.
+  const aptSplit = beforeState.match(/^(.+?)-(?:APT|UNIT|#)-[A-Z0-9]+(?:-(.+))?$/i);
+  if (aptSplit) {
+    beforeCity = aptSplit[1]!;
+    cityRaw = aptSplit[2] ?? null;
+  } else {
+    // No APT — fall back to the borough allowlist. URLs that hit this branch
+    // and are in a non-borough neighborhood (rare without a unit) currently
+    // return null and surface as listing_blocked.
+    const cityMatch = beforeState.match(ZILLOW_CITY_RE);
+    if (!cityMatch) return null;
+    const cityIdx = beforeState.lastIndexOf(cityMatch[0]);
+    beforeCity = beforeState.slice(0, cityIdx).replace(/-+$/, '');
+    cityRaw = cityMatch[0];
+  }
 
-  const tokens = noUnit.split('-').filter(Boolean);
+  const tokens = beforeCity.split('-').filter(Boolean);
   if (tokens.length < 2) return null;
   const housenumber = tokens[0]!;
   if (!/^\d{1,5}[A-Z]?$/i.test(housenumber)) return null;
   const street = tokens.slice(1).join(' ');
   if (!street) return null;
 
-  return zip ? `${housenumber} ${street}, ${city}, NY ${zip}` : `${housenumber} ${street}, ${city}, NY`;
+  const city = cityRaw ? cityRaw.replace(/-/g, ' ') : null;
+  if (city && zip) return `${housenumber} ${street}, ${city}, NY ${zip}`;
+  if (city) return `${housenumber} ${street}, ${city}, NY`;
+  if (zip) return `${housenumber} ${street}, NY ${zip}`;
+  return `${housenumber} ${street}, NY`;
 }
 
 function extractZillowSlug(url: string): string | null {

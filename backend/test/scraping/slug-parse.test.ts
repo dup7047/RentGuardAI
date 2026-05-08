@@ -20,6 +20,27 @@ describe('parseAddressFromUrl — Zillow', () => {
     ).toBe('127 W 81st St, Manhattan, NY 10024');
   });
 
+  it('parses /homedetails with neighborhood (not borough) as city when APT is present', () => {
+    // Regression: Ridgewood is a Queens neighborhood, not a borough. Before
+    // the APT-aware split this returned null because Ridgewood wasn't in
+    // the borough allowlist.
+    expect(
+      parseAddressFromUrl(
+        'https://www.zillow.com/homedetails/1823-Menahan-St-APT-1L-Ridgewood-NY-11385/2101423184_zpid/',
+        'zillow',
+      ),
+    ).toBe('1823 Menahan St, Ridgewood, NY 11385');
+  });
+
+  it('parses multi-token neighborhood (Long Island City) when APT is present', () => {
+    expect(
+      parseAddressFromUrl(
+        'https://www.zillow.com/homedetails/2425-Vernon-Blvd-APT-3-Long-Island-City-NY-11101/12345_zpid/',
+        'zillow',
+      ),
+    ).toBe('2425 Vernon Blvd, Long Island City, NY 11101');
+  });
+
   it('parses /homedetails when state has no zip suffix', () => {
     expect(
       parseAddressFromUrl(

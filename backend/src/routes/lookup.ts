@@ -17,6 +17,12 @@ import { geosearch } from '../geo/geosearch.js';
 import { lookupLandlord } from '../data/landlord.js';
 import { checkFare } from '../fare/check.js';
 import { generateSummary, CostCapExceededError } from '../ai/summary.js';
+import {
+  projectHpdViolations,
+  projectHpdComplaints,
+  projectDobComplaints,
+  project311Complaints,
+} from '../ai/payload-records.js';
 import { computeScore } from '../scoring/score.js';
 import { getHpdViolations } from '../data/datasets/hpd-violations.js';
 import { getDobComplaints } from '../data/datasets/dob-complaints.js';
@@ -24,6 +30,8 @@ import { getEvictions } from '../data/datasets/evictions.js';
 import { getBedbugReports } from '../data/datasets/bedbug.js';
 import { getLeadPaintViolations } from '../data/datasets/lead-paint.js';
 import { getHpdRegistrations } from '../data/datasets/hpd-registrations.js';
+import { getHpdComplaints } from '../data/datasets/hpd-complaints.js';
+import { get311HousingRequests } from '../data/datasets/three11-housing.js';
 import { getCachedBatch } from '../data/cache.js';
 import { getDb } from '../db/client.js';
 import { buildingLookups, buildings, nonNycWaitlist } from '../db/schema.js';
@@ -372,7 +380,7 @@ export async function runLookup(
   // it serially after Promise.all just wastes a round-trip.
   const isAddressOnlyInput = !listingUrl && !listingDescription;
   const cachedAiP = isAddressOnlyInput ? findRecentLookup(bbl) : Promise.resolve(null);
-  const [hpdR, evicR, bedR, leadR, landlordR, regsR, cached] = await Promise.all([
+  const [hpdR, evicR, bedR, leadR, landlordR, regsR, hpdCR, three11R, cached] = await Promise.all([
     withDeadline(hpdP, DATASET_DEADLINE_MS, []),
     withDeadline(getEvictions(bbl, rawData), DATASET_DEADLINE_MS, []),
     withDeadline(getBedbugReports(bbl, rawData), DATASET_DEADLINE_MS, []),
@@ -387,6 +395,8 @@ export async function runLookup(
       last_fetched_at: new Date(0).toISOString(),
     }),
     withDeadline(getHpdRegistrations(bbl, rawData), DATASET_DEADLINE_MS, []),
+    withDeadline(getHpdComplaints(bbl), DATASET_DEADLINE_MS, []),
+    withDeadline(get311HousingRequests(bbl), DATASET_DEADLINE_MS, []),
     cachedAiP,
   ]);
   const hpdV = hpdR.value;
@@ -395,6 +405,8 @@ export async function runLookup(
   const lead = leadR.value;
   const landlord = landlordR.value;
   const regs = regsR.value;
+  const hpdC = hpdCR.value;
+  const three11 = three11R.value;
   // DOB needs the BIN that comes off HPD registrations / violations — fetch
   // sequentially after the parallel batch resolves. Still wrapped in
   // withDeadline so a slow Socrata call here doesn't stall the response.
@@ -416,9 +428,15 @@ export async function runLookup(
   if (leadR.timedOut) partial.push('lead_paint');
   if (landlordR.timedOut) partial.push('landlord');
   if (regsR.timedOut) partial.push('hpd_registrations');
+  if (hpdCR.timedOut) partial.push('hpd_complaints');
+  if (three11R.timedOut) partial.push('three11_housing');
   if (partial.length > 0) {
     logger.warn({ partial, bbl }, 'one or more datasets timed out — serving partial');
   }
+  logger.debug(
+    { bbl, hpd_complaints: hpdC.length, three11_housing: three11.length },
+    'extra datasets fetched',
+  );
   const hpdOpen = hpdV.filter((v: { currentstatus?: string }) => v.currentstatus !== 'CLOSE').length;
   const hpdClosed = hpdV.length - hpdOpen;
   const hpdBuildingId = hpdV.find((v) => v.buildingid)?.buildingid ?? regs[0]?.buildingid ?? null;
@@ -584,6 +602,12 @@ export async function runLookup(
           scrapedListing: scrapedListing,
           // Phase 4.5: deterministic score handed in for narration
           score,
+          // Record-level context for the at-risk-apartments callouts; capped
+          // and projected by `payload-records.ts` so the prompt stays small.
+          recentHpdViolations: projectHpdViolations(hpdV),
+          recentHpdComplaints: projectHpdComplaints(hpdC),
+          recentDobComplaints: projectDobComplaints(dob),
+          recent311Complaints: project311Complaints(three11),
         },
         subject,
       ),

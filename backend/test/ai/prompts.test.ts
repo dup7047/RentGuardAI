@@ -166,4 +166,70 @@ describe('buildUserPrompt', () => {
     const prompt = buildUserPrompt(BASE);
     expect(prompt).toMatch(/never\s+characterize\s+the\s+rent/i);
   });
+
+  it('formats per-record HPD violation lines with apartment, class, date, status, description', () => {
+    const prompt = buildUserPrompt({
+      ...BASE,
+      recentHpdViolations: [
+        {
+          apartment: '2L',
+          class: 'B',
+          issuedDate: '2026-04-27T00:00:00.000',
+          description: 'WATER LEAK SOURCE / DAMAGED PLASTER PAINT',
+          status: 'open',
+        },
+      ],
+    });
+    expect(prompt).toContain('Recent HPD violations (apartment-level)');
+    expect(prompt).toContain('Apt 2L');
+    expect(prompt).toContain('Class B');
+    expect(prompt).toContain('2026-04-27');
+    expect(prompt).toContain('OPEN');
+    expect(prompt).toContain('WATER LEAK SOURCE');
+  });
+
+  it('formats per-record HPD complaint lines with apartment, date, status', () => {
+    const prompt = buildUserPrompt({
+      ...BASE,
+      recentHpdComplaints: [
+        { apartment: '1L', receivedDate: '2026-03-15T00:00:00.000', status: 'OPEN' },
+      ],
+    });
+    expect(prompt).toContain('Recent HPD complaints (apartment-level)');
+    expect(prompt).toContain('Apt 1L');
+    expect(prompt).toContain('2026-03-15');
+    expect(prompt).toContain('OPEN');
+  });
+
+  it('formats per-record DOB and 311 complaint lines (building-level, no apartment)', () => {
+    const prompt = buildUserPrompt({
+      ...BASE,
+      recentDobComplaints: [
+        { date: '2026-02-10T00:00:00.000', category: '45 UNSAFE CONDITION', status: 'ACTIVE' },
+      ],
+      recent311Complaints: [
+        {
+          date: '2026-01-20T00:00:00.000',
+          type: 'HEAT/HOT WATER',
+          descriptor: 'ENTIRE BUILDING',
+          status: 'Closed',
+        },
+      ],
+    });
+    expect(prompt).toContain('Recent DOB complaints (building-level)');
+    expect(prompt).toContain('45 UNSAFE CONDITION');
+    expect(prompt).toContain('Recent 311 housing complaints (building-level)');
+    expect(prompt).toContain('HEAT/HOT WATER / ENTIRE BUILDING');
+  });
+
+  it('omits record sections entirely when arrays are not provided', () => {
+    const prompt = buildUserPrompt(BASE);
+    expect(prompt).not.toContain('Recent HPD violations (apartment-level)');
+    expect(prompt).not.toContain('Recent HPD complaints (apartment-level)');
+  });
+
+  it('emits "none" line when an empty array is provided', () => {
+    const prompt = buildUserPrompt({ ...BASE, recentHpdViolations: [] });
+    expect(prompt).toContain('Recent HPD violations (apartment-level): none');
+  });
 });

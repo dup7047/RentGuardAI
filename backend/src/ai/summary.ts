@@ -13,7 +13,7 @@ import { getDb } from '../db/client.js';
 import { aiUsage } from '../db/schema.js';
 import { logger } from '../logger.js';
 
-const MAX_INPUT_CHARS = 16_000; // ~4K tokens; well within gpt-4o-mini context
+const MAX_INPUT_CHARS = 24_000; // ~6K tokens; sized for record-level HPD/DOB/311 context
 const PRICE_INPUT_PER_M = 0.15; // $ per million input tokens
 const PRICE_OUTPUT_PER_M = 0.6; // $ per million output tokens
 
@@ -48,7 +48,7 @@ export type SummaryListingNote = { snippet: string; note: string };
 export type SummaryResult = {
   /** Phase 4.5: 2-3 sentence narrative of what the listing offers. May be empty for address-only lookups. */
   listing_summary: string;
-  /** Phase 3.7: ≤180-word factual building summary covering HPD violations, DOB complaints, marshal evictions, and Worst Landlord Watchlist rank in plain English. */
+  /** Phase 3.7: ≤220-word renter-facing risk briefing — pattern lede + "At-risk apartments:" bullet list + optional watchlist sentence + closing disclaimer. Contains literal newlines and "- " bullets; render with white-space: pre-line. */
   summary: string;
   /** Phase 4.5: AI-narrated explanation of the deterministic score. */
   score_explanation: string;
@@ -83,9 +83,9 @@ export async function generateSummary(
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
     ],
-    // 1500 leaves headroom for: ≤180-word summary + 6 indicators + 5 questions
-    // + 5 listing_notes (each ~50 tokens for snippet+note). Was 1000 when we
-    // only asked for summary+indicators.
+    // 1500 leaves headroom for: ≤220-word pattern-lede + at-risk-apartments
+    // summary + 6 indicators + 5 questions + 5 listing_notes (each ~50 tokens
+    // for snippet+note).
     max_completion_tokens: 1500,
     response_format: { type: 'json_object' },
     temperature: 0.2,

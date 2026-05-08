@@ -13,8 +13,15 @@ import { getEvictions } from '../data/datasets/evictions.js';
 import { getBedbugReports } from '../data/datasets/bedbug.js';
 import { getLeadPaintViolations } from '../data/datasets/lead-paint.js';
 import { get311HousingRequests } from '../data/datasets/three11-housing.js';
+import { getHpdComplaints } from '../data/datasets/hpd-complaints.js';
 import { getHpdRegistrations } from '../data/datasets/hpd-registrations.js';
 import { generateSummary, CostCapExceededError } from '../ai/summary.js';
+import {
+  projectHpdViolations,
+  projectHpdComplaints,
+  projectDobComplaints,
+  project311Complaints,
+} from '../ai/payload-records.js';
 
 const VIOLATIONS_CAP = 100;
 const COMPLAINTS_CAP = 50;
@@ -51,7 +58,7 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
 
   // HPD registrations are needed to derive the BIN, which DOB complaints are
   // keyed by. Without it, DOB returns []. Fetch in parallel with the rest.
-  const [hpdV, evic, bed, lead, landlord, regs, threeoneone] = await Promise.all([
+  const [hpdV, evic, bed, lead, landlord, regs, threeoneone, hpdC] = await Promise.all([
     getHpdViolations(bbl),
     getEvictions(bbl),
     getBedbugReports(bbl),
@@ -59,6 +66,7 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
     lookupLandlord(bbl),
     getHpdRegistrations(bbl),
     get311HousingRequests(bbl),
+    getHpdComplaints(bbl),
   ]);
   const bin = regs[0]?.bin ?? hpdV[0]?.bin ?? null;
   const dob = await getDobComplaints(bbl, bin ?? undefined);
@@ -95,6 +103,11 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
           // SEO archive doesn't have the user's listing copy.
           listingText: null,
           fareFlag: null,
+          // Record-level context for the at-risk-apartments callouts.
+          recentHpdViolations: projectHpdViolations(hpdV),
+          recentHpdComplaints: projectHpdComplaints(hpdC),
+          recentDobComplaints: projectDobComplaints(dob),
+          recent311Complaints: project311Complaints(threeoneone),
         },
         { type: 'anon_token', value: `seo:${bbl}` },
       );
@@ -168,6 +181,13 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
         descriptor: t.descriptor,
         status: t.status,
       })),
+      hpd_complaints: hpdC.slice(0, COMPLAINTS_CAP).map((c) => ({
+        complaintid: c.complaintid,
+        apartment: c.apartment,
+        receiveddate: c.receiveddate,
+        status: c.status,
+        statusdate: c.statusdate,
+      })),
     },
     evictions_rows: evic.slice(0, EVICTIONS_CAP).map((e) => ({
       court_index_number: e.court_index_number,
@@ -180,12 +200,14 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
       violations: hpdV.length,
       dob: dob.length,
       threeoneone: threeoneone.length,
+      hpd_complaints: hpdC.length,
       evictions: evic.length,
     },
     has_more: {
       violations: hpdV.length > VIOLATIONS_CAP,
       dob: dob.length > COMPLAINTS_CAP,
       threeoneone: threeoneone.length > COMPLAINTS_CAP,
+      hpd_complaints: hpdC.length > COMPLAINTS_CAP,
       evictions: evic.length > EVICTIONS_CAP,
     },
   });

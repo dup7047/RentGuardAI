@@ -6,6 +6,7 @@ export type DatasetKey =
   | 'hpd_violations'
   | 'hpd_registrations'
   | 'hpd_contacts'
+  | 'hpd_complaints'
   | 'dob_complaints'
   | 'three11_housing'
   | 'evictions'

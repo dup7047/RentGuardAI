@@ -1,13 +1,15 @@
-// Dashboard — auth-gated server component. Auth + header are server-rendered;
-// the saved-buildings list is a child client component that fetches /v1/saved-buildings
-// and handles the optimistic Unsave UX.
+// Dashboard — auth-gated server component. The saved-buildings list is
+// fetched server-side here so we don't depend on Supabase client-side cookie
+// parsing (which fails on some Safari sessions with "The string did not match
+// the expected pattern"). The child client component handles the optimistic
+// Unsave UX via a server action.
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { createClient } from '@/lib/supabase/server';
 
-import { signOut } from './actions';
+import { loadSavedBuildings, signOut } from './actions';
 import { SavedBuildingsList } from './SavedBuildingsList';
 
 export default async function DashboardPage() {
@@ -17,6 +19,12 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    redirect('/login?redirectTo=/dashboard');
+  }
+
+  const initial = await loadSavedBuildings();
+
+  if (initial.kind === 'unauthorized') {
     redirect('/login?redirectTo=/dashboard');
   }
 
@@ -40,7 +48,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <SavedBuildingsList />
+      <SavedBuildingsList initial={initial} />
     </div>
   );
 }

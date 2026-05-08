@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { LegalFooter } from './LegalFooter';
 import { LegalFraming } from './LegalFraming';
@@ -21,12 +21,17 @@ import { buildingJsonLd } from '@/lib/seo/structured-data';
 import {
   getBandLabel,
   getReportTone,
+  getSavedBuildingState,
   getValueBandLabel,
   getValueTone,
+  saveBuilding,
+  unsaveBuilding,
+  SavedBuildingsAuthError,
   type LookupResponse,
   type ValueBand,
   type ValueConfidence,
 } from '@/lib/api/backend';
+import { createClient } from '@/lib/supabase/browser';
 
 type SuccessData = Extract<LookupResponse, { kind: 'success' }>;
 type Tab = 'overview' | 'violations' | 'complaints' | 'owner' | 'sources';
@@ -65,6 +70,42 @@ export function BuildingReport({ data }: { data: SuccessData }) {
   const [tab, setTab] = useState<Tab>('overview');
   const [modal, setModal] = useState<null | { kind: 'save' | 'lease' | 'gate'; reason: SignInReason } | { kind: 'share' }>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Saved-building state. `null` means "haven't checked yet" — render the
+  // default unsaved label until we know. After checking, true/false drive
+  // the button label.
+  const [isAuthed, setIsAuthed] = useState<boolean>(false);
+  const [isSaved, setIsSaved] = useState<boolean | null>(null);
+  const [saveInFlight, setSaveInFlight] = useState<boolean>(false);
+
+  // On mount + when bbl changes, check auth status. If signed in, fetch
+  // whether this BBL is already saved so the button label reflects reality
+  // before the user clicks anything.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
+        const authed = Boolean(session);
+        setIsAuthed(authed);
+        if (authed) {
+          const state = await getSavedBuildingState(bbl);
+          if (!cancelled) setIsSaved(state.saved);
+        } else {
+          setIsSaved(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsAuthed(false);
+          setIsSaved(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bbl]);
 
   const tone = getReportTone(score_band);
   const label = getBandLabel(score_band);
@@ -92,12 +133,38 @@ export function BuildingReport({ data }: { data: SuccessData }) {
     window.setTimeout(() => setToast(null), 2400);
   }
 
-  function handleSave() {
-    // Anon → SignInModal. Authed → toast (saved-buildings backend not yet built).
-    // We don't know auth state here without a client check; rely on the
-    // SignInModal's own success path. For authed users the modal renders
-    // briefly then they ignore it — minor v1 quirk.
-    setModal({ kind: 'save', reason: 'save' });
+  async function handleSave() {
+    // Anon → SignInModal (existing flow, unchanged).
+    if (!isAuthed) {
+      setModal({ kind: 'save', reason: 'save' });
+      return;
+    }
+    if (saveInFlight) return; // debounce double-clicks
+    // Authed: optimistic toggle, fire API, revert + toast on error.
+    const wasSaved = isSaved === true;
+    setIsSaved(!wasSaved);
+    setSaveInFlight(true);
+    try {
+      if (wasSaved) {
+        await unsaveBuilding(bbl);
+        showToast('Removed from saved buildings');
+      } else {
+        await saveBuilding(bbl);
+        showToast('Saved to your dashboard');
+      }
+    } catch (err) {
+      // Revert on failure.
+      setIsSaved(wasSaved);
+      if (err instanceof SavedBuildingsAuthError) {
+        // Token expired or invalid — fall back to the sign-in modal.
+        setIsAuthed(false);
+        setModal({ kind: 'save', reason: 'save' });
+      } else {
+        showToast(wasSaved ? "Couldn't unsave — try again" : "Couldn't save — try again");
+      }
+    } finally {
+      setSaveInFlight(false);
+    }
   }
 
   function handleLease() {
@@ -171,8 +238,9 @@ export function BuildingReport({ data }: { data: SuccessData }) {
                 type="button"
                 className="btn primary"
                 onClick={handleSave}
+                disabled={saveInFlight}
               >
-                ★ Save building
+                {isSaved ? '★ Saved' : '★ Save building'}
               </button>
               <button
                 type="button"

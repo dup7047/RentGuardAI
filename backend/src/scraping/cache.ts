@@ -11,7 +11,8 @@ const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export type CachedListing = {
   data: ScrapedListing;
   fetched_at: string;
-  fetch_method: 'direct' | 'scrapfly' | 'cache';
+  // 'scrapfly' kept for legacy rows persisted before the Firecrawl swap.
+  fetch_method: 'direct' | 'scrapfly' | 'firecrawl' | 'cache';
 };
 
 /**
@@ -22,7 +23,7 @@ export async function getCached(canonicalUrl: string): Promise<CachedListing | n
   const r = await pool.query<{
     data: ScrapedListing;
     fetched_at: Date;
-    fetch_method: 'direct' | 'scrapfly' | 'cache';
+    fetch_method: 'direct' | 'scrapfly' | 'firecrawl' | 'cache';
   }>(
     `SELECT data, fetched_at, fetch_method
      FROM public.scraped_listings
@@ -46,7 +47,7 @@ export async function getCached(canonicalUrl: string): Promise<CachedListing | n
 export async function setCached(args: {
   canonicalUrl: string;
   data: ScrapedListing;
-  fetchMethod: 'direct' | 'scrapfly';
+  fetchMethod: 'direct' | 'firecrawl';
   rawHtml?: string;
   fetchCostCredits?: number;
 }): Promise<void> {

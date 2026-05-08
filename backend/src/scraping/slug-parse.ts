@@ -1,6 +1,6 @@
 // Best-effort building-address extraction from Zillow / StreetEasy URL slugs.
 //
-// When the live scraper fails (ScrapFly quota exhausted, bot-wall, etc.), we
+// When the live scraper fails (Firecrawl quota exhausted, bot-wall, etc.), we
 // fall back to parsing the address straight out of the URL path. The user
 // loses listing-specific fields (rent, beds, broker fee) but still gets a
 // building report — same end state as the manual-paste fallback, with zero

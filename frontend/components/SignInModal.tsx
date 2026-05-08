@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { createClient } from '@/lib/supabase/browser';
+import { useLockBodyScroll } from '@/lib/useLockBodyScroll';
 
 import { Mark } from './Mark';
 
@@ -50,10 +51,7 @@ export function SignInModal({
     }
   }, []);
 
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, []);
+  useLockBodyScroll();
 
   // Close on Escape
   useEffect(() => {

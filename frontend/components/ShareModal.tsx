@@ -6,6 +6,8 @@
 
 import { useEffect, useState } from 'react';
 
+import { useLockBodyScroll } from '@/lib/useLockBodyScroll';
+
 export function ShareModal({
   bbl,
   onClose,
@@ -21,10 +23,7 @@ export function ShareModal({
       : `https://rentguard.cc/building/${bbl}`;
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, []);
+  useLockBodyScroll();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

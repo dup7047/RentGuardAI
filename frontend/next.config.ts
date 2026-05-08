@@ -27,7 +27,16 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: '/logo-:name*',
+        source: '/logo-lockup.png',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      {
+        source: '/logo-mark.png',
         headers: [
           {
             key: 'Cache-Control',

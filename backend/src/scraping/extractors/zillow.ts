@@ -36,7 +36,10 @@ function detectKind(url: string): ListingSourceKind {
   try {
     const u = new URL(url);
     const path = u.pathname;
-    if (/^\/b\/\d+/.test(path)) return 'building';
+    // Building pages: `/b/<digits>...` (older format) and `/b/<address-slug>-<base62-id>/`
+    // (newer format like /b/149-starr-st-brooklyn-ny-3ryQ/). Both are aggregate
+    // pages — no unit-specific listing data.
+    if (/^\/b\//.test(path)) return 'building';
     if (/\/homedetails\//.test(path)) return 'rental';
     if (/\/apartments\//.test(path)) return 'rental';
     return 'unknown';
@@ -253,11 +256,18 @@ export function extractZillow(html: string, url: string): ScrapedListing | null 
   }
 
   // ── Confidence ──────────────────────────────────────────────────────────────
-  // We refuse to surface a "scraped listing" with literally nothing in it.
-  // Require at least ONE of: rent, bedroom count, listing-specific description.
+  // For unit-level URLs (/homedetails/, /apartments/) we refuse to surface a
+  // "scraped listing" with literally nothing in it — the user is asking about
+  // a specific apartment, and an empty card would be misleading. Require at
+  // least ONE of: rent, bedroom count, listing-specific description.
+  //
+  // Building-level URLs (/b/<slug>/) are different by design: they're
+  // aggregate pages with no per-unit data. Accepting address-only here lets
+  // the lookup pipeline continue with a normal building report instead of
+  // surfacing the "listing blocked" UI for a page that wasn't blocked at all.
   const hasRichData =
     monthlyRentCents != null || bedrooms != null || descriptionIsListingSpecific;
-  if (!hasRichData) {
+  if (!hasRichData && kind !== 'building') {
     logger.info(
       { url, addressFromOg: address },
       'Zillow extractor: only address found, no rent/beds/listing-specific description — treating as blocked',

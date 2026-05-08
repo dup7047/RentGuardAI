@@ -16,6 +16,7 @@ import { AnimatedNum } from './AnimatedNum';
 import { RevealText } from './RevealText';
 
 type SuccessData = Extract<LookupResponse, { kind: 'success' }>;
+type NavTab = 'violations' | 'complaints' | 'owner';
 
 function findingTone(impact: number): 'good' | 'warn' | 'bad' {
   if (impact < 0) return 'bad';
@@ -50,7 +51,7 @@ export function OverviewTab({
   onSelectTab,
 }: {
   data: SuccessData;
-  onSelectTab?: (tab: string) => void;
+  onSelectTab?: (tab: NavTab) => void;
 }) {
   const {
     bbl,
@@ -73,7 +74,7 @@ export function OverviewTab({
     v: string;
     src: string;
     url: string;
-    tabId: string;
+    tabId: NavTab;
   }> = [
     {
       k: 'HPD violations · open',

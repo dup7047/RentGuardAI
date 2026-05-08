@@ -52,8 +52,11 @@ export type SavedBuildingsLoad =
 // avoids fragile client-side cookie/JWT decoding paths — Safari in particular
 // throws "The string did not match the expected pattern" from the Supabase
 // chunked-cookie decode when sessions span the cookie size limit.
-export async function loadSavedBuildings(): Promise<SavedBuildingsLoad> {
-  const token = await getAccessToken();
+//
+// The caller (DashboardPage) already loads the user via getUser() and has
+// the session in hand — passing the token in lets us skip a redundant
+// Supabase round-trip on every dashboard render.
+export async function loadSavedBuildings(token: string): Promise<SavedBuildingsLoad> {
   if (!token) return { kind: 'unauthorized' };
 
   try {
@@ -64,6 +67,11 @@ export async function loadSavedBuildings(): Promise<SavedBuildingsLoad> {
         Authorization: `Bearer ${token}`,
       },
       cache: 'no-store',
+      // 30 s hard cap — Render free-tier cold starts routinely take
+      // 20-40 s. Without a timeout the request hangs indefinitely and
+      // <main> stays blank; with too short a timeout users hit the
+      // error card on every cold boot.
+      signal: AbortSignal.timeout(30_000),
     });
     if (res.status === 401) {
       // Token was sent but the backend rejected it. Most likely cause: the

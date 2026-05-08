@@ -1014,6 +1014,14 @@ h1.hero em {
 .picker .info b { display: block; font-size: 14px; }
 .picker .info span { font-size: 12px; color: var(--muted); }
 
+/* ── Skeleton loader ─────────────────────────────────────────── */
+.skel {
+  background: linear-gradient(90deg, var(--line) 25%, var(--line-2) 50%, var(--line) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: 6px;
+}
+
 /* ── Dashboard ───────────────────────────────────────────────── */
 .dash-head {
   display: flex;

@@ -175,7 +175,11 @@ async function readNdjson(res: Response): Promise<Array<Record<string, unknown>>
 
 function makeCachedRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    summary: 'Cached AI summary.',
+    // Includes the "At-risk apartments:" marker so it would also pass the
+    // SQL LIKE filter in findRecentLookup (the mock bypasses SQL filtering,
+    // but matching prod behavior in the fixture keeps the test honest).
+    summary:
+      'Cached AI summary.\n\nAt-risk apartments:\n- No specific units recurred across recent records.',
     questions: ['Cached q?'],
     listingNotes: [],
     listingSummary: null,
@@ -240,7 +244,8 @@ describe('POST /v1/lookup/stream — cache hit (address-only)', () => {
       | { status: number; response: Record<string, unknown> }
       | undefined;
     expect(complete?.response.kind).toBe('success');
-    expect(complete?.response.summary).toBe('Cached AI summary.');
+    expect(complete?.response.summary).toContain('Cached AI summary.');
+    expect(complete?.response.summary).toContain('At-risk apartments:');
     expect(complete?.response.score).toBe(92);
     expect(complete?.response.score_band).toBe('minimal');
     expect(complete?.response.score_explanation).toBe('Cached score explanation.');
@@ -252,7 +257,7 @@ describe('POST /v1/lookup/stream — cache hit (address-only)', () => {
     );
     expect(lookupInserts).toHaveLength(1);
     expect(lookupInserts[0]?.aiCostCents).toBe(0);
-    expect(lookupInserts[0]?.aiSummary).toBe('Cached AI summary.');
+    expect(lookupInserts[0]?.aiSummary).toContain('Cached AI summary.');
     // Address-only requests must persist a null scraped_listing so this row
     // remains eligible for future cache hits.
     expect(lookupInserts[0]?.aiScrapedListing).toBeNull();

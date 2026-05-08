@@ -16,6 +16,7 @@ const { mocks } = vi.hoisted(() => ({
     latestRow: null as Record<string, unknown> | null,
     insertedRows: [] as Record<string, unknown>[],
     generateSummaryFn: vi.fn(),
+    getHpdComplaintsFn: vi.fn(),
   },
 }));
 
@@ -88,7 +89,7 @@ vi.mock('../src/data/datasets/three11-housing.js', () => ({
   get311HousingRequests: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('../src/data/datasets/hpd-complaints.js', () => ({
-  getHpdComplaints: vi.fn().mockResolvedValue([]),
+  getHpdComplaints: mocks.getHpdComplaintsFn,
 }));
 
 vi.mock('../src/ai/summary.js', () => ({
@@ -128,6 +129,8 @@ beforeEach(() => {
     cost_cents: 1,
     ai_usage_id: 'fake',
   });
+  mocks.getHpdComplaintsFn.mockReset();
+  mocks.getHpdComplaintsFn.mockResolvedValue([]);
 });
 
 describe('GET /v1/building/:bbl — stale row regeneration', () => {
@@ -205,5 +208,37 @@ describe('GET /v1/building/:bbl — stale row regeneration', () => {
     expect(body.score_explanation).toBe('cached score explanation');
     expect(mocks.generateSummaryFn).not.toHaveBeenCalled();
     expect(mocks.insertedRows).toHaveLength(0);
+  });
+
+  it('serves the page when an auxiliary public dataset is unavailable', async () => {
+    mocks.latestRow = {
+      summary: FRESH_SUMMARY,
+      questions: ['Cached q?'],
+      listingNotes: [],
+      listingSummary: 'cached listing summary',
+      scoreExplanation: 'cached score explanation',
+      score: 92,
+      scoreBand: 'minimal',
+      scoreFactors: [],
+      scrapedListing: null,
+      valueScore: null,
+      valueBand: null,
+      valueConfidence: null,
+      valueFactors: null,
+      valueExplanation: null,
+    };
+    mocks.getHpdComplaintsFn.mockRejectedValueOnce(new Error('Socrata 403'));
+
+    const app = createApp();
+    const res = await app.request(`/v1/building/${BBL}`);
+    const body = (await res.json()) as {
+      complaints_rows?: { hpd_complaints?: unknown[] };
+      summary?: string;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.summary).toBe(FRESH_SUMMARY);
+    expect(body.complaints_rows?.hpd_complaints).toEqual([]);
+    expect(mocks.generateSummaryFn).not.toHaveBeenCalled();
   });
 });

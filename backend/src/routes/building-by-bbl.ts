@@ -17,6 +17,8 @@ import { getHpdComplaints } from '../data/datasets/hpd-complaints.js';
 import { getHpdRegistrations } from '../data/datasets/hpd-registrations.js';
 import { generateSummary, CostCapExceededError } from '../ai/summary.js';
 import { isCurrentSummaryFormat } from '../ai/summary-format.js';
+import { logger } from '../logger.js';
+import type { LandlordRecord } from '../data/landlord.js';
 import {
   projectHpdViolations,
   projectHpdComplaints,
@@ -29,6 +31,32 @@ const COMPLAINTS_CAP = 50;
 const EVICTIONS_CAP = 100;
 
 export const buildingByBblRoute = new Hono();
+
+function fallbackLandlord(): LandlordRecord {
+  return {
+    registered_owner_name: null,
+    hpd_corporation_name: null,
+    registration_id: null,
+    head_officer_name: null,
+    head_officer_business_address: null,
+    watchlist_rank: null,
+    last_fetched_at: new Date().toISOString(),
+  };
+}
+
+async function loadForBuildingPage<T>(
+  bbl: string,
+  label: string,
+  load: () => Promise<T>,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await load();
+  } catch (err) {
+    logger.warn({ err, bbl, label }, 'building route data source unavailable');
+    return fallback;
+  }
+}
 
 buildingByBblRoute.get('/building/:bbl', async (c) => {
   const bbl = c.req.param('bbl');
@@ -65,17 +93,22 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
   // HPD registrations are needed to derive the BIN, which DOB complaints are
   // keyed by. Without it, DOB returns []. Fetch in parallel with the rest.
   const [hpdV, evic, bed, lead, landlord, regs, threeoneone, hpdC] = await Promise.all([
-    getHpdViolations(bbl),
-    getEvictions(bbl),
-    getBedbugReports(bbl),
-    getLeadPaintViolations(bbl),
-    lookupLandlord(bbl),
-    getHpdRegistrations(bbl),
-    get311HousingRequests(bbl),
-    getHpdComplaints(bbl),
+    loadForBuildingPage(bbl, 'hpd_violations', () => getHpdViolations(bbl), []),
+    loadForBuildingPage(bbl, 'evictions', () => getEvictions(bbl), []),
+    loadForBuildingPage(bbl, 'bedbug', () => getBedbugReports(bbl), []),
+    loadForBuildingPage(bbl, 'lead_paint', () => getLeadPaintViolations(bbl), []),
+    loadForBuildingPage(bbl, 'landlord', () => lookupLandlord(bbl), fallbackLandlord()),
+    loadForBuildingPage(bbl, 'hpd_registrations', () => getHpdRegistrations(bbl), []),
+    loadForBuildingPage(bbl, 'three11_housing', () => get311HousingRequests(bbl), []),
+    loadForBuildingPage(bbl, 'hpd_complaints', () => getHpdComplaints(bbl), []),
   ]);
   const bin = regs[0]?.bin ?? hpdV[0]?.bin ?? null;
-  const dob = await getDobComplaints(bbl, bin ?? undefined);
+  const dob = await loadForBuildingPage(
+    bbl,
+    'dob_complaints',
+    () => getDobComplaints(bbl, bin ?? undefined),
+    [],
+  );
   const hpdOpen = hpdV.filter((v: { currentstatus?: string }) => v.currentstatus !== 'CLOSE').length;
   const hpdClosed = hpdV.length - hpdOpen;
   const hpdBuildingId = hpdV.find((v) => v.buildingid)?.buildingid ?? regs[0]?.buildingid ?? null;

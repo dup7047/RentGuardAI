@@ -52,7 +52,7 @@ export async function updateSession(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet, headers) {
+      setAll(cookiesToSet, headers?: Record<string, string>) {
         cookiesToSet.forEach(({ name, value }) => {
           request.cookies.set(name, value);
         });
@@ -65,9 +65,11 @@ export async function updateSession(request: NextRequest) {
           response.cookies.set(name, value, options);
         });
 
-        Object.entries(headers).forEach(([name, value]) => {
-          response.headers.set(name, value);
-        });
+        if (headers) {
+          Object.entries(headers).forEach(([name, value]) => {
+            response.headers.set(name, value);
+          });
+        }
       },
     },
   });

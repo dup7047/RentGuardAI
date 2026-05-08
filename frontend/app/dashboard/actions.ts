@@ -23,6 +23,11 @@ export async function signOut() {
 
 async function getAccessToken(): Promise<string | null> {
   const supabase = await createClient();
+  // getUser() validates server-side and populates the client's in-memory
+  // session cache. Calling getSession() on the same instance then returns
+  // the refreshed session from that cache — works even on the very first
+  // request after sign-in before any cookie-refresh round-trip completes.
+  await supabase.auth.getUser();
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -51,6 +56,9 @@ export async function loadSavedBuildings(): Promise<SavedBuildingsLoad> {
         Authorization: `Bearer ${token}`,
       },
       cache: 'no-store',
+      // 10 s hard cap — prevents an indefinite hang when the Render.com
+      // backend is cold-starting, which otherwise leaves <main> blank.
+      signal: AbortSignal.timeout(10_000),
     });
     if (res.status === 401) return { kind: 'unauthorized' };
     if (!res.ok) return { kind: 'error' };

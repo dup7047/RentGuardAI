@@ -23,11 +23,6 @@ export async function signOut() {
 
 async function getAccessToken(): Promise<string | null> {
   const supabase = await createClient();
-  // getUser() validates server-side and populates the client's in-memory
-  // session cache. Calling getSession() on the same instance then returns
-  // the refreshed session from that cache — works even on the very first
-  // request after sign-in before any cookie-refresh round-trip completes.
-  await supabase.auth.getUser();
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -44,8 +39,11 @@ export type SavedBuildingsLoad =
 // avoids fragile client-side cookie/JWT decoding paths — Safari in particular
 // throws "The string did not match the expected pattern" from the Supabase
 // chunked-cookie decode when sessions span the cookie size limit.
-export async function loadSavedBuildings(): Promise<SavedBuildingsLoad> {
-  const token = await getAccessToken();
+//
+// The caller (DashboardPage) already loads the user via getUser() and has
+// the session in hand — passing the token in lets us skip a redundant
+// Supabase round-trip on every dashboard render.
+export async function loadSavedBuildings(token: string): Promise<SavedBuildingsLoad> {
   if (!token) return { kind: 'unauthorized' };
 
   try {

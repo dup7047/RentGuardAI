@@ -22,7 +22,14 @@ export default async function DashboardPage() {
     redirect('/login?redirectTo=/dashboard');
   }
 
-  const initial = await loadSavedBuildings();
+  // getUser() above warmed the client's in-memory session cache, so this
+  // getSession() reads from cache and never re-hits the network.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token ?? '';
+
+  const initial = await loadSavedBuildings(token);
 
   if (initial.kind === 'unauthorized') {
     redirect('/login?redirectTo=/dashboard');

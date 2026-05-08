@@ -12,7 +12,21 @@ type FormState =
   | { status: 'success'; message: string }
   | { status: 'error'; message: string };
 
-type Mode = 'password' | 'magic';
+type Mode = 'password' | 'signup' | 'magic';
+
+const MIN_PASSWORD_LENGTH = 8;
+
+const TITLE: Record<Mode, string> = {
+  password: 'Sign in',
+  signup: 'Create your account',
+  magic: 'Sign in with email',
+};
+
+const COPY: Record<Mode, string> = {
+  password: 'Use your email and password to reach your renter dashboard.',
+  signup: 'Set up an email and password to save buildings to your dashboard.',
+  magic: 'Use a magic link to reach your renter dashboard. No password needed.',
+};
 
 export function LoginForm() {
   const router = useRouter();
@@ -33,6 +47,7 @@ export function LoginForm() {
   const [mode, setMode] = useState<Mode>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [formState, setFormState] = useState<FormState>({
     status: 'idle',
     message: '',
@@ -41,6 +56,16 @@ export function LoginForm() {
   const redirectedFromDashboard = searchParams.get('redirectTo') === '/dashboard';
   const loggedOut = searchParams.get('loggedOut') === '1';
   const authError = searchParams.get('authError');
+
+  // Use the bare /auth/callback URL (no query string). Supabase only
+  // accepts URLs that exactly match `additional_redirect_urls` in the
+  // allow-list; if it doesn't match, GoTrue silently strips the path
+  // back to site_url, breaking the round-trip. The /auth/callback route
+  // always redirects to /dashboard, which is the only authenticated page
+  // we currently gate, so a query-string `?next=` isn't actually needed.
+  function buildCallbackUrl() {
+    return new URL('/auth/callback', window.location.origin).toString();
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,21 +92,55 @@ export function LoginForm() {
       return;
     }
 
+    if (mode === 'signup') {
+      if (password.length < MIN_PASSWORD_LENGTH) {
+        setFormState({
+          status: 'error',
+          message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+        });
+        return;
+      }
+      if (password !== confirmPassword) {
+        setFormState({ status: 'error', message: 'Passwords do not match.' });
+        return;
+      }
+
+      setFormState({ status: 'loading', message: 'Creating your account...' });
+      const { data, error } = await supabaseState.client.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: buildCallbackUrl() },
+      });
+      if (error) {
+        setFormState({ status: 'error', message: error.message });
+        return;
+      }
+      // If the project has email confirmations disabled, signUp returns a
+      // session and we can route straight to the dashboard. If confirmations
+      // are required, session is null and the user has to click the email
+      // link before logging in.
+      if (data.session) {
+        setFormState({
+          status: 'success',
+          message: 'Account created. Redirecting...',
+        });
+        router.push('/dashboard');
+        router.refresh();
+        return;
+      }
+      setFormState({
+        status: 'success',
+        message: `Check ${email} for a confirmation link to finish signing up.`,
+      });
+      return;
+    }
+
     // Magic link mode.
     setFormState({ status: 'loading', message: 'Sending your magic link...' });
-
-    // Use the bare /auth/callback URL (no query string). Supabase only
-    // accepts URLs that exactly match `additional_redirect_urls` in the
-    // allow-list; if it doesn't match, GoTrue silently strips the path
-    // back to site_url, breaking the round-trip. The /auth/callback route
-    // always redirects to /dashboard, which is the only authenticated page
-    // we currently gate, so a query-string `?next=` isn't actually needed.
-    const callbackUrl = new URL('/auth/callback', window.location.origin);
-
     const { error } = await supabaseState.client.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: callbackUrl.toString(),
+        emailRedirectTo: buildCallbackUrl(),
         shouldCreateUser: true,
       },
     });
@@ -99,19 +158,30 @@ export function LoginForm() {
 
   function switchMode(next: Mode) {
     setMode(next);
+    setConfirmPassword('');
     setFormState({ status: 'idle', message: '' });
   }
+
+  const showPasswordField = mode === 'password' || mode === 'signup';
+  const submitLabel =
+    formState.status === 'loading'
+      ? mode === 'magic'
+        ? 'Sending...'
+        : mode === 'signup'
+          ? 'Creating...'
+          : 'Signing in...'
+      : mode === 'magic'
+        ? 'Email me a magic link'
+        : mode === 'signup'
+          ? 'Create account'
+          : 'Sign in';
 
   return (
     <form className="auth-panel" onSubmit={handleSubmit}>
       <div>
         <p className="eyebrow">RentGuard account</p>
-        <h1>{mode === 'password' ? 'Sign in' : 'Sign in with email'}</h1>
-        <p className="auth-copy">
-          {mode === 'password'
-            ? 'Use your email and password to reach your renter dashboard.'
-            : 'Use a magic link to reach your renter dashboard. No password needed.'}
-        </p>
+        <h1>{TITLE[mode]}</h1>
+        <p className="auth-copy">{COPY[mode]}</p>
       </div>
 
       {redirectedFromDashboard ? (
@@ -136,7 +206,7 @@ export function LoginForm() {
         />
       </label>
 
-      {mode === 'password' ? (
+      {showPasswordField ? (
         <label className="field" htmlFor="password">
           <span>Password</span>
           <input
@@ -145,7 +215,23 @@ export function LoginForm() {
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            autoComplete="current-password"
+            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            minLength={mode === 'signup' ? MIN_PASSWORD_LENGTH : undefined}
+            required
+          />
+        </label>
+      ) : null}
+
+      {mode === 'signup' ? (
+        <label className="field" htmlFor="confirmPassword">
+          <span>Confirm password</span>
+          <input
+            id="confirmPassword"
+            name="confirmPassword"
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            autoComplete="new-password"
             required
           />
         </label>
@@ -156,24 +242,30 @@ export function LoginForm() {
         type="submit"
         disabled={formState.status === 'loading'}
       >
-        {formState.status === 'loading'
-          ? mode === 'password'
-            ? 'Signing in...'
-            : 'Sending...'
-          : mode === 'password'
-            ? 'Sign in'
-            : 'Email me a magic link'}
+        {submitLabel}
       </button>
 
       <button
         type="button"
         className="link-button"
-        onClick={() => switchMode(mode === 'password' ? 'magic' : 'password')}
+        onClick={() => switchMode(mode === 'signup' ? 'password' : 'signup')}
       >
-        {mode === 'password'
-          ? 'Use a magic link instead'
-          : 'Use password instead'}
+        {mode === 'signup'
+          ? 'Already have an account? Sign in'
+          : "Don't have an account? Sign up"}
       </button>
+
+      {mode !== 'signup' ? (
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => switchMode(mode === 'magic' ? 'password' : 'magic')}
+        >
+          {mode === 'magic'
+            ? 'Use password instead'
+            : 'Use a magic link instead'}
+        </button>
+      ) : null}
 
       {supabaseState.error ? (
         <p className="form-message error">{supabaseState.error}</p>

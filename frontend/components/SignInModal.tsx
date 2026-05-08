@@ -1,6 +1,6 @@
 // Sign-in gate modal — shown when an anon user clicks Save building, Share,
 // Lease review, or any quota-gate. Defaults to email + password; can switch
-// to magic link.
+// to magic link or sign up.
 
 'use client';
 
@@ -13,7 +13,9 @@ import { Mark } from './Mark';
 
 export type SignInReason = 'save' | 'share' | 'lease' | 'gate';
 
-type Mode = 'password' | 'magic';
+type Mode = 'password' | 'signup' | 'magic';
+
+const MIN_PASSWORD_LENGTH = 8;
 
 const COPY: Record<SignInReason, { title: string; body: string }> = {
   save: {
@@ -34,6 +36,25 @@ const COPY: Record<SignInReason, { title: string; body: string }> = {
   },
 };
 
+const SIGNUP_COPY: Record<SignInReason, { title: string; body: string }> = {
+  save: {
+    title: 'Create an account to save buildings',
+    body: "We'll keep this report on your dashboard and re-check it before you sign.",
+  },
+  share: {
+    title: 'Create an account to share',
+    body: 'Generate a shareable URL that stays in sync with the latest data.',
+  },
+  lease: {
+    title: 'Create an account to review your lease',
+    body: "Upload a lease PDF and we'll flag clauses that disagree with NYC tenant law.",
+  },
+  gate: {
+    title: 'Create an account to keep going',
+    body: "You've used your free lookups for this month. Sign up for more — no card needed.",
+  },
+};
+
 export function SignInModal({
   reason,
   onClose,
@@ -44,7 +65,8 @@ export function SignInModal({
   const [mode, setMode] = useState<Mode>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [sent, setSent] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [sentMessage, setSentMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,14 +92,27 @@ export function SignInModal({
   async function submit() {
     if (submitting || !supabase) return;
     if (!email.includes('@')) return;
+
+    if (mode === 'password' || mode === 'signup') {
+      if (password.length === 0) return;
+    }
+    if (mode === 'signup') {
+      if (password.length < MIN_PASSWORD_LENGTH) {
+        setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('Passwords do not match.');
+        return;
+      }
+    }
+
     setSubmitting(true);
     setError(null);
 
+    const callbackUrl = new URL('/auth/callback', window.location.origin);
+
     if (mode === 'password') {
-      if (password.length === 0) {
-        setSubmitting(false);
-        return;
-      }
       const { error: err } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -93,7 +128,32 @@ export function SignInModal({
       return;
     }
 
-    const callbackUrl = new URL('/auth/callback', window.location.origin);
+    if (mode === 'signup') {
+      const { data, error: err } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: callbackUrl.toString() },
+      });
+      setSubmitting(false);
+      if (err) {
+        setError(err.message);
+        return;
+      }
+      // If the project has email confirmations disabled, signUp returns a
+      // session and the parent's auth listener will fire SIGNED_IN; close.
+      // If confirmations are required, session is null and we surface the
+      // inbox message so the user knows to click the email link.
+      if (data.session) {
+        onClose();
+        return;
+      }
+      setSentMessage(
+        `We sent a confirmation link to ${email}. Click it to finish signing up — this tab will be ready when you come back.`,
+      );
+      return;
+    }
+
+    // Magic link
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -106,18 +166,34 @@ export function SignInModal({
       setError(err.message);
       return;
     }
-    setSent(true);
+    setSentMessage(
+      `We sent a magic link to ${email}. Click it to sign in — this tab will be ready when you come back.`,
+    );
   }
 
   function switchMode(next: Mode) {
     setMode(next);
+    setConfirmPassword('');
     setError(null);
   }
 
-  const copy = COPY[reason];
+  const copy = mode === 'signup' ? SIGNUP_COPY[reason] : COPY[reason];
+  const showPasswordField = mode === 'password' || mode === 'signup';
   const passwordValid = mode === 'magic' || password.length > 0;
   const canSubmit =
     email.includes('@') && passwordValid && !submitting && Boolean(supabase);
+
+  const submitLabel = submitting
+    ? mode === 'magic'
+      ? 'Sending…'
+      : mode === 'signup'
+        ? 'Creating…'
+        : 'Signing in…'
+    : mode === 'magic'
+      ? 'Send magic link'
+      : mode === 'signup'
+        ? 'Create account'
+        : 'Sign in';
 
   return (
     <div
@@ -141,7 +217,7 @@ export function SignInModal({
         >
           ✕
         </button>
-        {!sent ? (
+        {!sentMessage ? (
           <>
             <div className="modal-mark">
               <Mark size={40} />
@@ -157,7 +233,7 @@ export function SignInModal({
               aria-label="Email address"
               autoComplete="email"
             />
-            {mode === 'password' ? (
+            {showPasswordField ? (
               <input
                 className="modal-input"
                 type="password"
@@ -165,7 +241,21 @@ export function SignInModal({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 aria-label="Password"
-                autoComplete="current-password"
+                autoComplete={
+                  mode === 'signup' ? 'new-password' : 'current-password'
+                }
+                minLength={mode === 'signup' ? MIN_PASSWORD_LENGTH : undefined}
+              />
+            ) : null}
+            {mode === 'signup' ? (
+              <input
+                className="modal-input"
+                type="password"
+                placeholder="Confirm password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                aria-label="Confirm password"
+                autoComplete="new-password"
               />
             ) : null}
             <button
@@ -174,26 +264,34 @@ export function SignInModal({
               disabled={!canSubmit}
               onClick={submit}
             >
-              {submitting
-                ? mode === 'password'
-                  ? 'Signing in…'
-                  : 'Sending…'
-                : mode === 'password'
-                  ? 'Sign in'
-                  : 'Send magic link'}
+              {submitLabel}
             </button>
             <button
               type="button"
               className="link-button"
               style={{ marginTop: 8 }}
               onClick={() =>
-                switchMode(mode === 'password' ? 'magic' : 'password')
+                switchMode(mode === 'signup' ? 'password' : 'signup')
               }
             >
-              {mode === 'password'
-                ? 'Use a magic link instead'
-                : 'Use password instead'}
+              {mode === 'signup'
+                ? 'Already have an account? Sign in'
+                : "Don't have an account? Sign up"}
             </button>
+            {mode !== 'signup' ? (
+              <button
+                type="button"
+                className="link-button"
+                style={{ marginTop: 4 }}
+                onClick={() =>
+                  switchMode(mode === 'magic' ? 'password' : 'magic')
+                }
+              >
+                {mode === 'magic'
+                  ? 'Use password instead'
+                  : 'Use a magic link instead'}
+              </button>
+            ) : null}
             {error && (
               <p
                 style={{
@@ -225,10 +323,7 @@ export function SignInModal({
               ✓
             </div>
             <h3 id="signin-modal-title">Check your inbox</h3>
-            <p>
-              We sent a magic link to <b>{email}</b>. Click it to sign in —
-              this tab will be ready when you come back.
-            </p>
+            <p>{sentMessage}</p>
             <button type="button" className="btn primary full" onClick={onClose}>
               Got it
             </button>

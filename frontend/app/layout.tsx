@@ -4,9 +4,11 @@ import { NavBar } from '@/components/NavBar';
 import { SiteFooter } from '@/components/SiteFooter';
 import './globals.css';
 
+// Three weights cover all uses (body=400, semibold=600, bold=700).
+// Dropping 500 and 800 saves ~40 KB of font payload.
 const inter = Inter({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
+  weight: ['400', '600', '700'],
   variable: '--font-inter',
   display: 'swap',
 });
@@ -30,6 +32,8 @@ export const metadata: Metadata = {
   },
 };
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
 export default function RootLayout({
   children,
 }: {
@@ -37,6 +41,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+      <head>
+        {/* Warm up the connection to Supabase before any auth/data fetch fires */}
+        {supabaseUrl && (
+          <link rel="preconnect" href={supabaseUrl} crossOrigin="anonymous" />
+        )}
+        {/* Google Fonts is handled by next/font (self-hosted), so no preconnect needed */}
+      </head>
       <body data-density="comfy">
         <div className="shell">
           <NavBar />

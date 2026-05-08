@@ -266,8 +266,6 @@ h1.hero {
   font-weight: 700;
   margin: 0 0 18px;
   text-wrap: balance;
-  animation: rise 0.6s cubic-bezier(0.2, 0.75, 0.2, 1) both;
-  animation-delay: 0.05s;
 }
 h1.hero em {
   font-style: normal;
@@ -284,8 +282,6 @@ h1.hero em {
   line-height: 1.55;
   max-width: 540px;
   margin: 0 auto 28px;
-  animation: rise 0.6s cubic-bezier(0.2, 0.75, 0.2, 1) both;
-  animation-delay: 0.15s;
 }
 .hero-center .hero-sub { margin-left: auto; margin-right: auto; font-size: 18px; max-width: 580px; }
 
@@ -298,8 +294,7 @@ h1.hero em {
   gap: 8px;
   box-shadow: 0 1px 0 rgba(20, 30, 60, 0.03), 0 16px 40px -24px rgba(20, 40, 120, 0.18);
   transition: border-color 0.2s ease, box-shadow 0.25s ease, transform 0.15s ease;
-  animation: rise 0.6s cubic-bezier(0.2, 0.75, 0.2, 1) both;
-  animation-delay: 0.22s;
+  animation: rise 0.45s cubic-bezier(0.2, 0.75, 0.2, 1) forwards;
   max-width: 620px;
   margin: 0 auto;
 }
@@ -529,6 +524,19 @@ h1.hero em {
   border: 1px solid var(--line);
   border-radius: 8px;
   font-size: 14px;
+}
+
+/* Full-viewport overlay for loading / outside-nyc / ambiguous states.
+   Covers the server-rendered hero behind the client boundary. */
+.lookup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* ── Loading ─────────────────────────────────────────────────── */

@@ -21,12 +21,25 @@ export async function signOut() {
   redirect('/login?loggedOut=1');
 }
 
+// Resolve a Supabase access token server-side. Logs on null so we can tell
+// from prod logs whether a 401 from /v1/saved-buildings is "no token sent"
+// (Safari cookie parsing returns null session here) vs "backend rejected
+// token" (token was sent but backend's JWT verifier said no). Pair this with
+// the backend's `reason` log line from auth middleware to identify root cause.
 async function getAccessToken(): Promise<string | null> {
   const supabase = await createClient();
   const {
     data: { session },
+    error,
   } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
+  if (!session?.access_token) {
+    console.warn('[dashboard] getAccessToken returned null', {
+      hasSession: Boolean(session),
+      error: error?.message,
+    });
+    return null;
+  }
+  return session.access_token;
 }
 
 export type SavedBuildingsLoad =
@@ -52,7 +65,16 @@ export async function loadSavedBuildings(): Promise<SavedBuildingsLoad> {
       },
       cache: 'no-store',
     });
-    if (res.status === 401) return { kind: 'unauthorized' };
+    if (res.status === 401) {
+      // Token was sent but the backend rejected it. Most likely cause: the
+      // backend's SUPABASE_URL/JWT_SECRET don't match the Supabase project
+      // the frontend is signed into (the auth middleware logs `reason` for
+      // every rejection — check Render logs to confirm bad_iss vs expired).
+      console.warn(
+        '[dashboard] backend rejected access token (401) — check Render auth logs for reason',
+      );
+      return { kind: 'unauthorized' };
+    }
     if (!res.ok) return { kind: 'error' };
     const body = (await res.json()) as { items: SavedBuilding[]; total_count: number };
     return { kind: 'ok', items: body.items };

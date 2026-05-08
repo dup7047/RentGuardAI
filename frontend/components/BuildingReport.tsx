@@ -17,6 +17,7 @@ import { OwnerTab } from './OwnerTab';
 import { SourcesTab } from './SourcesTab';
 import { ShareModal } from './ShareModal';
 import { SignInModal, type SignInReason } from './SignInModal';
+import { MetricInfoModal } from './MetricInfoModal';
 import { buildingJsonLd } from '@/lib/seo/structured-data';
 import {
   getBandLabel,
@@ -68,7 +69,7 @@ export function BuildingReport({ data }: { data: SuccessData }) {
   } = data;
 
   const [tab, setTab] = useState<Tab>('overview');
-  const [modal, setModal] = useState<null | { kind: 'save' | 'lease' | 'gate'; reason: SignInReason } | { kind: 'share' }>(null);
+  const [modal, setModal] = useState<null | { kind: 'save' | 'lease' | 'gate'; reason: SignInReason } | { kind: 'share' } | { kind: 'maintenance-info' } | { kind: 'value-info' }>(null);
   const [toast, setToast] = useState<string | null>(null);
   // Saved-building state. `null` means "haven't checked yet" — render the
   // default unsaved label until we know. After checking, true/false drive
@@ -286,11 +287,7 @@ export function BuildingReport({ data }: { data: SuccessData }) {
                   type="button"
                   className="btn link sm"
                   style={{ padding: '4px 0', marginTop: 4, fontSize: 12 }}
-                  onClick={() =>
-                    showToast(
-                      'Score = 100 minus penalties. See "Notable findings" for the breakdown.',
-                    )
-                  }
+                  onClick={() => setModal({ kind: 'maintenance-info' })}
                 >
                   How is this calculated? →
                 </button>
@@ -326,11 +323,7 @@ export function BuildingReport({ data }: { data: SuccessData }) {
                     type="button"
                     className="btn link sm"
                     style={{ padding: '4px 0', marginTop: 4, fontSize: 12 }}
-                    onClick={() =>
-                      showToast(
-                        'Value score compares this rent to borough medians for similar-sized apartments. Higher = better deal.',
-                      )
-                    }
+                    onClick={() => setModal({ kind: 'value-info' })}
                   >
                     How is this calculated? →
                   </button>
@@ -403,6 +396,12 @@ export function BuildingReport({ data }: { data: SuccessData }) {
       )}
       {modal?.kind === 'share' && (
         <ShareModal bbl={bbl} onClose={() => setModal(null)} />
+      )}
+      {modal?.kind === 'maintenance-info' && (
+        <MetricInfoModal kind="maintenance" onClose={() => setModal(null)} />
+      )}
+      {modal?.kind === 'value-info' && (
+        <MetricInfoModal kind="value" onClose={() => setModal(null)} />
       )}
 
       {toast && <div className="toast">{toast}</div>}

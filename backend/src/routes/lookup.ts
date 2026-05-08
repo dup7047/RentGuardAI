@@ -831,10 +831,15 @@ lookupRoute.post('/lookup', async (c) => {
     userId: c.get('userId'),
     userEmail: c.get('userEmail'),
   };
-  const r = await runLookup(input, ctx);
-  // Hono's c.json type union for status is broad; our status is a narrow
-  // subset of valid codes.
-  return c.json(r.body as object, r.status);
+  try {
+    const r = await runLookup(input, ctx);
+    // Hono's c.json type union for status is broad; our status is a narrow
+    // subset of valid codes.
+    return c.json(r.body as object, r.status);
+  } catch (err) {
+    logger.error({ err: String(err) }, 'lookup failed');
+    return c.json({ kind: 'server_error', message: 'Lookup failed. Please try again.' }, 500);
+  }
 });
 
 // Streaming variant — same pipeline, NDJSON output with phase events.
@@ -868,13 +873,14 @@ lookupRoute.post('/lookup/stream', async (c) => {
         },
       );
       await writeLine({ event: 'complete', status: r.status, response: r.body });
-    } catch {
+    } catch (err) {
       // Truly unexpected exception (DB outage etc.). Send a synthetic
       // complete event so the client always knows the stream ended.
+      logger.error({ err: String(err) }, 'lookup stream failed');
       await writeLine({
         event: 'complete',
         status: 500,
-        response: { kind: 'invalid_input', errors: { _: 'server_error' } },
+        response: { kind: 'server_error', message: 'Lookup failed. Please try again.' },
       });
     }
   });

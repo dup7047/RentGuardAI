@@ -89,6 +89,11 @@ const FIXTURE: SuccessData = {
   ],
   total_counts: { violations: 42, dob: 4, threeoneone: 1, evictions: 1 },
   has_more: { violations: false, dob: false, threeoneone: false, evictions: false },
+  value_score: null,
+  value_band: null,
+  value_confidence: null,
+  value_factors: [],
+  value_explanation: null,
 };
 
 function clickTab(container: HTMLElement, label: string) {

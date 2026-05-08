@@ -24,9 +24,17 @@ export default async function DashboardPage() {
 
   const initial = await loadSavedBuildings();
 
-  if (initial.kind === 'unauthorized') {
-    redirect('/login?redirectTo=/dashboard');
-  }
+  // CRITICAL: do NOT redirect on `unauthorized` from the backend even though
+  // Supabase already confirmed `user` above. If the backend's SUPABASE_URL /
+  // JWT secret are misconfigured (every token rejected with bad_iss), or if
+  // getAccessToken()'s getSession() returns null due to Safari chunked-cookie
+  // parsing, redirecting to /login causes an infinite loop:
+  //   /dashboard (backend says 401) → /login (Supabase says authed) → /dashboard …
+  // Render the page in a degraded state instead. The list component already
+  // shows a "couldn't load" card for kind: 'error', so we coerce the
+  // unauthorized result into that shape and let the user see something usable.
+  const listProps =
+    initial.kind === 'unauthorized' ? ({ kind: 'error' } as const) : initial;
 
   return (
     <div className="container screen-fade">
@@ -48,7 +56,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <SavedBuildingsList initial={initial} />
+      <SavedBuildingsList initial={listProps} />
     </div>
   );
 }

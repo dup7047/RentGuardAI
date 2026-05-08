@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { createClient } from '@/lib/supabase/browser';
 
@@ -12,7 +12,10 @@ type FormState =
   | { status: 'success'; message: string }
   | { status: 'error'; message: string };
 
+type Mode = 'password' | 'magic';
+
 export function LoginForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const supabaseState = useMemo(() => {
     try {
@@ -27,7 +30,9 @@ export function LoginForm() {
       };
     }
   }, []);
+  const [mode, setMode] = useState<Mode>('password');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [formState, setFormState] = useState<FormState>({
     status: 'idle',
     message: '',
@@ -40,18 +45,30 @@ export function LoginForm() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    setFormState({
-      status: 'loading',
-      message: 'Sending your magic link...',
-    });
-
+    if (formState.status === 'loading') return;
     if (!supabaseState.client) {
-      setFormState({
-        status: 'idle',
-        message: '',
-      });
+      setFormState({ status: 'idle', message: '' });
       return;
     }
+
+    if (mode === 'password') {
+      setFormState({ status: 'loading', message: 'Signing you in...' });
+      const { error } = await supabaseState.client.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) {
+        setFormState({ status: 'error', message: error.message });
+        return;
+      }
+      setFormState({ status: 'success', message: 'Signed in. Redirecting...' });
+      router.push('/dashboard');
+      router.refresh();
+      return;
+    }
+
+    // Magic link mode.
+    setFormState({ status: 'loading', message: 'Sending your magic link...' });
 
     // Use the bare /auth/callback URL (no query string). Supabase only
     // accepts URLs that exactly match `additional_redirect_urls` in the
@@ -70,10 +87,7 @@ export function LoginForm() {
     });
 
     if (error) {
-      setFormState({
-        status: 'error',
-        message: error.message,
-      });
+      setFormState({ status: 'error', message: error.message });
       return;
     }
 
@@ -83,13 +97,20 @@ export function LoginForm() {
     });
   }
 
+  function switchMode(next: Mode) {
+    setMode(next);
+    setFormState({ status: 'idle', message: '' });
+  }
+
   return (
     <form className="auth-panel" onSubmit={handleSubmit}>
       <div>
         <p className="eyebrow">RentGuard account</p>
-        <h1>Sign in with email</h1>
+        <h1>{mode === 'password' ? 'Sign in' : 'Sign in with email'}</h1>
         <p className="auth-copy">
-          Use a magic link to reach your renter dashboard. No password needed.
+          {mode === 'password'
+            ? 'Use your email and password to reach your renter dashboard.'
+            : 'Use a magic link to reach your renter dashboard. No password needed.'}
         </p>
       </div>
 
@@ -115,8 +136,43 @@ export function LoginForm() {
         />
       </label>
 
-      <button className="primary-button" type="submit" disabled={formState.status === 'loading'}>
-        {formState.status === 'loading' ? 'Sending...' : 'Email me a magic link'}
+      {mode === 'password' ? (
+        <label className="field" htmlFor="password">
+          <span>Password</span>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password"
+            required
+          />
+        </label>
+      ) : null}
+
+      <button
+        className="primary-button"
+        type="submit"
+        disabled={formState.status === 'loading'}
+      >
+        {formState.status === 'loading'
+          ? mode === 'password'
+            ? 'Signing in...'
+            : 'Sending...'
+          : mode === 'password'
+            ? 'Sign in'
+            : 'Email me a magic link'}
+      </button>
+
+      <button
+        type="button"
+        className="link-button"
+        onClick={() => switchMode(mode === 'password' ? 'magic' : 'password')}
+      >
+        {mode === 'password'
+          ? 'Use a magic link instead'
+          : 'Use password instead'}
       </button>
 
       {supabaseState.error ? (

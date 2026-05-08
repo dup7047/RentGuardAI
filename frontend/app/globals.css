@@ -1125,6 +1125,16 @@ h1.hero em {
   border: 1px solid var(--line);
 }
 .secondary-button:hover { border-color: var(--ink-2); }
+.link-button {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: center;
+}
+.link-button:hover { color: var(--accent-deep); text-decoration: underline; }
 
 .notice,
 .form-message {

@@ -1,5 +1,6 @@
 // Sign-in gate modal — shown when an anon user clicks Save building, Share,
-// Lease review, or any quota-gate. Sends a real Supabase magic link.
+// Lease review, or any quota-gate. Defaults to email + password; can switch
+// to magic link.
 
 'use client';
 
@@ -11,6 +12,8 @@ import { useLockBodyScroll } from '@/lib/useLockBodyScroll';
 import { Mark } from './Mark';
 
 export type SignInReason = 'save' | 'share' | 'lease' | 'gate';
+
+type Mode = 'password' | 'magic';
 
 const COPY: Record<SignInReason, { title: string; body: string }> = {
   save: {
@@ -38,7 +41,9 @@ export function SignInModal({
   reason: SignInReason;
   onClose: () => void;
 }) {
+  const [mode, setMode] = useState<Mode>('password');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,10 +67,32 @@ export function SignInModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  async function send() {
-    if (!email.includes('@') || !supabase) return;
+  async function submit() {
+    if (submitting || !supabase) return;
+    if (!email.includes('@')) return;
     setSubmitting(true);
     setError(null);
+
+    if (mode === 'password') {
+      if (password.length === 0) {
+        setSubmitting(false);
+        return;
+      }
+      const { error: err } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      setSubmitting(false);
+      if (err) {
+        setError(err.message);
+        return;
+      }
+      // Parent components subscribe to onAuthStateChange and react to the
+      // SIGNED_IN event, so just close — no router refresh needed.
+      onClose();
+      return;
+    }
+
     const callbackUrl = new URL('/auth/callback', window.location.origin);
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
@@ -82,7 +109,15 @@ export function SignInModal({
     setSent(true);
   }
 
+  function switchMode(next: Mode) {
+    setMode(next);
+    setError(null);
+  }
+
   const copy = COPY[reason];
+  const passwordValid = mode === 'magic' || password.length > 0;
+  const canSubmit =
+    email.includes('@') && passwordValid && !submitting && Boolean(supabase);
 
   return (
     <div
@@ -120,14 +155,44 @@ export function SignInModal({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               aria-label="Email address"
+              autoComplete="email"
             />
+            {mode === 'password' ? (
+              <input
+                className="modal-input"
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                aria-label="Password"
+                autoComplete="current-password"
+              />
+            ) : null}
             <button
               type="button"
               className="btn primary full"
-              disabled={!email.includes('@') || submitting || !supabase}
-              onClick={send}
+              disabled={!canSubmit}
+              onClick={submit}
             >
-              {submitting ? 'Sending…' : 'Send magic link'}
+              {submitting
+                ? mode === 'password'
+                  ? 'Signing in…'
+                  : 'Sending…'
+                : mode === 'password'
+                  ? 'Sign in'
+                  : 'Send magic link'}
+            </button>
+            <button
+              type="button"
+              className="link-button"
+              style={{ marginTop: 8 }}
+              onClick={() =>
+                switchMode(mode === 'password' ? 'magic' : 'password')
+              }
+            >
+              {mode === 'password'
+                ? 'Use a magic link instead'
+                : 'Use password instead'}
             </button>
             {error && (
               <p
@@ -153,16 +218,6 @@ export function SignInModal({
                 Sign-in is not configured for this environment.
               </p>
             )}
-            <div
-              style={{
-                textAlign: 'center',
-                marginTop: 12,
-                fontSize: 12,
-                color: 'var(--muted)',
-              }}
-            >
-              No password. We&apos;ll email you a one-tap sign-in link.
-            </div>
           </>
         ) : (
           <>

@@ -6,6 +6,7 @@ import { lookupRoute } from './lookup.js';
 import { affiliateClickRoute } from './affiliate-click.js';
 import { waitlistEmailRoute } from './waitlist-email.js';
 import { buildingByBblRoute } from './building-by-bbl.js';
+import { savedBuildingsRoute } from './saved-buildings.js';
 
 export const v1Router = new Hono<{
   Variables: { anonToken: string; userId?: string; userEmail?: string };
@@ -15,3 +16,4 @@ v1Router.route('/', lookupRoute);
 v1Router.route('/', affiliateClickRoute);
 v1Router.route('/', waitlistEmailRoute);
 v1Router.route('/', buildingByBblRoute);
+v1Router.route('/', savedBuildingsRoute);

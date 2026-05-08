@@ -1,5 +1,6 @@
-// Dashboard — auth-gated. Empty-state design for now (saved-buildings
-// backend ships in a separate phase).
+// Dashboard — auth-gated server component. Auth + header are server-rendered;
+// the saved-buildings list is a child client component that fetches /v1/saved-buildings
+// and handles the optimistic Unsave UX.
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -7,6 +8,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 
 import { signOut } from './actions';
+import { SavedBuildingsList } from './SavedBuildingsList';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -38,27 +40,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="card dashboard-empty">
-        <div className="icn" aria-hidden="true">
-          ★
-        </div>
-        <h2>No saved buildings yet</h2>
-        <p>
-          Run a lookup and tap{' '}
-          <span style={{ color: 'var(--accent)', fontWeight: 600 }}>
-            ★ Save building
-          </span>{' '}
-          on any report — we&apos;ll re-check it every Monday and email you any
-          new violations.
-        </p>
-        <Link
-          href="/"
-          className="btn primary"
-          style={{ marginTop: 8 }}
-        >
-          Run your first lookup →
-        </Link>
-      </div>
+      <SavedBuildingsList />
     </div>
   );
 }

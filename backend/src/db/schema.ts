@@ -106,6 +106,18 @@ export const buildingLookups = pgTable('building_lookups', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Per-user "saved buildings" list. ON DELETE CASCADE on user_id ties cleanup
+// to the existing profiles deletion flow. UNIQUE (user_id, bbl) lets us upsert
+// idempotently with ON CONFLICT DO NOTHING. See migration 0016.
+export const savedBuildings = pgTable('saved_buildings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull(),
+  bbl: text('bbl').notNull(),
+  /** Reserved for a future "add a note" UX. Null for v1. */
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 // Public reference cache: one row per NYC building keyed by BBL
 // (Borough/Block/Lot). Hydrated by the Phase 3 NYC Open Data clients;
 // a 24-hour cache window is enforced in code, not the schema.

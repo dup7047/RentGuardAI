@@ -227,6 +227,10 @@ export async function runLookup(
   // ── 2. URL fetch + extract (Phase 4 — replaces the slug-only parser) ────────
   let resolvedAddress = address;
   let scrapedListing: ScrapedListing | null = null;
+  // Set when we recover from a scrape failure by parsing the address out of
+  // the URL slug. The response carries this back so the UI can tell the user
+  // the review covers public records only (no listing-specific fields).
+  let listingUnavailable = false;
   if (listingUrl && !resolvedAddress) {
     // Capture in a const so the closure passed to timePhase doesn't see the
     // post-slug-parse `listingUrl = undefined` reassignment below.
@@ -259,6 +263,7 @@ export async function runLookup(
           // sees this as an address-only lookup. Also: scrapedListing stays
           // null, so cache hits remain eligible for future cache hits.
           listingUrl = undefined;
+          listingUnavailable = true;
           emit('parse');
         } else {
           const status: LookupStatus = 200;
@@ -515,6 +520,7 @@ export async function runLookup(
         questions_to_ask: Array.isArray(cached.questions) ? cached.questions : [],
         listing_notes: Array.isArray(cached.listingNotes) ? cached.listingNotes : [],
         scraped_listing: null,
+        listing_unavailable: listingUnavailable || undefined,
         landlord,
         fare_check: null,
         stats: {
@@ -690,6 +696,7 @@ export async function runLookup(
       questions_to_ask: summary.questions_to_ask,
       listing_notes: summary.listing_notes,
       scraped_listing: scrapedListing,
+      listing_unavailable: listingUnavailable || undefined,
       landlord,
       fare_check: fareCheck,
       stats,

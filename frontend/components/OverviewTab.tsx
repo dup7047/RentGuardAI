@@ -54,6 +54,7 @@ export function OverviewTab({ data }: { data: SuccessData }) {
     questions_to_ask,
     landlord,
     stats,
+    listing_unavailable,
   } = data;
 
   const factorsForFindings: ScoreFactor[] = (score_factors ?? []).slice(0, 5);
@@ -108,6 +109,21 @@ export function OverviewTab({ data }: { data: SuccessData }) {
           <div className="ai-tag">✦ LISTING REVIEW</div>
           <p>
             <RevealText text={listing_summary} />
+          </p>
+        </div>
+      )}
+
+      {/* Listing-data-unavailable notice — fires when the user pasted a URL
+          but the scraper was blocked and we recovered the address by parsing
+          the URL slug. Tells the user the review covers the building only
+          and not listing-specific fields like rent, beds, or broker fee. */}
+      {listing_unavailable && !listing_summary && (
+        <div className="ai-block">
+          <div className="ai-tag">✦ LISTING DATA UNAVAILABLE</div>
+          <p>
+            We couldn&apos;t read the listing page (the site blocked our scraper),
+            so this review covers the building&apos;s public records only — not
+            listing-specific details like rent, bedrooms, or broker fees.
           </p>
         </div>
       )}

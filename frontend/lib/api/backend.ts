@@ -223,6 +223,13 @@ const BASE =
 export async function authHeader(): Promise<HeadersInit> {
   const { getCurrentSession } = await import('@/lib/auth/session');
   const session = await getCurrentSession();
+  // Diagnostic: log whether a token is being sent. Pair with the backend's
+  // `jwt verify failed` log in Render — `tokenSent: true` here + that log on
+  // the backend = env mismatch. `tokenSent: false` = client-side session
+  // missing despite the user being signed in.
+  if (typeof window !== 'undefined') {
+    console.warn('[authHeader] building request', { tokenSent: Boolean(session) });
+  }
   return session ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 

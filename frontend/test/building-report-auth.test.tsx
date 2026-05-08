@@ -52,6 +52,7 @@ vi.mock('@/lib/api/backend', async (importOriginal) => {
 });
 
 import { BuildingReport } from '@/components/BuildingReport';
+import { getCurrentSession } from '@/lib/auth/session';
 import {
   getSavedBuildingState,
   saveBuilding,
@@ -100,6 +101,7 @@ beforeEach(() => {
   authState.callback = null;
   authState.unsubscribe.mockClear();
   sessionState.current = null;
+  vi.mocked(getCurrentSession).mockClear();
   vi.mocked(getSavedBuildingState).mockClear();
   vi.mocked(getSavedBuildingState).mockResolvedValue({ saved: false });
   vi.mocked(saveBuilding).mockClear();
@@ -196,6 +198,60 @@ describe('BuildingReport auth gate', () => {
     // Optimistic state should revert: button label is "★ Save building",
     // not "★ Saved", because the save failed.
     expect(findSaveButton(container).textContent).toMatch(/save building/i);
+  });
+
+  it('6. mounted anon, click re-checks session — if session now present, save proceeds without modal', async () => {
+    // Simulates the narrow race the Phase 2 fix targets: mount-time
+    // getCurrentSession returns null (cookies not yet hydrated on Safari),
+    // the user clicks before the SIGNED_IN handler updates React state, but
+    // a fresh getCurrentSession call from handleSave finds the session.
+    sessionState.current = null;
+    const { container, queryByText } = render(<BuildingReport data={FIXTURE} />);
+
+    await waitFor(() => {
+      expect(findSaveButton(container).textContent).toMatch(/save building/i);
+    });
+    const callsAfterMount = vi.mocked(getCurrentSession).mock.calls.length;
+
+    // Cookies hydrate between mount and click
+    sessionState.current = { access_token: 'late-token' };
+
+    fireEvent.click(findSaveButton(container));
+
+    // Re-check fires another getCurrentSession call beyond the mount-time one
+    await waitFor(() => {
+      expect(vi.mocked(getCurrentSession).mock.calls.length).toBeGreaterThan(
+        callsAfterMount,
+      );
+    });
+
+    await waitFor(() => {
+      expect(saveBuilding).toHaveBeenCalledWith('1008420015');
+    });
+    expect(queryByText(/sign in to save buildings/i)).toBeNull();
+  });
+
+  it('7. mounted anon, click re-checks — still null → modal opens, save not called', async () => {
+    // Regression net for the Phase 2 re-check: when getCurrentSession
+    // genuinely returns null both times, the modal must still open.
+    sessionState.current = null;
+    const { container, findByText } = render(<BuildingReport data={FIXTURE} />);
+
+    await waitFor(() => {
+      expect(findSaveButton(container).textContent).toMatch(/save building/i);
+    });
+    const callsAfterMount = vi.mocked(getCurrentSession).mock.calls.length;
+
+    fireEvent.click(findSaveButton(container));
+
+    await waitFor(() => {
+      expect(vi.mocked(getCurrentSession).mock.calls.length).toBeGreaterThan(
+        callsAfterMount,
+      );
+    });
+
+    await findByText(/sign in to save buildings/i);
+    expect(saveBuilding).not.toHaveBeenCalled();
   });
 
   it('5. TOKEN_REFRESHED event does not refetch saved state', async () => {

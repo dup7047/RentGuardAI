@@ -20,6 +20,9 @@ import { lookupLandlord } from '../data/landlord.js';
 import { checkFare } from '../fare/check.js';
 import { generateSummary, CostCapExceededError } from '../ai/summary.js';
 import { computeScore } from '../scoring/score.js';
+import { computeValueScore } from '../scoring/value.js';
+import { getComps } from '../data/comps.js';
+import type { ValueScoreResult } from '../scoring/value.js';
 import { getHpdViolations } from '../data/datasets/hpd-violations.js';
 import { getDobComplaints } from '../data/datasets/dob-complaints.js';
 import { getEvictions } from '../data/datasets/evictions.js';
@@ -125,6 +128,12 @@ type CachedRow = {
   score: number;
   scoreBand: string;
   scoreFactors: unknown;
+  // Value score (nullable — only present for URL-based lookups with rent data)
+  valueScore: number | null;
+  valueBand: string | null;
+  valueConfidence: string | null;
+  valueFactors: unknown;
+  valueExplanation: string | null;
 };
 
 /**
@@ -148,6 +157,11 @@ async function findRecentLookup(bbl: string): Promise<CachedRow | null> {
       score: buildingLookups.aiScore,
       scoreBand: buildingLookups.aiScoreBand,
       scoreFactors: buildingLookups.aiScoreFactors,
+      valueScore: buildingLookups.aiValueScore,
+      valueBand: buildingLookups.aiValueBand,
+      valueConfidence: buildingLookups.aiValueConfidence,
+      valueFactors: buildingLookups.aiValueFactors,
+      valueExplanation: buildingLookups.aiValueExplanation,
     })
     .from(buildingLookups)
     .where(
@@ -176,6 +190,11 @@ async function findRecentLookup(bbl: string): Promise<CachedRow | null> {
     score: row.score,
     scoreBand: row.scoreBand,
     scoreFactors: row.scoreFactors,
+    valueScore: row.valueScore ?? null,
+    valueBand: row.valueBand ?? null,
+    valueConfidence: row.valueConfidence ?? null,
+    valueFactors: row.valueFactors,
+    valueExplanation: row.valueExplanation ?? null,
   };
 }
 
@@ -488,6 +507,12 @@ export async function runLookup(
           // Address-only request had no scrape — record the lack of one so a
           // subsequent address-only lookup can still cache-hit on this row.
           aiScrapedListing: null,
+          // Value score fields (null for address-only cache hits — no listing data)
+          aiValueScore: cached.valueScore,
+          aiValueBand: cached.valueBand,
+          aiValueConfidence: cached.valueConfidence,
+          aiValueFactors: cached.valueFactors,
+          aiValueExplanation: cached.valueExplanation,
           // Marker: this row was a cache hit, no AI charge. Used by analytics
           // and a future "free hit" billing path if we want one.
           aiCostCents: 0,
@@ -531,6 +556,11 @@ export async function runLookup(
           bedbug_reports: bed.length,
           lead_flags: lead.length,
         },
+        value_score: cached.valueScore,
+        value_band: cached.valueBand,
+        value_confidence: cached.valueConfidence,
+        value_factors: Array.isArray(cached.valueFactors) ? cached.valueFactors : [],
+        value_explanation: cached.valueExplanation,
         partial: partial.length > 0 ? partial : undefined,
         lookup_id: persisted[0]?.id ?? null,
         building_url: `/building/${bbl}`,
@@ -567,7 +597,37 @@ export async function runLookup(
     'lookup phase completed',
   );
 
-  // ── 6c. Progressive payload — score + stats are ready before AI starts ─────
+  // ── 6c. Apartment Value Score (deterministic) ─────────────────────────────
+  // Only computed when the scraped listing has rent + bedroom data and is a
+  // rental listing. Address-only, building, and sale listings skip this.
+  let valueScore: ValueScoreResult | null = null;
+  if (
+    scrapedListing &&
+    scrapedListing.source_kind === 'rental' &&
+    scrapedListing.monthlyRentCents != null &&
+    scrapedListing.bedrooms != null
+  ) {
+    try {
+      const comp = await getComps(borough, scrapedListing.bedrooms);
+      if (comp) {
+        valueScore = computeValueScore({
+          monthlyRentCents: scrapedListing.monthlyRentCents,
+          bedrooms: scrapedListing.bedrooms,
+          squareFeet: scrapedListing.squareFeet,
+          comp,
+        });
+        logger.info(
+          { phase: 'value_score', score: valueScore.score, band: valueScore.band, confidence: valueScore.confidence },
+          'lookup phase completed',
+        );
+      }
+    } catch (e) {
+      // Value score is non-critical — log and continue without it
+      logger.warn({ err: String(e) }, 'value score computation failed — continuing without it');
+    }
+  }
+
+  // ── 6d. Progressive payload — score + stats are ready before AI starts ─────
   // Streaming clients can render the Overview tab here while OpenAI runs.
   const stats = {
     hpd_violations_open: hpdOpen,
@@ -584,6 +644,9 @@ export async function runLookup(
     score: score.score,
     score_band: score.band,
     score_factors: score.factors,
+    value_score: valueScore?.score ?? null,
+    value_band: valueScore?.band ?? null,
+    value_confidence: valueScore?.confidence ?? null,
     landlord,
     fare_check: fareCheck,
     stats,
@@ -625,6 +688,8 @@ export async function runLookup(
           scrapedListing: scrapedListing,
           // Phase 4.5: deterministic score handed in for narration
           score,
+          // Value score for narration (null = no listing data, suppress)
+          valueScore,
         },
         subject,
       ),
@@ -664,6 +729,12 @@ export async function runLookup(
         // return it on cache hits (the scraped_listings table is keyed by URL,
         // not BBL, so we can't join cleanly — denormalize instead).
         aiScrapedListing: scrapedListing,
+        // Apartment Value Score
+        aiValueScore: valueScore?.score ?? null,
+        aiValueBand: valueScore?.band ?? null,
+        aiValueConfidence: valueScore?.confidence ?? null,
+        aiValueFactors: valueScore?.factors ?? null,
+        aiValueExplanation: summary.value_explanation || null,
         aiCostCents: summary.cost_cents,
       })
       .returning({ id: buildingLookups.id }),
@@ -700,6 +771,11 @@ export async function runLookup(
       landlord,
       fare_check: fareCheck,
       stats,
+      value_score: valueScore?.score ?? null,
+      value_band: valueScore?.band ?? null,
+      value_confidence: valueScore?.confidence ?? null,
+      value_factors: valueScore ? valueScore.factors : [],
+      value_explanation: summary.value_explanation || null,
       partial: partial.length > 0 ? partial : undefined,
       lookup_id: row?.id ?? null,
       building_url: `/building/${bbl}`,

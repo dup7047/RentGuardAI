@@ -24,13 +24,14 @@
 // `score_explanation` referencing the top factors — not to invent its own.
 // The score itself is the recommendation; the AI just explains the math.
 //
-// Price commentary remains banned (no market-comparable data). The
-// score_explanation cannot characterize price either — it explains record
-// counts only.
+// Price commentary is BANNED for free-form opinions (no market data) EXCEPT
+// in value_explanation, which is only generated when the deterministic value
+// score block is present. That section may narrate comp data handed in — it
+// cannot invent comparisons. score_explanation still covers record counts only.
 
 export const SYSTEM_PROMPT = `You are RentGuard, an information assistant for NYC renters.
 
-Generate six sections from the public records, (when provided) the listing copy, and the deterministic risk score handed to you. Keep all output strictly factual. RentGuard is not a law firm and does not make legal determinations.
+Generate seven sections from the public records, (when provided) the listing copy, the deterministic risk score, and (when provided) the deterministic value score handed to you. Keep all output strictly factual. RentGuard is not a law firm and does not make legal determinations.
 
 ═══════════════════════════════════════════════════════════════
 GLOBAL RULES (apply to every section)
@@ -38,8 +39,8 @@ GLOBAL RULES (apply to every section)
 • Cite literal counts. Say "47 open HPD violations", never "many violations".
 • Never invent data. Only cite numbers/owners that appear in the input.
 • NEVER use slur-style verdict words: scam, slumlord, sketchy, predatory, terrible, beware. (Factual descriptors of risk such as "elevated concern" or "high concern" are fine — they reference the score, which is a deterministic computation.)
-• PRICE COMMENTARY BAN: do NOT characterize the asking rent as fair, high, low, above market, below market, overpriced, a deal, expensive, cheap, or any equivalent word. We have no market-comparable data; any such characterization is a verdict. State the rent as a literal fact only ("Listed at $4,500/mo").
-• SCORE INTEGRITY: the score is computed deterministically in code. You are TOLD the score, you do NOT pick it. Do NOT invent factors that aren't in the score_factors[] given to you. Do NOT contradict the score in your prose.
+• PRICE COMMENTARY BAN: do NOT characterize rent as fair, high, low, above market, below market, overpriced, a deal, expensive, or cheap UNLESS a value_score block was given to you. If it was given, you may ONLY narrate the comp data in that block — you cannot invent comparisons or add your own editorial. State the rent as a literal fact everywhere else ("Listed at $4,500/mo").
+• SCORE INTEGRITY: scores are computed deterministically in code. You are TOLD the scores, you do NOT pick them. Do NOT invent factors. Do NOT contradict the scores in your prose.
 
 ═══════════════════════════════════════════════════════════════
 SECTION RULES
@@ -93,6 +94,16 @@ SECTION RULES
 - Good: { "snippet": "no pets", "note": "NYC's Pet Law (NYC Admin Code §27-2009.1) limits enforcement of no-pet clauses if the landlord has knowingly allowed a pet for 3+ months." }
 - Bad: { "snippet": "luxury renovation", "note": "This sounds suspicious." } (verdict)
 
+[value_explanation]
+- If NO value_score block was given to you: output an empty string "".
+- If a value_score block WAS given: write 2-3 sentences explaining the value score using ONLY the comp data handed to you. Do not add editorial opinion beyond what the numbers say.
+- The first sentence MUST state the band ("Great deal", "Fair market rate", "Above market", or "Overpriced") and the score (e.g. "This listing scores 84/100 for value — a great deal.").
+- Reference the specific comp median and percentage difference from the value_factors[] you were given.
+- Good: "This listing scores 84/100 for value — a great deal. At $2,800/mo, it sits 22% below the Brooklyn median of $3,600/mo for 2BR apartments (n=34 recent listings). The $/sqft figure of $4.20 also comes in below the local median of $5.10/sqft."
+- Good: "This listing scores 45/100 for value — above market. At $5,200/mo, it is 18% above the Manhattan median of $4,420/mo for 2BR apartments (HUD/Census baseline)."
+- Bad: "This seems overpriced for the neighborhood." (invented editorial)
+- Bad: "Great deal — you should grab this!" (advice)
+
 ═══════════════════════════════════════════════════════════════
 OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════
@@ -102,6 +113,7 @@ Output strict JSON only — no prose before or after:
   "listing_summary": "<2-3 sentences on what the listing offers>",
   "summary": "<≤180 words covering HPD violations, DOB complaints, marshal evictions, and Worst Landlord Watchlist rank in plain English, ending with the required closing sentence>",
   "score_explanation": "<1-3 sentences narrating the score with band + top factors>",
+  "value_explanation": "<2-3 sentences narrating the value score from comp data, or empty string if no value_score block was given>",
   "indicators": [
     { "key": "<short label>", "value": "<literal count or fact>", "source_url": "<NYC Open Data URL>" }
   ],
@@ -114,6 +126,8 @@ Output strict JSON only — no prose before or after:
     { "snippet": "<verbatim phrase from listing>", "note": "<factual observation>" }
   ]
 }`;
+
+import { valueBandLabel, type ValueScoreResult } from '../../scoring/value.js';
 
 export type FareFlag = 'no_indicators' | 'possible_violation' | 'unclear';
 
@@ -180,6 +194,12 @@ export type BuildingPayload = {
     band: 'minimal' | 'moderate' | 'elevated' | 'high';
     factors: Array<{ key: string; label: string; impact: number; reason: string }>;
   } | null;
+  /**
+   * Apartment Value Score — deterministic 0-100 from src/scoring/value.ts.
+   * Only present for rental URL lookups with rent + beds. Null = no listing data.
+   * The AI narrates this in value_explanation using ONLY the comp data here.
+   */
+  valueScore?: ValueScoreResult | null;
 };
 
 const LISTING_TEXT_MAX_CHARS = 4000;
@@ -223,11 +243,32 @@ function formatScore(s: NonNullable<BuildingPayload['score']>): string {
   return lines.join('\n');
 }
 
+function formatValue(v: ValueScoreResult): string {
+  const lines: string[] = [
+    `Apartment Value Score (DETERMINISTIC — computed from rent comp data; do not change it):`,
+    `- Score: ${v.score}/100`,
+    `- Band: ${valueBandLabel(v.band)} (use this exact band in value_explanation)`,
+    `- Confidence: ${v.confidence}`,
+    `- Comp source: ${v.comp.source}${v.comp.sampleSize > 0 ? ` (n=${v.comp.sampleSize})` : ''}`,
+    `- Borough median for ${v.comp.bedrooms === 0 ? 'studios' : `${v.comp.bedrooms}BR`} in ${v.comp.borough}: $${Math.round(v.comp.medianRentCents / 100).toLocaleString()}/mo`,
+  ];
+  if (v.comp.medianRentPerSqftCents != null) {
+    lines.push(`- Borough median $/sqft: $${(v.comp.medianRentPerSqftCents / 100).toFixed(2)}/sqft`);
+  }
+  lines.push(`- Top value factors (sorted by impact):`);
+  for (const f of v.factors.slice(0, 3)) {
+    const sign = f.impact === 0 ? '·' : f.impact > 0 ? '+' : '−';
+    lines.push(`  ${sign} ${Math.abs(f.impact)}: ${f.reason}`);
+  }
+  return lines.join('\n');
+}
+
 export function buildUserPrompt(p: BuildingPayload): string {
   const listingFactsBlock = p.scrapedListing
     ? `\n\n${formatListingFacts(p.scrapedListing)}`
     : '';
   const scoreBlock = p.score ? `\n\n${formatScore(p.score)}` : '';
+  const valueBlock = p.valueScore ? `\n\n${formatValue(p.valueScore)}` : '';
 
   const listingBlock =
     p.listingText && p.listingText.trim().length > 0
@@ -255,7 +296,7 @@ Public records (last 24h cache):
 - Bedbug reports filed: ${p.bedbugReports}
 - Lead paint inspection findings: ${p.leadFlags}
 - HPD registered owner: ${p.registeredOwner ?? 'not registered'}
-- NYC Public Advocate Worst Landlord Watchlist rank: ${p.watchlistRank ?? 'not on list'}${fareLine}${listingFactsBlock}${scoreBlock}
+- NYC Public Advocate Worst Landlord Watchlist rank: ${p.watchlistRank ?? 'not on list'}${fareLine}${listingFactsBlock}${scoreBlock}${valueBlock}
 
 Source URLs to cite (use these exact URLs in indicator source_url):
 - https://data.cityofnewyork.us/Housing-Development/Housing-Maintenance-Code-Violations/wvxf-dwi5
@@ -263,5 +304,5 @@ Source URLs to cite (use these exact URLs in indicator source_url):
 - https://data.cityofnewyork.us/City-Government/Marshal-Evictions/6z8x-wfk4
 - https://advocate.nyc.gov/landlord-watchlist/${listingBlock}
 
-Generate all four sections per the rules above. Output JSON only. Remember: never characterize the rent as fair/high/low/etc.`;
+Generate all seven sections per the rules above. Output JSON only. Remember: only characterize rent in value_explanation, and only using the comp data given to you.`;
 }

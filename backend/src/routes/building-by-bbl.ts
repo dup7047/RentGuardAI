@@ -87,6 +87,10 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
   // findRecentLookup() in routes/lookup.ts mirrors it for SQL-level filtering.
   const cachedRowIsCurrent = isCurrentSummaryFormat(latest?.summary ?? null);
   let summary = cachedRowIsCurrent ? (latest?.summary ?? null) : null;
+  let listingSummary: string | null = cachedRowIsCurrent ? (latest?.listingSummary ?? null) : null;
+  let scoreExplanation: string | null = cachedRowIsCurrent
+    ? (latest?.scoreExplanation ?? null)
+    : null;
   let indicators: Array<{ key: string; value: string; source_url: string }> = [];
   let questions_to_ask: string[] =
     cachedRowIsCurrent && Array.isArray(latest?.questions) ? (latest!.questions as string[]) : [];
@@ -95,7 +99,10 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
       ? (latest!.listingNotes as Array<{ snippet: string; note: string }>)
       : [];
 
-  // If no prior summary, generate one using the SEO anon token (subject to cost cap)
+  // If no prior summary (or the cached row is stale), generate one using the
+  // SEO anon token (subject to cost cap) and persist it back. The persist is
+  // critical: without it, every SEO page view of a stale building re-runs
+  // gpt-4o-mini until /v1/lookup writes a fresh row.
   if (!summary) {
     try {
       const r = await generateSummary(
@@ -122,9 +129,41 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
         { type: 'anon_token', value: `seo:${bbl}` },
       );
       summary = r.summary;
+      listingSummary = r.listing_summary || null;
+      scoreExplanation = r.score_explanation || null;
       indicators = r.indicators;
       questions_to_ask = r.questions_to_ask;
       listing_notes = r.listing_notes; // always [] for SEO route (no listingText)
+
+      // Persist the regenerated row so subsequent SEO views hit cache instead
+      // of re-running the AI. Score columns are deterministic and prompt-
+      // independent, so we carry them over from `latest` when present (a fresh
+      // /v1/lookup is responsible for recomputing them, not the SEO route).
+      // anonToken is nullable in the schema; SEO origin has no user identity.
+      await getDb()
+        .insert(buildingLookups)
+        .values({
+          userId: null,
+          email: null,
+          anonToken: null,
+          addressInput: b.address,
+          buildingBbl: bbl,
+          aiSummary: r.summary,
+          aiQuestions: r.questions_to_ask,
+          aiListingNotes: r.listing_notes,
+          aiListingSummary: r.listing_summary || null,
+          aiScoreExplanation: r.score_explanation || null,
+          aiScore: latest?.score ?? null,
+          aiScoreBand: latest?.scoreBand ?? null,
+          aiScoreFactors: latest?.scoreFactors ?? null,
+          aiScrapedListing: null,
+          aiValueScore: null,
+          aiValueBand: null,
+          aiValueConfidence: null,
+          aiValueFactors: null,
+          aiValueExplanation: null,
+          aiCostCents: r.cost_cents,
+        });
     } catch (e) {
       if (e instanceof CostCapExceededError) {
         summary = 'Summary temporarily unavailable due to daily generation limits.';
@@ -139,9 +178,9 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
     bbl,
     address: b.address,
     borough: b.borough,
-    listing_summary: cachedRowIsCurrent ? (latest?.listingSummary ?? null) : null,
+    listing_summary: listingSummary,
     summary,
-    score_explanation: cachedRowIsCurrent ? (latest?.scoreExplanation ?? null) : null,
+    score_explanation: scoreExplanation,
     score: latest?.score ?? null,
     score_band: latest?.scoreBand ?? null,
     score_factors: Array.isArray(latest?.scoreFactors) ? latest!.scoreFactors : [],

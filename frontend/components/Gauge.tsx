@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { getReportTone, type ReportTone, type ScoreBand } from '@/lib/api/backend';
+import { getReportTone, getValueTone, type ReportTone, type ScoreBand, type ValueBand } from '@/lib/api/backend';
 
 function useCountUp(target: number, duration = 900): number {
   const [val, setVal] = useState(0);
@@ -39,11 +39,13 @@ const COLOR: Record<ReportTone, string> = {
 export function Gauge({
   score,
   band,
+  valueBand,
   size = 96,
   stroke = 8,
 }: {
   score: number;
   band: ScoreBand | null;
+  valueBand?: ValueBand;
   size?: number;
   stroke?: number;
 }) {
@@ -52,7 +54,10 @@ export function Gauge({
   const animScore = useCountUp(score, 1100);
   const pct = Math.min(100, Math.max(0, animScore));
   const offset = c - (pct / 100) * c;
-  const color = COLOR[getReportTone(band)];
+  const tone: ReportTone = valueBand
+    ? getValueTone(valueBand)
+    : getReportTone(band);
+  const color = COLOR[tone];
 
   return (
     <div className="gauge" style={{ width: size, height: size }}>

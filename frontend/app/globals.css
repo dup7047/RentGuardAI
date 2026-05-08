@@ -653,13 +653,28 @@ h1.hero em {
 .head-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
 .head-right {
   display: flex;
-  align-items: center;
-  gap: 18px;
+  flex-direction: column;
+  gap: 0;
   padding: 24px;
 }
 .head-right .col { flex: 1; }
 .head-right h3 { margin: 0; font-size: 18px; font-weight: 600; }
 .head-right .sub { font-size: 13px; color: var(--ink-2); margin-top: 4px; line-height: 1.5; }
+
+/* Each score row: gauge + label col side by side */
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.score-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
 
 .tabs {
   display: flex;

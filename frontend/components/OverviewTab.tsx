@@ -5,6 +5,7 @@
 'use client';
 
 import type { LookupResponse, ScoreFactor } from '@/lib/api/backend';
+import { getValueBandLabel } from '@/lib/api/backend';
 import {
   dobComplaintsUrl,
   evictionsUrl,
@@ -62,6 +63,9 @@ export function OverviewTab({
     landlord,
     stats,
     listing_unavailable,
+    value_explanation,
+    value_band,
+    value_confidence,
   } = data;
 
   const factorsForFindings: ScoreFactor[] = (score_factors ?? []).slice(0, 5);
@@ -136,6 +140,30 @@ export function OverviewTab({
             We couldn&apos;t read the listing page (the site blocked our scraper),
             so this review covers the building&apos;s public records only — not
             listing-specific details like rent, bedrooms, or broker fees.
+          </p>
+        </div>
+      )}
+
+      {/* Value analysis block — shown before the building summary when present */}
+      {value_explanation && value_confidence !== 'low' && (
+        <div className="ai-block">
+          <div className="ai-tag">
+            ✦ VALUE ANALYSIS
+            {value_band && (
+              <span
+                style={{
+                  marginLeft: 8,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  letterSpacing: 0,
+                }}
+              >
+                · {getValueBandLabel(value_band)}
+              </span>
+            )}
+          </div>
+          <p>
+            <RevealText text={value_explanation} />
           </p>
         </div>
       )}

@@ -36,6 +36,8 @@ export type ScrapedListingPublic = {
 };
 
 export type ScoreBand = 'minimal' | 'moderate' | 'elevated' | 'high';
+export type ValueBand = 'great_deal' | 'fair' | 'above_market' | 'overpriced';
+export type ValueConfidence = 'high' | 'medium' | 'low';
 
 export type ScoreFactor = {
   key: string;
@@ -67,6 +69,23 @@ export function getBandLabel(band: ScoreBand | null | undefined): string {
       return 'High concern';
     default:
       return 'Score unavailable';
+  }
+}
+
+export function getValueTone(band: ValueBand | null | undefined): ReportTone {
+  if (band === 'great_deal') return 'good';
+  if (band === 'overpriced') return 'bad';
+  if (band === 'fair') return 'good';
+  return 'warn';
+}
+
+export function getValueBandLabel(band: ValueBand | null | undefined): string {
+  switch (band) {
+    case 'great_deal': return 'Great deal';
+    case 'fair': return 'Fair market rate';
+    case 'above_market': return 'Above market';
+    case 'overpriced': return 'Overpriced';
+    default: return 'Value score unavailable';
   }
 }
 
@@ -139,6 +158,16 @@ export type LookupResponse =
        * pasted. Null when the user pasted only an address.
        */
       scraped_listing: ScrapedListingPublic | null;
+      /**
+       * Apartment Value Score (0-100, higher = better deal). Null for address-only
+       * lookups or when the listing lacks rent / beds.
+       */
+      value_score: number | null;
+      value_band: ValueBand | null;
+      value_confidence: ValueConfidence | null;
+      value_factors: ScoreFactor[];
+      /** AI-narrated explanation of the value score citing comp medians. */
+      value_explanation: string | null;
       /**
        * True when the user pasted a listing URL but the scraper was blocked
        * and we fell back to parsing the address out of the URL slug. The

@@ -56,9 +56,11 @@ export async function loadSavedBuildings(): Promise<SavedBuildingsLoad> {
         Authorization: `Bearer ${token}`,
       },
       cache: 'no-store',
-      // 10 s hard cap — prevents an indefinite hang when the Render.com
-      // backend is cold-starting, which otherwise leaves <main> blank.
-      signal: AbortSignal.timeout(10_000),
+      // 30 s hard cap — Render free-tier cold starts routinely take
+      // 20-40 s. Without a timeout the request hangs indefinitely and
+      // <main> stays blank; with too short a timeout users hit the
+      // error card on every cold boot.
+      signal: AbortSignal.timeout(30_000),
     });
     if (res.status === 401) return { kind: 'unauthorized' };
     if (!res.ok) return { kind: 'error' };

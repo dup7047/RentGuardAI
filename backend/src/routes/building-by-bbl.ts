@@ -16,6 +16,7 @@ import { get311HousingRequests } from '../data/datasets/three11-housing.js';
 import { getHpdComplaints } from '../data/datasets/hpd-complaints.js';
 import { getHpdRegistrations } from '../data/datasets/hpd-registrations.js';
 import { generateSummary, CostCapExceededError } from '../ai/summary.js';
+import { isCurrentSummaryFormat } from '../ai/summary-format.js';
 import {
   projectHpdViolations,
   projectHpdComplaints,
@@ -79,16 +80,20 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
   const hpdClosed = hpdV.length - hpdOpen;
   const hpdBuildingId = hpdV.find((v) => v.buildingid)?.buildingid ?? regs[0]?.buildingid ?? null;
 
-  let summary = latest?.summary ?? null;
+  // Skip cached AI fields from before the pattern-lede + at-risk-apartments
+  // prompt rule shipped. summary, questions, and listing_notes all come from
+  // the same generation call — when the summary is stale the whole row is.
+  // See ai/summary-format.ts for the marker definition; the LIKE filter in
+  // findRecentLookup() in routes/lookup.ts mirrors it for SQL-level filtering.
+  const cachedRowIsCurrent = isCurrentSummaryFormat(latest?.summary ?? null);
+  let summary = cachedRowIsCurrent ? (latest?.summary ?? null) : null;
   let indicators: Array<{ key: string; value: string; source_url: string }> = [];
-  // Hydrate cached structured fields when present. JSONB read returns unknown,
-  // so cast through known shapes; defaults to [] for legacy rows missing them.
-  let questions_to_ask: string[] = Array.isArray(latest?.questions)
-    ? (latest!.questions as string[])
-    : [];
-  let listing_notes: Array<{ snippet: string; note: string }> = Array.isArray(latest?.listingNotes)
-    ? (latest!.listingNotes as Array<{ snippet: string; note: string }>)
-    : [];
+  let questions_to_ask: string[] =
+    cachedRowIsCurrent && Array.isArray(latest?.questions) ? (latest!.questions as string[]) : [];
+  let listing_notes: Array<{ snippet: string; note: string }> =
+    cachedRowIsCurrent && Array.isArray(latest?.listingNotes)
+      ? (latest!.listingNotes as Array<{ snippet: string; note: string }>)
+      : [];
 
   // If no prior summary, generate one using the SEO anon token (subject to cost cap)
   if (!summary) {
@@ -134,9 +139,9 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
     bbl,
     address: b.address,
     borough: b.borough,
-    listing_summary: latest?.listingSummary ?? null,
+    listing_summary: cachedRowIsCurrent ? (latest?.listingSummary ?? null) : null,
     summary,
-    score_explanation: latest?.scoreExplanation ?? null,
+    score_explanation: cachedRowIsCurrent ? (latest?.scoreExplanation ?? null) : null,
     score: latest?.score ?? null,
     score_band: latest?.scoreBand ?? null,
     score_factors: Array.isArray(latest?.scoreFactors) ? latest!.scoreFactors : [],

@@ -75,7 +75,8 @@ let createApp: typeof import('../src/app.js').createApp;
 
 beforeAll(async () => {
   process.env.SUPABASE_JWT_SECRET = TEST_SECRET;
-  // Import after env var is set so the auth middleware sees it on first call.
+  process.env.SUPABASE_URL = 'http://localhost:54321';
+  // Import after env vars are set so the auth middleware sees them on first call.
   ({ createApp } = await import('../src/app.js'));
 });
 
@@ -93,6 +94,8 @@ async function signToken(userId = TEST_USER_ID): Promise<string> {
   return await new SignJWT({ sub: userId, email: 'user@example.com' })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
+    .setAudience('authenticated')
+    .setIssuer('http://localhost:54321/auth/v1')
     .setExpirationTime('1h')
     .sign(secret);
 }

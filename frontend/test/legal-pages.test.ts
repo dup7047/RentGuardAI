@@ -35,4 +35,26 @@ describe('legal long-form documents', () => {
       });
     });
   }
+
+  // Roadmap §pre-launch alignment edits to the Privacy Policy
+  // (RENTGUARD_ROADMAP_v6.md lines 840-861).
+  describe('privacy.md production-stack alignment', () => {
+    const md = readFileSync(join(ROOT, 'docs/legal/privacy.md'), 'utf8');
+
+    it('uses magic-link wording (no plaintext password mention)', () => {
+      expect(md).toMatch(/magic-link sign-in/);
+      expect(md).not.toMatch(/password \(stored hashed\)/);
+    });
+
+    it('documents the anonymous-use flow', () => {
+      expect(md).toMatch(/Anonymous use/);
+      expect(md).toMatch(/anon_token/);
+    });
+
+    it('reflects the production analytics stack (no Plausible reference)', () => {
+      expect(md).not.toMatch(/Plausible/i);
+      expect(md).toMatch(/Cloudflare Web Analytics/);
+      expect(md).toMatch(/PostHog/);
+    });
+  });
 });

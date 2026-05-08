@@ -45,7 +45,13 @@ const FALLBACK_NEXT_STEPS = [
   },
 ];
 
-export function OverviewTab({ data }: { data: SuccessData }) {
+export function OverviewTab({
+  data,
+  onSelectTab,
+}: {
+  data: SuccessData;
+  onSelectTab?: (tab: string) => void;
+}) {
   const {
     bbl,
     listing_summary,
@@ -67,30 +73,35 @@ export function OverviewTab({ data }: { data: SuccessData }) {
     v: string;
     src: string;
     url: string;
+    tabId: string;
   }> = [
     {
       k: 'HPD violations · open',
       v: String(stats.hpd_violations_open ?? 0),
       src: 'HPD Online',
       url: hpdViolationsUrl({ hpdBuildingId: data.hpd_building_id, bbl }),
+      tabId: 'violations',
     },
     {
       k: 'DOB complaints (12 mo)',
       v: String(stats.dob_complaints ?? 0),
       src: 'DOB BIS',
       url: dobComplaintsUrl({ bin: data.bin }),
+      tabId: 'complaints',
     },
     {
       k: 'Marshal evictions',
       v: String(stats.evictions ?? 0),
       src: 'DOI dataset',
       url: evictionsUrl({ bbl }),
+      tabId: 'complaints',
     },
     {
       k: 'Watchlist rank',
       v: typeof watchlistRank === 'number' ? `#${watchlistRank}` : '—',
       src: 'Public Adv.',
       url: watchlistUrl({ registeredOwnerName, watchlistRank }),
+      tabId: 'owner',
     },
   ];
 
@@ -141,7 +152,21 @@ export function OverviewTab({ data }: { data: SuccessData }) {
       {/* 4-up indicator grid */}
       <div className="ind-grid">
         {indicatorCards.map((i) => (
-          <div key={i.k} className="ind">
+          <div
+            key={i.k}
+            className="ind"
+            style={onSelectTab ? { cursor: 'pointer' } : undefined}
+            onClick={onSelectTab ? () => onSelectTab(i.tabId) : undefined}
+            role={onSelectTab ? 'button' : undefined}
+            tabIndex={onSelectTab ? 0 : undefined}
+            onKeyDown={
+              onSelectTab
+                ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') onSelectTab(i.tabId);
+                  }
+                : undefined
+            }
+          >
             <div className="k">{i.k}</div>
             <div className="v">
               <AnimatedNum value={i.v} />
@@ -151,6 +176,7 @@ export function OverviewTab({ data }: { data: SuccessData }) {
                 href={i.url}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
               >
                 ↗ {i.src}
               </a>

@@ -244,7 +244,7 @@ export function BuildingReport({ data }: { data: SuccessData }) {
           ))}
         </div>
 
-        {tab === 'overview' && <OverviewTab data={data} />}
+        {tab === 'overview' && <OverviewTab data={data} onSelectTab={setTab} />}
         {tab === 'violations' && <ViolationsTab data={data} />}
         {tab === 'complaints' && <ComplaintsTab data={data} />}
         {tab === 'owner' && <OwnerTab data={data} />}

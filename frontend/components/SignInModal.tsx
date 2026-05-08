@@ -50,6 +50,11 @@ export function SignInModal({
     }
   }, []);
 
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
   // Close on Escape
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

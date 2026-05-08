@@ -52,6 +52,8 @@ export type SummaryResult = {
   summary: string;
   /** Phase 4.5: AI-narrated explanation of the deterministic score. */
   score_explanation: string;
+  /** Value score explanation narrating the comp data. Empty when no value score was computed. */
+  value_explanation: string;
   indicators: SummaryIndicator[];
   /** Specific factual questions the renter should ask. Always non-empty (3–5). */
   questions_to_ask: SummaryQuestion[];
@@ -83,10 +85,10 @@ export async function generateSummary(
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
     ],
-    // 1500 leaves headroom for: ≤220-word pattern-lede + at-risk-apartments
-    // summary + 6 indicators + 5 questions + 5 listing_notes (each ~50 tokens
-    // for snippet+note).
-    max_completion_tokens: 1500,
+    // 1800 leaves headroom for the 7 sections: ≤220-word pattern-lede +
+    // at-risk-apartments summary + score_explanation + value_explanation +
+    // 6 indicators + 5 questions + 5 listing_notes.
+    max_completion_tokens: 1800,
     response_format: { type: 'json_object' },
     temperature: 0.2,
   });
@@ -98,6 +100,7 @@ export async function generateSummary(
     listing_summary?: string;
     summary?: string;
     score_explanation?: string;
+    value_explanation?: string;
     indicators?: unknown[];
     questions_to_ask?: unknown[];
     listing_notes?: unknown[];
@@ -110,11 +113,13 @@ export async function generateSummary(
   if (typeof parsed.summary !== 'string') throw new MalformedAIResponse('missing summary');
   if (!Array.isArray(parsed.indicators)) throw new MalformedAIResponse('missing indicators');
 
-  // Phase 4.5: tolerate legacy responses that omit the new sections
+  // Tolerate legacy responses that omit sections (forward-compatible)
   const listing_summary =
     typeof parsed.listing_summary === 'string' ? parsed.listing_summary : '';
   const score_explanation =
     typeof parsed.score_explanation === 'string' ? parsed.score_explanation : '';
+  const value_explanation =
+    typeof parsed.value_explanation === 'string' ? parsed.value_explanation : '';
 
   // Forward-compatible: accept legacy responses that omit the new sections.
   // The model SHOULD return both, but tolerate missing fields by defaulting
@@ -168,6 +173,7 @@ export async function generateSummary(
     listing_summary,
     summary: parsed.summary,
     score_explanation,
+    value_explanation,
     indicators: parsed.indicators as SummaryIndicator[],
     questions_to_ask,
     listing_notes: verifiedListingNotes,

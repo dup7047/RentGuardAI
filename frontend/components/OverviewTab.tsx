@@ -5,6 +5,7 @@
 'use client';
 
 import type { LookupResponse, ScoreFactor } from '@/lib/api/backend';
+import { getValueBandLabel } from '@/lib/api/backend';
 import {
   dobComplaintsUrl,
   evictionsUrl,
@@ -16,6 +17,7 @@ import { AnimatedNum } from './AnimatedNum';
 import { RevealText } from './RevealText';
 
 type SuccessData = Extract<LookupResponse, { kind: 'success' }>;
+type NavTab = 'violations' | 'complaints' | 'owner';
 
 function findingTone(impact: number): 'good' | 'warn' | 'bad' {
   if (impact < 0) return 'bad';
@@ -45,7 +47,13 @@ const FALLBACK_NEXT_STEPS = [
   },
 ];
 
-export function OverviewTab({ data }: { data: SuccessData }) {
+export function OverviewTab({
+  data,
+  onSelectTab,
+}: {
+  data: SuccessData;
+  onSelectTab?: (tab: NavTab) => void;
+}) {
   const {
     bbl,
     listing_summary,
@@ -54,6 +62,10 @@ export function OverviewTab({ data }: { data: SuccessData }) {
     questions_to_ask,
     landlord,
     stats,
+    listing_unavailable,
+    value_explanation,
+    value_band,
+    value_confidence,
   } = data;
 
   const factorsForFindings: ScoreFactor[] = (score_factors ?? []).slice(0, 5);
@@ -66,30 +78,35 @@ export function OverviewTab({ data }: { data: SuccessData }) {
     v: string;
     src: string;
     url: string;
+    tabId: NavTab;
   }> = [
     {
       k: 'HPD violations · open',
       v: String(stats.hpd_violations_open ?? 0),
       src: 'HPD Online',
       url: hpdViolationsUrl({ hpdBuildingId: data.hpd_building_id, bbl }),
+      tabId: 'violations',
     },
     {
       k: 'DOB complaints (12 mo)',
       v: String(stats.dob_complaints ?? 0),
       src: 'DOB BIS',
       url: dobComplaintsUrl({ bin: data.bin }),
+      tabId: 'complaints',
     },
     {
       k: 'Marshal evictions',
       v: String(stats.evictions ?? 0),
       src: 'DOI dataset',
       url: evictionsUrl({ bbl }),
+      tabId: 'complaints',
     },
     {
       k: 'Watchlist rank',
       v: typeof watchlistRank === 'number' ? `#${watchlistRank}` : '—',
       src: 'Public Adv.',
       url: watchlistUrl({ registeredOwnerName, watchlistRank }),
+      tabId: 'owner',
     },
   ];
 
@@ -112,6 +129,45 @@ export function OverviewTab({ data }: { data: SuccessData }) {
         </div>
       )}
 
+      {/* Listing-data-unavailable notice — fires when the user pasted a URL
+          but the scraper was blocked and we recovered the address by parsing
+          the URL slug. Tells the user the review covers the building only
+          and not listing-specific fields like rent, beds, or broker fee. */}
+      {listing_unavailable && !listing_summary && (
+        <div className="ai-block">
+          <div className="ai-tag">✦ LISTING DATA UNAVAILABLE</div>
+          <p>
+            We couldn&apos;t read the listing page (the site blocked our scraper),
+            so this review covers the building&apos;s public records only — not
+            listing-specific details like rent, bedrooms, or broker fees.
+          </p>
+        </div>
+      )}
+
+      {/* Value analysis block — shown before the building summary when present */}
+      {value_explanation && value_confidence !== 'low' && (
+        <div className="ai-block">
+          <div className="ai-tag">
+            ✦ VALUE ANALYSIS
+            {value_band && (
+              <span
+                style={{
+                  marginLeft: 8,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  letterSpacing: 0,
+                }}
+              >
+                · {getValueBandLabel(value_band)}
+              </span>
+            )}
+          </div>
+          <p>
+            <RevealText text={value_explanation} />
+          </p>
+        </div>
+      )}
+
       {/* AI summary block */}
       {summary && (
         <div className="ai-block">
@@ -125,7 +181,21 @@ export function OverviewTab({ data }: { data: SuccessData }) {
       {/* 4-up indicator grid */}
       <div className="ind-grid">
         {indicatorCards.map((i) => (
-          <div key={i.k} className="ind">
+          <div
+            key={i.k}
+            className="ind"
+            style={onSelectTab ? { cursor: 'pointer' } : undefined}
+            onClick={onSelectTab ? () => onSelectTab(i.tabId) : undefined}
+            role={onSelectTab ? 'button' : undefined}
+            tabIndex={onSelectTab ? 0 : undefined}
+            onKeyDown={
+              onSelectTab
+                ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') onSelectTab(i.tabId);
+                  }
+                : undefined
+            }
+          >
             <div className="k">{i.k}</div>
             <div className="v">
               <AnimatedNum value={i.v} />
@@ -135,6 +205,7 @@ export function OverviewTab({ data }: { data: SuccessData }) {
                 href={i.url}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
               >
                 ↗ {i.src}
               </a>

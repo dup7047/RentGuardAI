@@ -23,13 +23,35 @@ describe('extractZillow — bot-wall handling', () => {
     expect(extractZillow(blockedHtml, URL)).toBeNull();
   });
 
-  it('returns null when ONLY og:title is present (just address, no rich data)', () => {
-    // The classic "we got past the WAF but Zillow withheld JSON-LD" case
+  it('returns null when ONLY og:title is present on a unit URL (just address, no rich data)', () => {
+    // The classic "we got past the WAF but Zillow withheld JSON-LD" case for
+    // /homedetails/ — we want to surface the manual-paste fallback rather
+    // than a half-empty card claiming this is a real listing.
     const html = `<html><head>
       <meta property="og:title" content="444 W 49th St APT 1D, New York, NY 10019 | Zillow">
       <meta property="og:description" content="Zillow has more rental listings than any other site...">
     </head><body></body></html>`;
     expect(extractZillow(html, URL)).toBeNull();
+  });
+
+  it('accepts address-only on a /b/ building URL (aggregate pages have no unit data by design)', () => {
+    // Zillow building URL like https://www.zillow.com/b/149-starr-st-brooklyn-ny-3ryQ/
+    // — a real, non-blocked page that legitimately has no per-unit rent/beds.
+    // We should still return a ScrapedListing so the lookup pipeline produces
+    // a building report, instead of falling through to the listing_blocked UI.
+    const buildingUrl = 'https://www.zillow.com/b/149-starr-st-brooklyn-ny-3ryQ/';
+    const html = `<html><head>
+      <meta property="og:title" content="149 Starr St, Brooklyn, NY 11237 | Zillow">
+      <meta property="og:description" content="Zillow has rental listings...">
+    </head><body></body></html>`;
+    const r = extractZillow(html, buildingUrl);
+    expect(r).not.toBeNull();
+    expect(r?.source_kind).toBe('building');
+    expect(r?.address).toContain('149 Starr St');
+    expect(r?.monthlyRentCents).toBeNull();
+    expect(r?.bedrooms).toBeNull();
+    // Building-only with og:description present → 'medium' confidence
+    expect(r?.confidence).toBe('medium');
   });
 
   it('extracts when JSON-LD Apartment is present even without __NEXT_DATA__', () => {

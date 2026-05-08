@@ -162,9 +162,9 @@ describe('buildUserPrompt', () => {
     expect(prompt).not.toContain('0 bed');
   });
 
-  it('reminder line about NEVER characterizing rent appears in user prompt', () => {
+  it('reminder confines rent characterization to value_explanation', () => {
     const prompt = buildUserPrompt(BASE);
-    expect(prompt).toMatch(/never\s+characterize\s+the\s+rent/i);
+    expect(prompt).toMatch(/only\s+characterize\s+rent\s+in\s+value_explanation/i);
   });
 
   it('formats per-record HPD violation lines with apartment, class, date, status, description', () => {

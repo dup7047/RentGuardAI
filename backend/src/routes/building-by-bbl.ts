@@ -50,6 +50,11 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
       scoreBand: buildingLookups.aiScoreBand,
       scoreFactors: buildingLookups.aiScoreFactors,
       scrapedListing: buildingLookups.aiScrapedListing,
+      valueScore: buildingLookups.aiValueScore,
+      valueBand: buildingLookups.aiValueBand,
+      valueConfidence: buildingLookups.aiValueConfidence,
+      valueFactors: buildingLookups.aiValueFactors,
+      valueExplanation: buildingLookups.aiValueExplanation,
     })
     .from(buildingLookups)
     .where(eq(buildingLookups.buildingBbl, bbl))
@@ -140,6 +145,11 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
     listing_notes,
     // Phase 4.5 follow-up: hydrate from the snapshotted column when present
     scraped_listing: latest?.scrapedListing ?? null,
+    value_score: latest?.valueScore ?? null,
+    value_band: latest?.valueBand ?? null,
+    value_confidence: latest?.valueConfidence ?? null,
+    value_factors: Array.isArray(latest?.valueFactors) ? latest!.valueFactors : [],
+    value_explanation: latest?.valueExplanation ?? null,
     landlord,
     fare_check: null,
     stats: {

@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { LegalFooter } from './LegalFooter';
 import { LegalFraming } from './LegalFraming';
@@ -21,8 +21,17 @@ import { buildingJsonLd } from '@/lib/seo/structured-data';
 import {
   getBandLabel,
   getReportTone,
+  getSavedBuildingState,
+  getValueBandLabel,
+  getValueTone,
+  saveBuilding,
+  unsaveBuilding,
+  SavedBuildingsAuthError,
   type LookupResponse,
+  type ValueBand,
+  type ValueConfidence,
 } from '@/lib/api/backend';
+import { createClient } from '@/lib/supabase/browser';
 
 type SuccessData = Extract<LookupResponse, { kind: 'success' }>;
 type Tab = 'overview' | 'violations' | 'complaints' | 'owner' | 'sources';
@@ -53,11 +62,50 @@ export function BuildingReport({ data }: { data: SuccessData }) {
     score_band,
     scraped_listing,
     stats,
+    value_score,
+    value_band,
+    value_confidence,
   } = data;
 
   const [tab, setTab] = useState<Tab>('overview');
   const [modal, setModal] = useState<null | { kind: 'save' | 'lease' | 'gate'; reason: SignInReason } | { kind: 'share' }>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Saved-building state. `null` means "haven't checked yet" — render the
+  // default unsaved label until we know. After checking, true/false drive
+  // the button label.
+  const [isAuthed, setIsAuthed] = useState<boolean>(false);
+  const [isSaved, setIsSaved] = useState<boolean | null>(null);
+  const [saveInFlight, setSaveInFlight] = useState<boolean>(false);
+
+  // On mount + when bbl changes, check auth status. If signed in, fetch
+  // whether this BBL is already saved so the button label reflects reality
+  // before the user clicks anything.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
+        const authed = Boolean(session);
+        setIsAuthed(authed);
+        if (authed) {
+          const state = await getSavedBuildingState(bbl);
+          if (!cancelled) setIsSaved(state.saved);
+        } else {
+          setIsSaved(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsAuthed(false);
+          setIsSaved(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bbl]);
 
   const tone = getReportTone(score_band);
   const label = getBandLabel(score_band);
@@ -85,12 +133,38 @@ export function BuildingReport({ data }: { data: SuccessData }) {
     window.setTimeout(() => setToast(null), 2400);
   }
 
-  function handleSave() {
-    // Anon → SignInModal. Authed → toast (saved-buildings backend not yet built).
-    // We don't know auth state here without a client check; rely on the
-    // SignInModal's own success path. For authed users the modal renders
-    // briefly then they ignore it — minor v1 quirk.
-    setModal({ kind: 'save', reason: 'save' });
+  async function handleSave() {
+    // Anon → SignInModal (existing flow, unchanged).
+    if (!isAuthed) {
+      setModal({ kind: 'save', reason: 'save' });
+      return;
+    }
+    if (saveInFlight) return; // debounce double-clicks
+    // Authed: optimistic toggle, fire API, revert + toast on error.
+    const wasSaved = isSaved === true;
+    setIsSaved(!wasSaved);
+    setSaveInFlight(true);
+    try {
+      if (wasSaved) {
+        await unsaveBuilding(bbl);
+        showToast('Removed from saved buildings');
+      } else {
+        await saveBuilding(bbl);
+        showToast('Saved to your dashboard');
+      }
+    } catch (err) {
+      // Revert on failure.
+      setIsSaved(wasSaved);
+      if (err instanceof SavedBuildingsAuthError) {
+        // Token expired or invalid — fall back to the sign-in modal.
+        setIsAuthed(false);
+        setModal({ kind: 'save', reason: 'save' });
+      } else {
+        showToast(wasSaved ? "Couldn't unsave — try again" : "Couldn't save — try again");
+      }
+    } finally {
+      setSaveInFlight(false);
+    }
   }
 
   function handleLease() {
@@ -164,8 +238,9 @@ export function BuildingReport({ data }: { data: SuccessData }) {
                 type="button"
                 className="btn primary"
                 onClick={handleSave}
+                disabled={saveInFlight}
               >
-                ★ Save building
+                {isSaved ? '★ Saved' : '★ Save building'}
               </button>
               <button
                 type="button"
@@ -184,39 +259,89 @@ export function BuildingReport({ data }: { data: SuccessData }) {
             </div>
           </div>
 
-          {/* Right: gauge + band */}
-          <div className="card head-right">
-            <Gauge score={numericScore} band={score_band} size={104} stroke={9} />
-            <div className="col">
-              <h3
-                style={{
-                  color:
-                    tone === 'good'
-                      ? 'var(--good)'
-                      : tone === 'warn'
-                        ? 'oklch(0.45 0.13 70)'
-                        : 'var(--bad)',
-                }}
-              >
-                {label}
-              </h3>
-              <div className="sub">
-                Score reflects open HPD violations, recent DOB complaints,
-                eviction filings, and watchlist match. Higher is safer.
+          {/* Right: maintenance gauge + optional value gauge (stacked) */}
+          <div className="card head-right" style={{ gap: 20 }}>
+            {/* Maintenance score */}
+            <div className="score-row">
+              <Gauge score={numericScore} band={score_band} size={88} stroke={8} />
+              <div className="col">
+                <div className="score-label">Maintenance</div>
+                <h3
+                  style={{
+                    color:
+                      tone === 'good'
+                        ? 'var(--good)'
+                        : tone === 'warn'
+                          ? 'oklch(0.45 0.13 70)'
+                          : 'var(--bad)',
+                    marginTop: 2,
+                  }}
+                >
+                  {label}
+                </h3>
+                <div className="sub" style={{ fontSize: 12 }}>
+                  HPD violations, complaints, evictions, watchlist.
+                </div>
+                <button
+                  type="button"
+                  className="btn link sm"
+                  style={{ padding: '4px 0', marginTop: 4, fontSize: 12 }}
+                  onClick={() =>
+                    showToast(
+                      'Score = 100 minus penalties. See "Notable findings" for the breakdown.',
+                    )
+                  }
+                >
+                  How is this calculated? →
+                </button>
               </div>
-              <button
-                type="button"
-                className="btn link sm"
-                style={{ padding: '8px 0', marginTop: 6 }}
-                onClick={() =>
-                  showToast(
-                    'Score = 100 minus penalties. See "Notable findings" for the breakdown.',
-                  )
-                }
-              >
-                How is this calculated? →
-              </button>
             </div>
+
+            {/* Value score — shown only when we have a result with medium/high confidence */}
+            {value_score !== null && value_confidence !== 'low' ? (
+              <div className="score-row" style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+                <Gauge score={value_score} band={null} valueBand={value_band ?? undefined} size={88} stroke={8} />
+                <div className="col">
+                  <div className="score-label">Value</div>
+                  <h3
+                    style={{
+                      color:
+                        getValueTone(value_band) === 'good'
+                          ? 'var(--good)'
+                          : getValueTone(value_band) === 'warn'
+                            ? 'oklch(0.45 0.13 70)'
+                            : 'var(--bad)',
+                      marginTop: 2,
+                    }}
+                  >
+                    {getValueBandLabel(value_band)}
+                  </h3>
+                  <div className="sub" style={{ fontSize: 12 }}>
+                    Rent vs. comparable nearby listings.
+                    {value_confidence === 'medium' && (
+                      <span style={{ color: 'var(--muted)', marginLeft: 4 }}>(limited data)</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn link sm"
+                    style={{ padding: '4px 0', marginTop: 4, fontSize: 12 }}
+                    onClick={() =>
+                      showToast(
+                        'Value score compares this rent to borough medians for similar-sized apartments. Higher = better deal.',
+                      )
+                    }
+                  >
+                    How is this calculated? →
+                  </button>
+                </div>
+              </div>
+            ) : scraped_listing?.monthlyRentCents ? (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, fontSize: 13, color: 'var(--muted)' }}>
+                <div style={{ fontWeight: 600, marginBottom: 2 }}>Value</div>
+                Not enough nearby comp data for a value rating yet.
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -244,7 +369,7 @@ export function BuildingReport({ data }: { data: SuccessData }) {
           ))}
         </div>
 
-        {tab === 'overview' && <OverviewTab data={data} />}
+        {tab === 'overview' && <OverviewTab data={data} onSelectTab={setTab} />}
         {tab === 'violations' && <ViolationsTab data={data} />}
         {tab === 'complaints' && <ComplaintsTab data={data} />}
         {tab === 'owner' && <OwnerTab data={data} />}

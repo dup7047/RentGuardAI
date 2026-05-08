@@ -13,6 +13,8 @@ import { stream } from 'hono/streaming';
 import { z } from 'zod';
 import { scrapeListing } from '../scraping/fetcher.js';
 import type { ScrapedListing } from '../scraping/types.js';
+import { detectListingHost, canonicalizeListingUrl } from '../scraping/url-canonicalize.js';
+import { parseAddressFromUrl } from '../scraping/slug-parse.js';
 import { geosearch } from '../geo/geosearch.js';
 import { lookupLandlord } from '../data/landlord.js';
 import { checkFare } from '../fare/check.js';
@@ -24,6 +26,9 @@ import {
   project311Complaints,
 } from '../ai/payload-records.js';
 import { computeScore } from '../scoring/score.js';
+import { computeValueScore } from '../scoring/value.js';
+import { getComps } from '../data/comps.js';
+import type { ValueScoreResult } from '../scoring/value.js';
 import { getHpdViolations } from '../data/datasets/hpd-violations.js';
 import { getDobComplaints } from '../data/datasets/dob-complaints.js';
 import { getEvictions } from '../data/datasets/evictions.js';
@@ -131,6 +136,12 @@ type CachedRow = {
   score: number;
   scoreBand: string;
   scoreFactors: unknown;
+  // Value score (nullable — only present for URL-based lookups with rent data)
+  valueScore: number | null;
+  valueBand: string | null;
+  valueConfidence: string | null;
+  valueFactors: unknown;
+  valueExplanation: string | null;
 };
 
 /**
@@ -154,6 +165,11 @@ async function findRecentLookup(bbl: string): Promise<CachedRow | null> {
       score: buildingLookups.aiScore,
       scoreBand: buildingLookups.aiScoreBand,
       scoreFactors: buildingLookups.aiScoreFactors,
+      valueScore: buildingLookups.aiValueScore,
+      valueBand: buildingLookups.aiValueBand,
+      valueConfidence: buildingLookups.aiValueConfidence,
+      valueFactors: buildingLookups.aiValueFactors,
+      valueExplanation: buildingLookups.aiValueExplanation,
     })
     .from(buildingLookups)
     .where(
@@ -182,6 +198,11 @@ async function findRecentLookup(bbl: string): Promise<CachedRow | null> {
     score: row.score,
     scoreBand: row.scoreBand,
     scoreFactors: row.scoreFactors,
+    valueScore: row.valueScore ?? null,
+    valueBand: row.valueBand ?? null,
+    valueConfidence: row.valueConfidence ?? null,
+    valueFactors: row.valueFactors,
+    valueExplanation: row.valueExplanation ?? null,
   };
 }
 
@@ -221,15 +242,27 @@ export async function runLookup(
     return { status: 400, body: { kind: 'invalid_input', errors: parsed.error.flatten() } };
   }
 
-  const { address, listingUrl, listingDescription, email, bbl: providedBbl } = parsed.data;
+  // `listingUrl` is `let` because the slug-parse fallback in step 2 clears it
+  // so the rest of the pipeline (cache short-circuit, persistence) treats the
+  // request as address-only when we couldn't actually scrape the page.
+  // eslint-disable-next-line prefer-const -- intentional mutation below
+  let { listingUrl } = parsed.data;
+  const { address, listingDescription, email, bbl: providedBbl } = parsed.data;
   const { anonToken, userId } = ctx;
   const userEmail = ctx.userEmail ?? email;
 
   // ── 2. URL fetch + extract (Phase 4 — replaces the slug-only parser) ────────
   let resolvedAddress = address;
   let scrapedListing: ScrapedListing | null = null;
+  // Set when we recover from a scrape failure by parsing the address out of
+  // the URL slug. The response carries this back so the UI can tell the user
+  // the review covers public records only (no listing-specific fields).
+  let listingUnavailable = false;
   if (listingUrl && !resolvedAddress) {
-    const r = await timePhase('scrape', () => scrapeListing(listingUrl));
+    // Capture in a const so the closure passed to timePhase doesn't see the
+    // post-slug-parse `listingUrl = undefined` reassignment below.
+    const scrapeUrl = listingUrl;
+    const r = await timePhase('scrape', () => scrapeListing(scrapeUrl));
     if (r.kind === 'error') {
       // 'listing_blocked' is recoverable if the user pasted a description and address
       // (defensive — the current LookupForm sends address+url together on retry,
@@ -237,6 +270,32 @@ export async function runLookup(
       if (r.code === 'listing_blocked' && listingDescription && address) {
         resolvedAddress = address;
         emit('parse');
+      } else if (r.code === 'listing_blocked' || r.code === 'listing_expired') {
+        // Slug-parse fallback: the address is already in the URL path for
+        // most Zillow / StreetEasy listings. Pull it out and route as
+        // address-only — user gets a building report instead of the
+        // manual-paste fallback. We lose listing-specific fields but
+        // those are unrecoverable when the scraper is blocked anyway.
+        const detect = detectListingHost(listingUrl);
+        const canonical = canonicalizeListingUrl(listingUrl);
+        const fromSlug = detect ? parseAddressFromUrl(canonical, detect.source) : null;
+        if (fromSlug) {
+          logger.info(
+            { source: detect!.source, url: canonical, parsedAddress: fromSlug },
+            'slug-parse fallback hit — routing as address-only',
+          );
+          resolvedAddress = fromSlug;
+          // Drop listingUrl from the rest of the pipeline so the AI cache
+          // short-circuit (which keys on `!listingUrl && !listingDescription`)
+          // sees this as an address-only lookup. Also: scrapedListing stays
+          // null, so cache hits remain eligible for future cache hits.
+          listingUrl = undefined;
+          listingUnavailable = true;
+          emit('parse');
+        } else {
+          const status: LookupStatus = 200;
+          return { status, body: { kind: r.code, message: r.message ?? null } };
+        }
       } else {
         const status: LookupStatus = r.code === 'listing_not_found' ? 404 : 200;
         return { status, body: { kind: r.code, message: r.message ?? null } };
@@ -466,6 +525,12 @@ export async function runLookup(
           // Address-only request had no scrape — record the lack of one so a
           // subsequent address-only lookup can still cache-hit on this row.
           aiScrapedListing: null,
+          // Value score fields (null for address-only cache hits — no listing data)
+          aiValueScore: cached.valueScore,
+          aiValueBand: cached.valueBand,
+          aiValueConfidence: cached.valueConfidence,
+          aiValueFactors: cached.valueFactors,
+          aiValueExplanation: cached.valueExplanation,
           // Marker: this row was a cache hit, no AI charge. Used by analytics
           // and a future "free hit" billing path if we want one.
           aiCostCents: 0,
@@ -498,6 +563,7 @@ export async function runLookup(
         questions_to_ask: Array.isArray(cached.questions) ? cached.questions : [],
         listing_notes: Array.isArray(cached.listingNotes) ? cached.listingNotes : [],
         scraped_listing: null,
+        listing_unavailable: listingUnavailable || undefined,
         landlord,
         fare_check: null,
         stats: {
@@ -508,6 +574,11 @@ export async function runLookup(
           bedbug_reports: bed.length,
           lead_flags: lead.length,
         },
+        value_score: cached.valueScore,
+        value_band: cached.valueBand,
+        value_confidence: cached.valueConfidence,
+        value_factors: Array.isArray(cached.valueFactors) ? cached.valueFactors : [],
+        value_explanation: cached.valueExplanation,
         partial: partial.length > 0 ? partial : undefined,
         lookup_id: persisted[0]?.id ?? null,
         building_url: `/building/${bbl}`,
@@ -544,7 +615,37 @@ export async function runLookup(
     'lookup phase completed',
   );
 
-  // ── 6c. Progressive payload — score + stats are ready before AI starts ─────
+  // ── 6c. Apartment Value Score (deterministic) ─────────────────────────────
+  // Only computed when the scraped listing has rent + bedroom data and is a
+  // rental listing. Address-only, building, and sale listings skip this.
+  let valueScore: ValueScoreResult | null = null;
+  if (
+    scrapedListing &&
+    scrapedListing.source_kind === 'rental' &&
+    scrapedListing.monthlyRentCents != null &&
+    scrapedListing.bedrooms != null
+  ) {
+    try {
+      const comp = await getComps(borough, scrapedListing.bedrooms);
+      if (comp) {
+        valueScore = computeValueScore({
+          monthlyRentCents: scrapedListing.monthlyRentCents,
+          bedrooms: scrapedListing.bedrooms,
+          squareFeet: scrapedListing.squareFeet,
+          comp,
+        });
+        logger.info(
+          { phase: 'value_score', score: valueScore.score, band: valueScore.band, confidence: valueScore.confidence },
+          'lookup phase completed',
+        );
+      }
+    } catch (e) {
+      // Value score is non-critical — log and continue without it
+      logger.warn({ err: String(e) }, 'value score computation failed — continuing without it');
+    }
+  }
+
+  // ── 6d. Progressive payload — score + stats are ready before AI starts ─────
   // Streaming clients can render the Overview tab here while OpenAI runs.
   const stats = {
     hpd_violations_open: hpdOpen,
@@ -561,6 +662,9 @@ export async function runLookup(
     score: score.score,
     score_band: score.band,
     score_factors: score.factors,
+    value_score: valueScore?.score ?? null,
+    value_band: valueScore?.band ?? null,
+    value_confidence: valueScore?.confidence ?? null,
     landlord,
     fare_check: fareCheck,
     stats,
@@ -608,6 +712,8 @@ export async function runLookup(
           recentHpdComplaints: projectHpdComplaints(hpdC),
           recentDobComplaints: projectDobComplaints(dob),
           recent311Complaints: project311Complaints(three11),
+          // Value score for narration (null = no listing data, suppress)
+          valueScore,
         },
         subject,
       ),
@@ -647,6 +753,12 @@ export async function runLookup(
         // return it on cache hits (the scraped_listings table is keyed by URL,
         // not BBL, so we can't join cleanly — denormalize instead).
         aiScrapedListing: scrapedListing,
+        // Apartment Value Score
+        aiValueScore: valueScore?.score ?? null,
+        aiValueBand: valueScore?.band ?? null,
+        aiValueConfidence: valueScore?.confidence ?? null,
+        aiValueFactors: valueScore?.factors ?? null,
+        aiValueExplanation: summary.value_explanation || null,
         aiCostCents: summary.cost_cents,
       })
       .returning({ id: buildingLookups.id }),
@@ -679,9 +791,15 @@ export async function runLookup(
       questions_to_ask: summary.questions_to_ask,
       listing_notes: summary.listing_notes,
       scraped_listing: scrapedListing,
+      listing_unavailable: listingUnavailable || undefined,
       landlord,
       fare_check: fareCheck,
       stats,
+      value_score: valueScore?.score ?? null,
+      value_band: valueScore?.band ?? null,
+      value_confidence: valueScore?.confidence ?? null,
+      value_factors: valueScore ? valueScore.factors : [],
+      value_explanation: summary.value_explanation || null,
       partial: partial.length > 0 ? partial : undefined,
       lookup_id: row?.id ?? null,
       building_url: `/building/${bbl}`,

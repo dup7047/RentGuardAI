@@ -1,15 +1,17 @@
 // Listing fetcher — the entry point used by /v1/lookup.
 //   1. Canonicalize URL
 //   2. Cache check (7-day TTL)
-//   3. Direct fetch with browser-like headers
-//   4. If blocked / empty / suspicious → ScrapFly fallback (if key set)
+//   3. Direct fetch with browser-like headers (skipped for hosts whose direct
+//      fetch always returns a Cloudflare/PerimeterX challenge — saves ~2-5s
+//      of guaranteed-failure latency per lookup).
+//   4. If blocked / empty / suspicious → Firecrawl fallback (if key set)
 //   5. Run per-host extractor on whichever HTML we got
 //   6. Cache the parsed result
 
 import { logger } from '../logger.js';
 import { canonicalizeListingUrl, detectListingHost } from './url-canonicalize.js';
 import { getCached, setCached } from './cache.js';
-import { scrapflyFetch, ScrapflyError, isScrapflyAvailable } from './scrapfly-client.js';
+import { firecrawlFetch, FirecrawlError, isFirecrawlAvailable } from './firecrawl-client.js';
 import { extractStreetEasy } from './extractors/streeteasy.js';
 import { extractZillow } from './extractors/zillow.js';
 import { extractGeneric } from './extractors/generic.js';
@@ -25,6 +27,13 @@ const BROWSER_HEADERS: Record<string, string> = {
   // Some sites 403 on missing Referer; using google as a benign default
   Referer: 'https://www.google.com/',
 };
+
+// Hosts whose direct fetch is empirically guaranteed to return a Cloudflare
+// "Just a moment..." page — paying 2-5s for that round-trip before failing
+// over to Firecrawl is pure waste. Skip direct entirely for these and go
+// straight to the vendor scraper. StreetEasy stays in the direct-first path
+// because it occasionally serves real HTML to us.
+const ALWAYS_BOT_WALLED = new Set(['zillow.com', 'www.zillow.com']);
 
 /**
  * Heuristic for "did the direct fetch actually return real content or a wall?"
@@ -75,23 +84,38 @@ export async function scrapeListing(rawUrl: string): Promise<ScrapeResult> {
   const source = detect.source;
   const extractor = pickExtractor(source);
 
-  // 2. Direct fetch
+  // Skip direct fetch for hosts that always block us — saves the
+  // guaranteed-failure round-trip and goes straight to Firecrawl.
+  let host = '';
+  try {
+    host = new URL(canonicalUrl).hostname.toLowerCase();
+  } catch {
+    // Already validated above by detectListingHost; defensive only.
+  }
+  const skipDirect = ALWAYS_BOT_WALLED.has(host);
+
+  // 2. Direct fetch (skipped for known bot-walled hosts)
   let html: string | null = null;
   let directStatus = 0;
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), DIRECT_TIMEOUT_MS);
-    const res = await fetch(canonicalUrl, { headers: BROWSER_HEADERS, signal: ctrl.signal });
-    clearTimeout(timer);
-    directStatus = res.status;
-    if (res.status === 404) {
-      return { kind: 'error', code: 'listing_not_found', status: 404 };
+  if (!skipDirect) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), DIRECT_TIMEOUT_MS);
+      const res = await fetch(canonicalUrl, { headers: BROWSER_HEADERS, signal: ctrl.signal });
+      clearTimeout(timer);
+      directStatus = res.status;
+      if (res.status === 404) {
+        return { kind: 'error', code: 'listing_not_found', status: 404 };
+      }
+      if (res.ok) {
+        html = await res.text();
+      }
+    } catch (e) {
+      logger.warn(
+        { url: canonicalUrl, err: String(e) },
+        'direct fetch failed; will try Firecrawl',
+      );
     }
-    if (res.ok) {
-      html = await res.text();
-    }
-  } catch (e) {
-    logger.warn({ url: canonicalUrl, err: String(e) }, 'direct fetch failed; will try ScrapFly');
   }
 
   // 3. Try direct extraction if HTML looks usable
@@ -103,34 +127,34 @@ export async function scrapeListing(rawUrl: string): Promise<ScrapeResult> {
     }
   }
 
-  // 4. ScrapFly fallback — only if direct didn't work AND key is configured
-  if (!isScrapflyAvailable()) {
+  // 4. Firecrawl fallback — only if direct didn't work AND key is configured
+  if (!isFirecrawlAvailable()) {
     logger.info(
       { url: canonicalUrl, direct_status: directStatus, html_len: html?.length ?? 0 },
-      'direct fetch insufficient and SCRAPFLY_API_KEY not set',
+      'direct fetch insufficient and FIRECRAWL_API_KEY not set (or quota exhausted)',
     );
     return { kind: 'error', code: 'listing_blocked', status: directStatus || undefined };
   }
 
-  let scrapflyHtml: string;
+  let firecrawlHtml: string;
   let costCredits = 0;
   try {
-    const sf = await scrapflyFetch(canonicalUrl, { asp: true, renderJs: true });
-    scrapflyHtml = sf.html;
-    costCredits = sf.costCredits;
-    if (sf.statusCode === 404) {
+    const fc = await firecrawlFetch(canonicalUrl);
+    firecrawlHtml = fc.html;
+    costCredits = fc.costCredits;
+    if (fc.statusCode === 404) {
       return { kind: 'error', code: 'listing_not_found', status: 404 };
     }
   } catch (e) {
-    if (e instanceof ScrapflyError && e.code === 'quota_exceeded') {
-      logger.error('ScrapFly quota exceeded — fallback unavailable until next cycle');
-      return { kind: 'error', code: 'listing_blocked', message: 'scrapfly_quota_exceeded' };
+    if (e instanceof FirecrawlError && e.code === 'quota_exceeded') {
+      logger.error('Firecrawl quota exceeded — fallback unavailable until next cycle');
+      return { kind: 'error', code: 'listing_blocked', message: 'firecrawl_quota_exceeded' };
     }
-    logger.warn({ url: canonicalUrl, err: String(e) }, 'ScrapFly fetch failed');
+    logger.warn({ url: canonicalUrl, err: String(e) }, 'Firecrawl fetch failed');
     return { kind: 'error', code: 'listing_blocked', message: String(e) };
   }
 
-  const extracted = extractor(scrapflyHtml, canonicalUrl);
+  const extracted = extractor(firecrawlHtml, canonicalUrl);
   if (!extracted) {
     return { kind: 'error', code: 'listing_blocked', message: 'extractor_returned_null' };
   }
@@ -138,11 +162,11 @@ export async function scrapeListing(rawUrl: string): Promise<ScrapeResult> {
   await safeSetCached({
     canonicalUrl,
     data: extracted,
-    fetchMethod: 'scrapfly',
-    rawHtml: scrapflyHtml,
+    fetchMethod: 'firecrawl',
+    rawHtml: firecrawlHtml,
     fetchCostCredits: costCredits,
   });
-  return { kind: 'ok', data: extracted, fetchMethod: 'scrapfly' };
+  return { kind: 'ok', data: extracted, fetchMethod: 'firecrawl' };
 }
 
 async function safeSetCached(args: Parameters<typeof setCached>[0]): Promise<void> {

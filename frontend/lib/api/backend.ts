@@ -36,6 +36,8 @@ export type ScrapedListingPublic = {
 };
 
 export type ScoreBand = 'minimal' | 'moderate' | 'elevated' | 'high';
+export type ValueBand = 'great_deal' | 'fair' | 'above_market' | 'overpriced';
+export type ValueConfidence = 'high' | 'medium' | 'low';
 
 export type ScoreFactor = {
   key: string;
@@ -67,6 +69,23 @@ export function getBandLabel(band: ScoreBand | null | undefined): string {
       return 'High concern';
     default:
       return 'Score unavailable';
+  }
+}
+
+export function getValueTone(band: ValueBand | null | undefined): ReportTone {
+  if (band === 'great_deal') return 'good';
+  if (band === 'overpriced') return 'bad';
+  if (band === 'fair') return 'good';
+  return 'warn';
+}
+
+export function getValueBandLabel(band: ValueBand | null | undefined): string {
+  switch (band) {
+    case 'great_deal': return 'Great deal';
+    case 'fair': return 'Fair market rate';
+    case 'above_market': return 'Above market';
+    case 'overpriced': return 'Overpriced';
+    default: return 'Value score unavailable';
   }
 }
 
@@ -139,6 +158,25 @@ export type LookupResponse =
        * pasted. Null when the user pasted only an address.
        */
       scraped_listing: ScrapedListingPublic | null;
+      /**
+       * Apartment Value Score (0-100, higher = better deal). Null for address-only
+       * lookups or when the listing lacks rent / beds.
+       */
+      value_score: number | null;
+      value_band: ValueBand | null;
+      value_confidence: ValueConfidence | null;
+      value_factors: ScoreFactor[];
+      /** AI-narrated explanation of the value score citing comp medians. */
+      value_explanation: string | null;
+      /**
+       * True when the user pasted a listing URL but the scraper was blocked
+       * and we fell back to parsing the address out of the URL slug. The
+       * report still has full public-records coverage but listing-specific
+       * fields (rent, beds, broker fee, listing notes) aren't available.
+       * Frontend should surface this so users know the review is
+       * building-only, not listing-specific.
+       */
+      listing_unavailable?: boolean;
       landlord: AnyRecord;
       fare_check: AnyRecord | null;
       stats: Record<string, number>;
@@ -323,4 +361,66 @@ export async function getBuildingByBbl(
   };
   const res = await fetch(`${BASE}/v1/building/${bbl}`, init);
   return (await res.json()) as LookupResponse;
+}
+
+// ── Saved buildings ────────────────────────────────────────────────────────
+// All four endpoints require an authed user. The backend returns 401 when
+// the Bearer token is missing or invalid; callers should surface that as a
+// "please sign in" UX (the existing SignInModal already handles it).
+
+export type SavedBuilding = {
+  bbl: string;
+  address: string | null;
+  borough: string | null;
+  saved_at: string;
+  score: number | null;
+  score_band: ScoreBand | null;
+};
+
+export class SavedBuildingsAuthError extends Error {
+  constructor() {
+    super('Authentication required');
+    this.name = 'SavedBuildingsAuthError';
+  }
+}
+
+async function savedBuildingsFetch(path: string, init: RequestInit): Promise<Response> {
+  const auth = await authHeader();
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...auth, ...(init.headers ?? {}) },
+  });
+  if (res.status === 401) throw new SavedBuildingsAuthError();
+  return res;
+}
+
+export async function getSavedBuildingState(
+  bbl: string,
+): Promise<{ saved: boolean; saved_at?: string }> {
+  const res = await savedBuildingsFetch(`/v1/saved-buildings/${bbl}`, { method: 'GET' });
+  return (await res.json()) as { saved: boolean; saved_at?: string };
+}
+
+export async function saveBuilding(
+  bbl: string,
+): Promise<{ saved: true; saved_at: string }> {
+  const res = await savedBuildingsFetch('/v1/saved-buildings', {
+    method: 'POST',
+    body: JSON.stringify({ bbl }),
+  });
+  return (await res.json()) as { saved: true; saved_at: string };
+}
+
+export async function unsaveBuilding(bbl: string): Promise<{ saved: false }> {
+  const res = await savedBuildingsFetch(`/v1/saved-buildings/${bbl}`, { method: 'DELETE' });
+  return (await res.json()) as { saved: false };
+}
+
+export async function listSavedBuildings(): Promise<{
+  items: SavedBuilding[];
+  total_count: number;
+}> {
+  const res = await savedBuildingsFetch('/v1/saved-buildings', { method: 'GET' });
+  return (await res.json()) as { items: SavedBuilding[]; total_count: number };
 }

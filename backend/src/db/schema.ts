@@ -92,7 +92,29 @@ export const buildingLookups = pgTable('building_lookups', {
   aiScoreFactors: jsonb('ai_score_factors'),
   /** Phase 4.5 follow-up: ScrapedListing snapshot so SEO route returns it on cache hits */
   aiScrapedListing: jsonb('ai_scraped_listing'),
+  /** Apartment Value Score — deterministic 0-100 (higher = better deal) */
+  aiValueScore: integer('ai_value_score'),
+  /** Band derived from ai_value_score: great_deal | fair | above_market | overpriced */
+  aiValueBand: text('ai_value_band'),
+  /** Confidence level: high | medium | low */
+  aiValueConfidence: text('ai_value_confidence'),
+  /** ValueScoreFactor[] from src/scoring/value.ts */
+  aiValueFactors: jsonb('ai_value_factors'),
+  /** AI-narrated explanation of the value score */
+  aiValueExplanation: text('ai_value_explanation'),
   aiCostCents: integer('ai_cost_cents').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Per-user "saved buildings" list. ON DELETE CASCADE on user_id ties cleanup
+// to the existing profiles deletion flow. UNIQUE (user_id, bbl) lets us upsert
+// idempotently with ON CONFLICT DO NOTHING. See migration 0016.
+export const savedBuildings = pgTable('saved_buildings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull(),
+  bbl: text('bbl').notNull(),
+  /** Reserved for a future "add a note" UX. Null for v1. */
+  note: text('note'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

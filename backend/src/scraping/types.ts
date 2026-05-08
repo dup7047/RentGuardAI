@@ -63,7 +63,9 @@ export type ScrapeError =
   | 'unsupported_url';   // URL doesn't match any extractor + no JSON-LD/OG fallback
 
 export type ScrapeResult =
-  | { kind: 'ok'; data: ScrapedListing; fetchMethod: 'direct' | 'scrapfly' | 'cache' }
+  // 'scrapfly' is preserved for backwards-compat with rows persisted before the
+  // Firecrawl swap; new writes use 'firecrawl'.
+  | { kind: 'ok'; data: ScrapedListing; fetchMethod: 'direct' | 'scrapfly' | 'firecrawl' | 'cache' }
   | { kind: 'error'; code: ScrapeError; status?: number; message?: string };
 
 /**

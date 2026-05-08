@@ -1,12 +1,16 @@
-// Dashboard — auth-gated. Empty-state design for now (saved-buildings
-// backend ships in a separate phase).
+// Dashboard — auth-gated server component. The saved-buildings list is
+// fetched server-side here so we don't depend on Supabase client-side cookie
+// parsing (which fails on some Safari sessions with "The string did not match
+// the expected pattern"). The child client component handles the optimistic
+// Unsave UX via a server action.
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { createClient } from '@/lib/supabase/server';
 
-import { signOut } from './actions';
+import { loadSavedBuildings, signOut } from './actions';
+import { SavedBuildingsList } from './SavedBuildingsList';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -15,6 +19,12 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    redirect('/login?redirectTo=/dashboard');
+  }
+
+  const initial = await loadSavedBuildings();
+
+  if (initial.kind === 'unauthorized') {
     redirect('/login?redirectTo=/dashboard');
   }
 
@@ -38,27 +48,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="card dashboard-empty">
-        <div className="icn" aria-hidden="true">
-          ★
-        </div>
-        <h2>No saved buildings yet</h2>
-        <p>
-          Run a lookup and tap{' '}
-          <span style={{ color: 'var(--accent)', fontWeight: 600 }}>
-            ★ Save building
-          </span>{' '}
-          on any report — we&apos;ll re-check it every Monday and email you any
-          new violations.
-        </p>
-        <Link
-          href="/"
-          className="btn primary"
-          style={{ marginTop: 8 }}
-        >
-          Run your first lookup →
-        </Link>
-      </div>
+      <SavedBuildingsList initial={initial} />
     </div>
   );
 }

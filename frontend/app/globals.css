@@ -653,13 +653,28 @@ h1.hero em {
 .head-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
 .head-right {
   display: flex;
-  align-items: center;
-  gap: 18px;
+  flex-direction: column;
+  gap: 0;
   padding: 24px;
 }
 .head-right .col { flex: 1; }
 .head-right h3 { margin: 0; font-size: 18px; font-weight: 600; }
 .head-right .sub { font-size: 13px; color: var(--ink-2); margin-top: 4px; line-height: 1.5; }
+
+/* Each score row: gauge + label col side by side */
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.score-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
 
 .tabs {
   display: flex;
@@ -1144,6 +1159,142 @@ h1.hero em {
 .legal-framing strong,
 .legal-footer strong { color: var(--ink-2); }
 
+/* ── Long-form legal documents (terms / privacy / disclaimer) ─ */
+.legal-prose {
+  max-width: 720px;
+  margin: 0 auto;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.legal-prose h1 {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+  color: var(--ink);
+}
+.legal-prose h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  margin: 36px 0 10px;
+  color: var(--ink);
+}
+.legal-prose h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 24px 0 8px;
+  color: var(--ink);
+}
+.legal-prose h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 18px 0 6px;
+  color: var(--ink-2);
+}
+.legal-prose p { margin: 10px 0; color: var(--ink-2); }
+.legal-prose strong { color: var(--ink); font-weight: 600; }
+.legal-prose em { font-style: italic; }
+.legal-prose ul,
+.legal-prose ol {
+  margin: 10px 0 10px 0;
+  padding-left: 22px;
+  color: var(--ink-2);
+}
+.legal-prose li { margin: 4px 0; }
+.legal-prose a { color: var(--accent); text-decoration: none; }
+.legal-prose a:hover { text-decoration: underline; }
+.legal-prose hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 28px 0;
+}
+.legal-prose blockquote {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  margin: 14px 0;
+  padding: 10px 16px;
+  color: var(--ink-2);
+  border-radius: 0 8px 8px 0;
+}
+.legal-prose blockquote p { margin: 6px 0; }
+.legal-prose code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--accent-soft);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--ink);
+}
+.legal-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+.legal-prose th,
+.legal-prose td {
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+.legal-prose th {
+  background: var(--accent-soft);
+  font-weight: 600;
+  color: var(--ink);
+}
+.legal-prose tbody tr:nth-child(even) td { background: oklch(0.985 0.003 240); }
+
+/* ── Site footer (global navigation) ─────────────────────────── */
+.site-footer {
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+  margin-top: 56px;
+  padding: 40px 32px 24px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.site-footer-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+}
+.site-footer-col h4 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.site-footer-col ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.site-footer-col a {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.site-footer-col a:hover { color: var(--ink); text-decoration: underline; }
+.site-footer-base {
+  max-width: 1240px;
+  margin: 28px auto 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 980px) {
   h1.hero { font-size: 42px; }
@@ -1157,4 +1308,9 @@ h1.hero em {
   .container { padding: 0 20px; }
   body[data-density='comfy'] .landing { padding: 60px 0 40px; }
   .lease-cta { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .site-footer-inner { grid-template-columns: 1fr; gap: 24px; }
+  .site-footer-base { flex-direction: column; gap: 6px; align-items: flex-start; }
+  .site-footer { padding: 32px 20px 20px; }
+  .legal-prose h1 { font-size: 26px; }
+  .legal-prose h2 { font-size: 19px; }
 }

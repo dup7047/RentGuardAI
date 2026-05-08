@@ -44,6 +44,7 @@ export class CostCapExceededError extends Error {
 export type SummaryIndicator = { key: string; value: string; source_url: string };
 export type SummaryQuestion = string;
 export type SummaryListingNote = { snippet: string; note: string };
+export type SummaryAtRiskApartment = { apt: string; summary: string };
 
 export type SummaryResult = {
   /** Phase 4.5: 2-3 sentence narrative of what the listing offers. May be empty for address-only lookups. */
@@ -52,6 +53,8 @@ export type SummaryResult = {
   summary: string;
   /** Phase 4.5: AI-narrated explanation of the deterministic score. */
   score_explanation: string;
+  /** Per-unit callouts derived from HPD violations, evictions, and lead-paint data. Empty when no per-apt data was supplied. */
+  at_risk_apartments: SummaryAtRiskApartment[];
   indicators: SummaryIndicator[];
   /** Specific factual questions the renter should ask. Always non-empty (3–5). */
   questions_to_ask: SummaryQuestion[];
@@ -98,6 +101,7 @@ export async function generateSummary(
     listing_summary?: string;
     summary?: string;
     score_explanation?: string;
+    at_risk_apartments?: unknown[];
     indicators?: unknown[];
     questions_to_ask?: unknown[];
     listing_notes?: unknown[];
@@ -122,6 +126,16 @@ export async function generateSummary(
   // glitches shouldn't break the whole lookup.
   const questions_to_ask: SummaryQuestion[] = Array.isArray(parsed.questions_to_ask)
     ? parsed.questions_to_ask.filter((q): q is string => typeof q === 'string' && q.length > 0)
+    : [];
+
+  const at_risk_apartments: SummaryAtRiskApartment[] = Array.isArray(parsed.at_risk_apartments)
+    ? parsed.at_risk_apartments.filter(
+        (a): a is SummaryAtRiskApartment =>
+          !!a &&
+          typeof a === 'object' &&
+          typeof (a as { apt?: unknown }).apt === 'string' &&
+          typeof (a as { summary?: unknown }).summary === 'string',
+      )
     : [];
 
   const listing_notes: SummaryListingNote[] = Array.isArray(parsed.listing_notes)
@@ -168,6 +182,7 @@ export async function generateSummary(
     listing_summary,
     summary: parsed.summary,
     score_explanation,
+    at_risk_apartments,
     indicators: parsed.indicators as SummaryIndicator[],
     questions_to_ask,
     listing_notes: verifiedListingNotes,

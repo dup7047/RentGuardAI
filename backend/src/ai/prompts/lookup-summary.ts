@@ -10,14 +10,15 @@
 // user prompt built by buildUserPrompt below.
 //
 // Output shape (validated in summary.ts):
-//   listing_summary    — 2-3 sentence narrative of what the listing offers (Phase 4.5)
-//   summary            — ≤180-word factual summary of building records, with explicit
-//                         per-dataset coverage of HPD violations, DOB complaints, marshal
-//                         evictions, and Worst Landlord Watchlist rank in plain English
-//   score_explanation  — 1-3 sentences narrating the deterministic score (Phase 4.5)
-//   indicators         — 3-6 cited counts with source_url
-//   questions_to_ask   — 3-5 concrete factual questions tied to the records
-//   listing_notes      — neutral observations on listing copy (only when provided)
+//   listing_summary      — 2-3 sentence narrative of what the listing offers (Phase 4.5)
+//   summary              — ≤180-word factual summary of building records, with explicit
+//                           per-dataset coverage of HPD violations, DOB complaints, marshal
+//                           evictions, and Worst Landlord Watchlist rank in plain English
+//   score_explanation    — 1-3 sentences narrating the deterministic score (Phase 4.5)
+//   at_risk_apartments   — 0-5 per-unit callouts when per-apt data is provided (empty [] otherwise)
+//   indicators           — 3-6 cited counts with source_url
+//   questions_to_ask     — 3-5 concrete factual questions tied to the records
+//   listing_notes        — neutral observations on listing copy (only when provided)
 //
 // Phase 4.5: a deterministic 0-100 score is computed in code (NOT by the AI)
 // and handed to the AI as input. The AI's job is to NARRATE the score in
@@ -30,7 +31,7 @@
 
 export const SYSTEM_PROMPT = `You are RentGuard, an information assistant for NYC renters.
 
-Generate six sections from the public records, (when provided) the listing copy, and the deterministic risk score handed to you. Keep all output strictly factual. RentGuard is not a law firm and does not make legal determinations.
+Generate seven sections from the public records, (when provided) the listing copy, and the deterministic risk score handed to you. Keep all output strictly factual. RentGuard is not a law firm and does not make legal determinations.
 
 ═══════════════════════════════════════════════════════════════
 GLOBAL RULES (apply to every section)
@@ -61,7 +62,16 @@ SECTION RULES
   4. NYC Public Advocate Worst Landlord Watchlist rank — an annual ranking of the city's worst-rated landlords (rank 1 is the worst, ~100 landlords are listed each year). If the registered owner is on the list, STATE THE RANK as a fact and explain that being ranked means the Public Advocate has flagged this owner as one of the city's worst-rated landlords for the year. If not on the list, say so explicitly ("the registered owner is not on the current Worst Landlord Watchlist").
 - Mention the registered owner only by literal name.
 - Stay factual — describe what the counts represent and what they signal in plain English, but do NOT invent thresholds the records don't support and do NOT use slur-style verdicts (slumlord, predatory, etc.).
+- If the per-apartment records show that issues cluster around specific units, you may note that briefly here (e.g. "Issues appear concentrated in a few units — see the at-risk-apartments breakdown below."). Per-apartment detail belongs in [at_risk_apartments], not in [summary].
 - Must end with this exact sentence: "Always check the cited records yourself before relying on anything in this summary."
+
+[at_risk_apartments]
+- When a "Per-apartment issue records:" block is present in the input: output an array of up to 5 apartments, most-concerning first.
+- Each entry: { "apt": "<verbatim apartment label from the input>", "summary": "<1–2 sentences on the most recent and serious issues for this unit>" }
+- Prioritize recent and open issues, Class B and C HPD violations, water leaks, mold, heat/hot-water failures, fire safety, gas, smoke/CO detectors, and egress concerns.
+- Use hedged language: "suggests", "appears", "should be verified before signing". Do not state conclusions as facts.
+- Skip apartments whose only records are older than 2 years and do not involve safety-related categories (heat, gas, fire, egress, lead).
+- When NO "Per-apartment issue records:" block was provided in the input, output [].
 
 [score_explanation]
 - 1-3 sentences narrating the score handed to you.
@@ -102,6 +112,9 @@ Output strict JSON only — no prose before or after:
   "listing_summary": "<2-3 sentences on what the listing offers>",
   "summary": "<≤180 words covering HPD violations, DOB complaints, marshal evictions, and Worst Landlord Watchlist rank in plain English, ending with the required closing sentence>",
   "score_explanation": "<1-3 sentences narrating the score with band + top factors>",
+  "at_risk_apartments": [
+    { "apt": "<verbatim apt label>", "summary": "<1-2 sentences on this unit's most serious issues>" }
+  ],
   "indicators": [
     { "key": "<short label>", "value": "<literal count or fact>", "source_url": "<NYC Open Data URL>" }
   ],
@@ -114,6 +127,8 @@ Output strict JSON only — no prose before or after:
     { "snippet": "<verbatim phrase from listing>", "note": "<factual observation>" }
   ]
 }`;
+
+import type { ApartmentRisk } from '../../routes/apartment-risks.js';
 
 export type FareFlag = 'no_indicators' | 'possible_violation' | 'unclear';
 
@@ -180,6 +195,12 @@ export type BuildingPayload = {
     band: 'minimal' | 'moderate' | 'elevated' | 'high';
     factors: Array<{ key: string; label: string; impact: number; reason: string }>;
   } | null;
+  /**
+   * Per-apartment risk data derived from HPD violations, evictions, and lead-
+   * paint violations. Used to populate the [at_risk_apartments] section. When
+   * empty or omitted the AI outputs [] for that section.
+   */
+  apartmentRisks?: ApartmentRisk[] | null;
 };
 
 const LISTING_TEXT_MAX_CHARS = 4000;
@@ -223,11 +244,30 @@ function formatScore(s: NonNullable<BuildingPayload['score']>): string {
   return lines.join('\n');
 }
 
+function formatApartmentRisks(risks: ApartmentRisk[]): string {
+  const lines: string[] = ['Per-apartment issue records (for at_risk_apartments section):'];
+  for (const r of risks) {
+    for (const i of r.issues) {
+      const parts: string[] = [i.source];
+      if (i.cls) parts.push(i.cls);
+      if (i.status && i.status !== 'CLOSE') parts.push('open');
+      if (i.date) parts.push(i.date.slice(0, 10));
+      if (i.description) parts.push(`"${i.description}"`);
+      lines.push(`- Apt ${r.apt}: ${parts.join(' ')}`);
+    }
+  }
+  return lines.join('\n');
+}
+
 export function buildUserPrompt(p: BuildingPayload): string {
   const listingFactsBlock = p.scrapedListing
     ? `\n\n${formatListingFacts(p.scrapedListing)}`
     : '';
   const scoreBlock = p.score ? `\n\n${formatScore(p.score)}` : '';
+  const aptBlock =
+    p.apartmentRisks && p.apartmentRisks.length > 0
+      ? `\n\n${formatApartmentRisks(p.apartmentRisks)}`
+      : '';
 
   const listingBlock =
     p.listingText && p.listingText.trim().length > 0
@@ -255,7 +295,7 @@ Public records (last 24h cache):
 - Bedbug reports filed: ${p.bedbugReports}
 - Lead paint inspection findings: ${p.leadFlags}
 - HPD registered owner: ${p.registeredOwner ?? 'not registered'}
-- NYC Public Advocate Worst Landlord Watchlist rank: ${p.watchlistRank ?? 'not on list'}${fareLine}${listingFactsBlock}${scoreBlock}
+- NYC Public Advocate Worst Landlord Watchlist rank: ${p.watchlistRank ?? 'not on list'}${fareLine}${listingFactsBlock}${scoreBlock}${aptBlock}
 
 Source URLs to cite (use these exact URLs in indicator source_url):
 - https://data.cityofnewyork.us/Housing-Development/Housing-Maintenance-Code-Violations/wvxf-dwi5
@@ -263,5 +303,5 @@ Source URLs to cite (use these exact URLs in indicator source_url):
 - https://data.cityofnewyork.us/City-Government/Marshal-Evictions/6z8x-wfk4
 - https://advocate.nyc.gov/landlord-watchlist/${listingBlock}
 
-Generate all four sections per the rules above. Output JSON only. Remember: never characterize the rent as fair/high/low/etc.`;
+Generate all seven sections per the rules above. Output JSON only. Remember: never characterize the rent as fair/high/low/etc.`;
 }

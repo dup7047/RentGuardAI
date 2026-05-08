@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildUserPrompt, type BuildingPayload } from '../../src/ai/prompts/lookup-summary.js';
+import { buildUserPrompt, SYSTEM_PROMPT, type BuildingPayload } from '../../src/ai/prompts/lookup-summary.js';
 
 const BASE: BuildingPayload = {
   bbl: '1008350041',
@@ -165,5 +165,60 @@ describe('buildUserPrompt', () => {
   it('reminder line about NEVER characterizing rent appears in user prompt', () => {
     const prompt = buildUserPrompt(BASE);
     expect(prompt).toMatch(/never\s+characterize\s+the\s+rent/i);
+  });
+
+  it('omits per-apartment block when apartmentRisks is empty', () => {
+    const prompt = buildUserPrompt({ ...BASE, apartmentRisks: [] });
+    expect(prompt).not.toContain('Per-apartment issue records');
+  });
+
+  it('omits per-apartment block when apartmentRisks is null/undefined', () => {
+    const prompt = buildUserPrompt({ ...BASE, apartmentRisks: null });
+    expect(prompt).not.toContain('Per-apartment issue records');
+    const prompt2 = buildUserPrompt(BASE);
+    expect(prompt2).not.toContain('Per-apartment issue records');
+  });
+
+  it('includes per-apartment block when apartmentRisks is non-empty', () => {
+    const prompt = buildUserPrompt({
+      ...BASE,
+      apartmentRisks: [
+        {
+          apt: '2L',
+          issues: [
+            { source: 'hpd', cls: 'B', status: 'Open', date: '2026-04-27T00:00:00.000Z', description: 'LEAK FROM ABOVE' },
+            { source: 'hpd', cls: 'B', status: 'CLOSE', date: '2024-01-01T00:00:00.000Z', description: 'OLD ISSUE' },
+          ],
+        },
+        {
+          apt: '1L',
+          issues: [
+            { source: 'eviction', date: '2025-03-01T00:00:00.000Z', description: 'HOLDOVER' },
+          ],
+        },
+      ],
+    });
+    expect(prompt).toContain('Per-apartment issue records');
+    expect(prompt).toContain('Apt 2L:');
+    expect(prompt).toContain('Apt 1L:');
+    expect(prompt).toContain('LEAK FROM ABOVE');
+    // open status is included in output
+    expect(prompt).toContain('open');
+    // CLOSE status is NOT emitted as "open"
+    const lines = prompt.split('\n');
+    const closedLine = lines.find((l) => l.includes('OLD ISSUE'));
+    expect(closedLine).not.toContain('open');
+  });
+
+  it('SYSTEM_PROMPT is static (contains no per-request data)', () => {
+    // System prompt must not reference any specific BBL, address, or stats
+    expect(SYSTEM_PROMPT).not.toMatch(/\b\d{10}\b/); // no 10-digit BBL
+    expect(SYSTEM_PROMPT).not.toContain('HPD violations: ');
+    expect(SYSTEM_PROMPT).not.toContain('Public records (last');
+  });
+
+  it('system prompt includes at_risk_apartments section rules', () => {
+    expect(SYSTEM_PROMPT).toContain('[at_risk_apartments]');
+    expect(SYSTEM_PROMPT).toContain('"apt"');
   });
 });

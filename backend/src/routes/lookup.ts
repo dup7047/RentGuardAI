@@ -28,6 +28,7 @@ import { getLeadPaintViolations } from '../data/datasets/lead-paint.js';
 import { getHpdRegistrations } from '../data/datasets/hpd-registrations.js';
 import { getCachedBatch } from '../data/cache.js';
 import { getDb } from '../db/client.js';
+import { buildApartmentRisks } from './apartment-risks.js';
 import { buildingLookups, buildings, nonNycWaitlist } from '../db/schema.js';
 import { and, desc, eq, gt, isNotNull, isNull, sql as drizzleSql } from 'drizzle-orm';
 import { LIMITS, countAnonLookups, countEmailLookups, incrementEmailCounter } from '../lib/counters.js';
@@ -567,6 +568,9 @@ export async function runLookup(
     'lookup phase completed',
   );
 
+  // ── 6c-i. Per-apartment risk aggregation ─────────────────────────────────────
+  const apartmentRisks = buildApartmentRisks({ hpd: hpdV, evic, lead });
+
   // ── 6c. Progressive payload — score + stats are ready before AI starts ─────
   // Streaming clients can render the Overview tab here while OpenAI runs.
   const stats = {
@@ -625,6 +629,7 @@ export async function runLookup(
           scrapedListing: scrapedListing,
           // Phase 4.5: deterministic score handed in for narration
           score,
+          apartmentRisks,
         },
         subject,
       ),

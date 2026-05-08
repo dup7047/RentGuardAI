@@ -335,7 +335,7 @@ describe('generateSummary', () => {
     expect(result.listing_notes).toEqual([]);
   });
 
-  it('forward-compat: legacy AI response (no new fields) → questions/notes default to []', async () => {
+  it('forward-compat: legacy AI response (no new fields) → questions/notes/at_risk default to []', async () => {
     // Cached/older responses that only return summary+indicators must not crash
     vi.spyOn(global, 'fetch').mockImplementation(async () =>
       new Response(
@@ -359,5 +359,66 @@ describe('generateSummary', () => {
     expect(result.summary).toContain('Old-shape');
     expect(result.questions_to_ask).toEqual([]);
     expect(result.listing_notes).toEqual([]);
+    expect(result.at_risk_apartments).toEqual([]);
+  });
+
+  it('parses at_risk_apartments when AI provides well-formed entries', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary: 'Building has issues. Always check the cited records yourself before relying on anything in this summary.',
+                  indicators: [{ key: 'HPD', value: '5', source_url: 'https://x' }],
+                  at_risk_apartments: [
+                    { apt: '2L', summary: 'Most concerning. Recent open leak and plaster violations suggest unresolved water damage.' },
+                    { apt: '1L', summary: 'Hot-water issues appear in recent HPD records and should be verified.' },
+                  ],
+                }),
+              },
+            },
+          ],
+          usage: { prompt_tokens: 500, completion_tokens: 200 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const result = await generateSummary(BASE_PAYLOAD, SUBJECT);
+    expect(result.at_risk_apartments).toHaveLength(2);
+    expect(result.at_risk_apartments[0]?.apt).toBe('2L');
+    expect(result.at_risk_apartments[1]?.apt).toBe('1L');
+  });
+
+  it('filters out malformed at_risk_apartments entries (missing apt or summary)', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary: 'Summary. Always check the cited records yourself before relying on anything in this summary.',
+                  indicators: [{ key: 'k', value: 'v', source_url: 'https://x' }],
+                  at_risk_apartments: [
+                    { apt: '3A', summary: 'Valid entry — recent open B violations.' },
+                    { apt: '4B' }, // missing summary → filtered out
+                    { summary: 'No apt label' }, // missing apt → filtered out
+                    null, // null → filtered out
+                    42, // wrong type → filtered out
+                  ],
+                }),
+              },
+            },
+          ],
+          usage: { prompt_tokens: 100, completion_tokens: 50 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const result = await generateSummary(BASE_PAYLOAD, SUBJECT);
+    expect(result.at_risk_apartments).toHaveLength(1);
+    expect(result.at_risk_apartments[0]?.apt).toBe('3A');
   });
 });

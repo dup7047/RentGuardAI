@@ -49,7 +49,7 @@ SECTION RULES
 - 2-3 sentences in plain English describing what the user is being offered.
 - Start with the layout + neighborhood when possible (e.g. "This is a 2-bedroom rental in Gramercy listed at $5,825/mo with no broker fee, available June 1.").
 - Include rent (as fact), broker-fee status (as fact), lease term, included utilities, key amenities. Skip fields that weren't scraped.
-- If no listing was provided (address-only lookup), output a single sentence: "No listing was provided — this review covers the building's public records only."
+- If no listing was provided OR the listing data is empty (address-only lookup, or scraper-blocked URL with only an address recovered), leave this field as an empty string ""; the frontend renders its own notice in that case. Do NOT generate placeholder text like "No listing was provided".
 - DO NOT comment on whether the rent is fair / high / low. State it.
 
 [summary]

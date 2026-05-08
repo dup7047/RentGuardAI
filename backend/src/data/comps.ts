@@ -9,8 +9,7 @@
 // Returns null when we cannot produce a defensible comp (missing beds, no data).
 // The value scorer treats null as "low confidence" and suppresses the gauge.
 
-import { getDb } from '../db/client.js';
-import { sql } from 'drizzle-orm';
+import { getPool } from '../db/client.js';
 import type { Borough } from './types.js';
 
 export type CompResult = {
@@ -28,29 +27,23 @@ export type CompResult = {
 // Figures represent approximate median asking rents in each borough × bedroom.
 //
 // Layout: BEDROOMS[0]=studio, [1]=1BR, [2]=2BR, [3]=3BR, [4]=4BR+
-const BASELINE_CENTS: Record<Borough, number[]> = {
-  MANHATTAN:     [285000, 420000, 600000, 800000, 1000000],
-  BROOKLYN:      [235000, 320000, 440000, 590000, 780000],
-  QUEENS:        [200000, 270000, 370000, 490000, 640000],
-  BRONX:         [165000, 220000, 300000, 400000, 520000],
+const BASELINE_CENTS: Record<Borough, [number, number, number, number, number]> = {
+  MANHATTAN:       [285000, 420000, 600000, 800000, 1000000],
+  BROOKLYN:        [235000, 320000, 440000, 590000, 780000],
+  QUEENS:          [200000, 270000, 370000, 490000, 640000],
+  BRONX:           [165000, 220000, 300000, 400000, 520000],
   'STATEN ISLAND': [155000, 210000, 285000, 380000, 500000],
 };
 
-function getBaselineIndex(bedrooms: number): number {
-  return Math.max(0, Math.min(4, bedrooms));
-}
-
 function baselineForBoroughBeds(borough: Borough, bedrooms: number): number {
-  return BASELINE_CENTS[borough][getBaselineIndex(bedrooms)];
+  const idx = Math.max(0, Math.min(4, bedrooms)) as 0 | 1 | 2 | 3 | 4;
+  return BASELINE_CENTS[borough][idx];
 }
 
 // ── Scraped-listings refinement ──────────────────────────────────────────────
-// Pulls recent ai_scraped_listing snapshots from building_lookups. These are
-// ScrapedListing JSON blobs snapshotted at lookup time (Phase 4.5 follow-up).
-// We filter to the same borough + bedroom count from the last 90 days.
-//
-// Drizzle doesn't have a native median aggregate; we use raw SQL via drizzle's
-// sql template tag so we stay in the existing query infrastructure.
+// Pulls recent ai_scraped_listing snapshots from building_lookups joined to
+// buildings for borough filtering. Uses getPool().query() following the
+// existing codebase pattern (cache.ts, server.ts).
 
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
 const BLEND_THRESHOLD_SCRAPED_ONLY = 20;
@@ -67,36 +60,35 @@ async function fetchScrapedComps(
   bedrooms: number,
 ): Promise<ScrapedSnapshot[]> {
   const cutoff = new Date(Date.now() - NINETY_DAYS_MS);
-  // ai_scraped_listing is JSONB; cast and filter at the DB level.
-  // We check the borough from the building_lookups row itself is not available
-  // directly, so we rely on the ai_scraped_listing->>'address' matching the
-  // borough. The borough isn't stored in the snapshot, so we join buildings.
-  // This is an approximation: join building_lookups → buildings on building_bbl.
-  const rows = await getDb().execute(sql`
-    SELECT
-      (bl.ai_scraped_listing->>'monthlyRentCents')::int AS "monthlyRentCents",
-      (bl.ai_scraped_listing->>'squareFeet')::int        AS "squareFeet",
-      (bl.ai_scraped_listing->>'bedrooms')::int          AS bedrooms
-    FROM building_lookups bl
-    JOIN buildings b ON b.bbl = bl.building_bbl
-    WHERE
-      bl.ai_scraped_listing IS NOT NULL
-      AND bl.ai_scraped_listing->>'monthlyRentCents' IS NOT NULL
-      AND (bl.ai_scraped_listing->>'bedrooms')::int = ${bedrooms}
-      AND b.borough = ${borough}
-      AND bl.created_at > ${cutoff}
-    LIMIT 200
-  `);
-  return rows.rows as ScrapedSnapshot[];
+  const res = await getPool().query<ScrapedSnapshot>(
+    `SELECT
+       (bl.ai_scraped_listing->>'monthlyRentCents')::int AS "monthlyRentCents",
+       (bl.ai_scraped_listing->>'squareFeet')::int        AS "squareFeet",
+       (bl.ai_scraped_listing->>'bedrooms')::int          AS bedrooms
+     FROM building_lookups bl
+     JOIN buildings b ON b.bbl = bl.building_bbl
+     WHERE
+       bl.ai_scraped_listing IS NOT NULL
+       AND bl.ai_scraped_listing->>'monthlyRentCents' IS NOT NULL
+       AND (bl.ai_scraped_listing->>'bedrooms')::int = $1
+       AND b.borough = $2
+       AND bl.created_at > $3
+     LIMIT 200`,
+    [bedrooms, borough, cutoff],
+  );
+  return res.rows;
 }
 
 function median(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
-    : sorted[mid];
+  if (sorted.length % 2 === 0) {
+    const lo = sorted[mid - 1] ?? 0;
+    const hi = sorted[mid] ?? 0;
+    return Math.round((lo + hi) / 2);
+  }
+  return sorted[mid] ?? 0;
 }
 
 /**
@@ -140,7 +132,6 @@ export async function getComps(
 
   if (rentSamples.length >= BLEND_THRESHOLD_MIX) {
     const scrapedMedian = median(rentSamples);
-    // Weighted 75% scraped, 25% baseline for blended mode
     const blended = Math.round(scrapedMedian * 0.75 + baseline * 0.25);
     const medianPerSqft = sqftSamples.length >= 3 ? median(sqftSamples.map(Math.round)) : null;
     return {
@@ -153,7 +144,6 @@ export async function getComps(
     };
   }
 
-  // Pure baseline fallback
   return {
     medianRentCents: baseline,
     medianRentPerSqftCents: null,

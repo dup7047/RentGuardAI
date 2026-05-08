@@ -28,6 +28,7 @@ const FIXTURE: SuccessData = {
   indicators: [],
   questions_to_ask: [],
   listing_notes: [],
+  at_risk_apartments: [],
   scraped_listing: null,
   landlord: {
     registered_owner_name: 'TEST OWNER LLC',

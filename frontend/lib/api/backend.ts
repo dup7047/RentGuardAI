@@ -135,6 +135,11 @@ export type LookupResponse =
        */
       listing_notes: Array<{ snippet: string; note: string }>;
       /**
+       * Per-unit callouts derived from HPD violations, evictions, and lead-
+       * paint data. Empty when no per-apartment data is available.
+       */
+      at_risk_apartments: Array<{ apt: string; summary: string }>;
+      /**
        * Phase 4: structured data scraped from the listing URL the user
        * pasted. Null when the user pasted only an address.
        */

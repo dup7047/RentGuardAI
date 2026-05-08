@@ -74,6 +74,7 @@ beforeEach(() => {
     indicators: [],
     questions_to_ask: [],
     listing_notes: [],
+    at_risk_apartments: [],
     scraped_listing: null,
     landlord: {},
     fare_check: null,

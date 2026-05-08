@@ -138,6 +138,7 @@ beforeEach(() => {
     summary: 'Fresh AI summary.',
     listing_summary: null,
     score_explanation: null,
+    at_risk_apartments: [],
     indicators: [],
     questions_to_ask: [],
     listing_notes: [],
@@ -183,6 +184,7 @@ function makeCachedRow(overrides: Record<string, unknown> = {}): Record<string, 
     score: 92,
     scoreBand: 'minimal',
     scoreFactors: [{ key: 'hpd', label: 'No open HPD', impact: 0, reason: 'clean' }],
+    atRiskApartments: null,
     ...overrides,
   };
 }

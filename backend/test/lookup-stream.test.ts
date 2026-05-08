@@ -95,6 +95,7 @@ vi.mock('../src/ai/summary.js', () => ({
     summary: 'A neutral summary.',
     listing_summary: null,
     score_explanation: null,
+    at_risk_apartments: [],
     indicators: [],
     questions_to_ask: [],
     listing_notes: [],

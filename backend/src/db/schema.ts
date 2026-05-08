@@ -92,6 +92,8 @@ export const buildingLookups = pgTable('building_lookups', {
   aiScoreFactors: jsonb('ai_score_factors'),
   /** Phase 4.5 follow-up: ScrapedListing snapshot so SEO route returns it on cache hits */
   aiScrapedListing: jsonb('ai_scraped_listing'),
+  /** SummaryAtRiskApartment[] — per-unit callouts from HPD/eviction/lead data */
+  aiAtRiskApartments: jsonb('ai_at_risk_apartments'),
   aiCostCents: integer('ai_cost_cents').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });

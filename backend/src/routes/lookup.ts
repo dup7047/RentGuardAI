@@ -126,6 +126,7 @@ type CachedRow = {
   score: number;
   scoreBand: string;
   scoreFactors: unknown;
+  atRiskApartments: unknown;
 };
 
 /**
@@ -149,6 +150,7 @@ async function findRecentLookup(bbl: string): Promise<CachedRow | null> {
       score: buildingLookups.aiScore,
       scoreBand: buildingLookups.aiScoreBand,
       scoreFactors: buildingLookups.aiScoreFactors,
+      atRiskApartments: buildingLookups.aiAtRiskApartments,
     })
     .from(buildingLookups)
     .where(
@@ -177,6 +179,7 @@ async function findRecentLookup(bbl: string): Promise<CachedRow | null> {
     score: row.score,
     scoreBand: row.scoreBand,
     scoreFactors: row.scoreFactors,
+    atRiskApartments: row.atRiskApartments,
   };
 }
 
@@ -486,6 +489,7 @@ export async function runLookup(
           aiScore: cached.score,
           aiScoreBand: cached.scoreBand,
           aiScoreFactors: cached.scoreFactors,
+          aiAtRiskApartments: cached.atRiskApartments ?? null,
           // Address-only request had no scrape — record the lack of one so a
           // subsequent address-only lookup can still cache-hit on this row.
           aiScrapedListing: null,
@@ -669,6 +673,7 @@ export async function runLookup(
         // return it on cache hits (the scraped_listings table is keyed by URL,
         // not BBL, so we can't join cleanly — denormalize instead).
         aiScrapedListing: scrapedListing,
+        aiAtRiskApartments: (summary.at_risk_apartments?.length ?? 0) > 0 ? summary.at_risk_apartments : null,
         aiCostCents: summary.cost_cents,
       })
       .returning({ id: buildingLookups.id }),

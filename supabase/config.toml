@@ -178,9 +178,9 @@ additional_redirect_urls = [
   "https://www.rentguard.cc/auth/callback/**",
   "https://rentguard.cc/auth/confirm",
   "https://www.rentguard.cc/auth/confirm",
-  "https://*.vercel.app/auth/callback",
-  "https://*.vercel.app/auth/callback/**",
-  "https://*.vercel.app/auth/confirm",
+  "https://rent-guard-ai-*.vercel.app/auth/callback",
+  "https://rent-guard-ai-*.vercel.app/auth/callback/**",
+  "https://rent-guard-ai-*.vercel.app/auth/confirm",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
@@ -200,7 +200,10 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+# Set to 12 per NIST SP 800-63B §5.1.1.2. Latent — passwords aren't used today
+# (magic-link only), but defensively configured so a future password-auth path
+# would meet the floor.
+minimum_password_length = 12
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
@@ -298,11 +301,11 @@ max_frequency = "5s"
 # 4152127777 = "123456"
 
 # Configure logged in session timeouts.
-# [auth.sessions]
+[auth.sessions]
 # Force log out after the specified duration.
-# timebox = "24h"
+timebox = "24h"
 # Force log out if the user has been inactive longer than the specified duration.
-# inactivity_timeout = "8h"
+inactivity_timeout = "8h"
 
 # This hook runs before a new user is created and allows developers to reject the request based on the incoming user object.
 # [auth.hook.before_user_created]

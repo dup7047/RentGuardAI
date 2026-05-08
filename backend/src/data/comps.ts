@@ -28,7 +28,7 @@ export type CompResult = {
 // Figures represent approximate median asking rents in each borough × bedroom.
 //
 // Layout: BEDROOMS[0]=studio, [1]=1BR, [2]=2BR, [3]=3BR, [4]=4BR+
-const BASELINE_CENTS: Record<Borough, number[]> = {
+const BASELINE_CENTS: Record<Borough, [number, number, number, number, number]> = {
   MANHATTAN:     [285000, 420000, 600000, 800000, 1000000],
   BROOKLYN:      [235000, 320000, 440000, 590000, 780000],
   QUEENS:        [200000, 270000, 370000, 490000, 640000],
@@ -41,7 +41,7 @@ function getBaselineIndex(bedrooms: number): number {
 }
 
 function baselineForBoroughBeds(borough: Borough, bedrooms: number): number {
-  return BASELINE_CENTS[borough][getBaselineIndex(bedrooms)];
+  return BASELINE_CENTS[borough][getBaselineIndex(bedrooms)] ?? 0;
 }
 
 // ── Scraped-listings refinement ──────────────────────────────────────────────
@@ -95,8 +95,8 @@ function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 0
-    ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
-    : sorted[mid];
+    ? Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2)
+    : (sorted[mid] ?? 0);
 }
 
 /**

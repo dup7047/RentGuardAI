@@ -18,12 +18,12 @@ const STEPS = [
   {
     n: '2',
     t: 'Pull live records from NYC.gov',
-    d: 'We query nine NYC Open Data sources for that BBL: HPD violations, multiple-dwelling registrations, DOB complaints, 311 housing complaints, marshal evictions, the bedbug registry, lead-paint history, and the Public Advocate Worst Landlord Watchlist.',
+    d: 'We query nine NYC Open Data sources for that BBL: HPD violations, HPD complaints, HPD multiple-dwelling registrations, DOB complaints, 311 housing complaints, marshal evictions, the bedbug registry, lead-paint history, and the Public Advocate Worst Landlord Watchlist.',
   },
   {
     n: '3',
     t: 'Run a structured AI summary',
-    d: 'A small, audited model (gpt-4o-mini) writes a ~150-word plain-English summary that walks you through what each public-records dataset means for this building — HPD violations (open vs. closed), DOB complaints, marshal evictions, and the building owner\'s Worst Landlord Watchlist rank. It must cite raw counts ("47 open HPD violations") and never characterizes the building, owner, or manager beyond what the records literally say.',
+    d: 'A small, audited model (gpt-4o-mini) writes a renter-facing risk briefing in plain English. It opens with a short pattern lede naming the themes recurring across HPD violations, HPD complaints, DOB complaints, and 311 housing complaints (water leaks, mold, heat/hot water, plaster damage, fire safety, etc.), then lists the specific apartments that show up across multiple records. Counts ("12 open HPD violations") are cited from the raw data; the model never characterizes the building, owner, or manager beyond what the records literally say.',
   },
   {
     n: '4',

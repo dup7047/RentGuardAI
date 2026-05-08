@@ -823,7 +823,7 @@ h1.hero em {
   font-weight: 600;
   margin-bottom: 8px;
 }
-.ai-block p { margin: 0; font-size: 14.5px; line-height: 1.65; color: var(--ink); position: relative; z-index: 1; }
+.ai-block p { margin: 0; font-size: 14.5px; line-height: 1.65; color: var(--ink); position: relative; z-index: 1; white-space: pre-line; }
 .ai-block p + p { margin-top: 8px; }
 .ai-block .closer {
   display: block;

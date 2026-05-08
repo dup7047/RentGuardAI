@@ -9,15 +9,15 @@ import { ENDPOINTS, checkEndpoint, type Endpoint } from "../scripts/verify-data-
 
 describe("data-source endpoint inventory", () => {
   it("has every dataset listed in the Phase 0.3 roadmap", () => {
-    // Sanity check: 8 datasets per the roadmap (HPD Violations, HPD
-    // Registrations, HPD Registration Contacts, DOB Complaints, 311 Housing
-    // Complaints, NYC Marshal Evictions, Bedbug Registry, Lead Paint History).
-    expect(ENDPOINTS).toHaveLength(8);
+    // Sanity check: 9 datasets (8 from Phase 0.3 + HPD Complaints added later
+    // to power unit-level complaint callouts in the AI summary).
+    expect(ENDPOINTS).toHaveLength(9);
     const ids = ENDPOINTS.map((e) => e.resourceId);
     expect(ids).toContain("wvxf-dwi5"); // HPD Violations
     expect(ids).toContain("tesw-yqqr"); // HPD Multiple Dwelling Registrations
     expect(ids).toContain("feu5-w2e2"); // HPD Registration Contacts
     expect(ids).toContain("eabe-havv"); // DOB Complaints
+    expect(ids).toContain("uwyv-629c"); // HPD Complaints
     expect(ids).toContain("erm2-nwe9"); // 311 Service Requests
     expect(ids).toContain("6z8x-wfk4"); // Marshal Evictions
     expect(ids).toContain("wz6d-d3jb"); // Bedbug Reporting

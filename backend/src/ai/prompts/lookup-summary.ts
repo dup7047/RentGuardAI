@@ -11,9 +11,10 @@
 //
 // Output shape (validated in summary.ts):
 //   listing_summary    — 2-3 sentence narrative of what the listing offers (Phase 4.5)
-//   summary            — ≤180-word factual summary of building records, with explicit
-//                         per-dataset coverage of HPD violations, DOB complaints, marshal
-//                         evictions, and Worst Landlord Watchlist rank in plain English
+//   summary            — ≤220-word renter-facing risk briefing: 1-2 sentence pattern lede,
+//                         then "At-risk apartments:" + 2-5 unit bullets, optional watchlist
+//                         sentence, closing disclaimer. Newlines and "- " bullets are
+//                         literal — frontend renders with white-space: pre-line.
 //   score_explanation  — 1-3 sentences narrating the deterministic score (Phase 4.5)
 //   indicators         — 3-6 cited counts with source_url
 //   questions_to_ask   — 3-5 concrete factual questions tied to the records
@@ -54,15 +55,25 @@ SECTION RULES
 - DO NOT comment on whether the rent is fair / high / low. State it.
 
 [summary]
-- Plain-English ≤180 words covering the BUILDING records. The renter is reading this to understand what's in the public record for this building, so SUMMARIZE THE RESULTS for each dataset — do not just rattle off raw counts. Tell them what each data source is and what this building's count means in plain language.
-- MUST explicitly cover ALL FOUR of these datasets, in order, even when the count is zero:
-  1. HPD violations — the city's housing-maintenance code citations (heat/hot-water failures, leaks, mold, vermin, lead paint, peeling paint, broken windows, etc.). Cite both the OPEN and CLOSED counts and briefly characterize what the open count represents (0 open means no active code violations; dozens of open violations means unresolved maintenance issues the landlord has not corrected).
-  2. DOB complaints — Department of Buildings complaints filed in the last 12 months (illegal construction, unsafe conditions, work without a permit). Cite the count and briefly say what level of recent construction/safety activity it represents (0 means no recent DOB activity; a high count means the building has drawn repeated DOB attention).
-  3. Marshal evictions — executed residential evictions logged at this BBL by city marshals. Cite the count and briefly note what the count signals about the landlord's enforcement history (0 is the norm for stable buildings; multiple executed evictions is uncommon).
-  4. NYC Public Advocate Worst Landlord Watchlist rank — an annual ranking of the city's worst-rated landlords (rank 1 is the worst, ~100 landlords are listed each year). If the registered owner is on the list, STATE THE RANK as a fact and explain that being ranked means the Public Advocate has flagged this owner as one of the city's worst-rated landlords for the year. If not on the list, say so explicitly ("the registered owner is not on the current Worst Landlord Watchlist").
+- A renter-facing risk briefing in plain English, ≤220 words total. Structure is fixed:
+
+  PART 1 — Building-wide pattern lede (1-2 sentences):
+    Name the THEMES recurring across HPD violations, HPD complaints, DOB complaints, and 311 housing complaints — water leaks, mold/dampness, heat/hot water, plaster damage, fire safety, gas, smoke/CO detectors, egress, vermin. Note when issues appear to cluster by unit. Use hedged language ("suggests", "appears", "should be verified") — do not overstate certainty.
+
+  PART 2 — Blank line, then the literal label "At-risk apartments:" on its own line.
+
+  PART 3 — A bulleted list of 2-5 apartments that recur across the records. Each bullet is on its own line, prefixed with "- Apt. <unit>:" exactly. Most concerning apartment first. For each bullet, cite the most recent / most severe records driving the call (recent open HPD violations, Class B/C citations, recent HPD complaints, safety-related categories). Pull verbatim phrases from the violation descriptions when they sharpen the picture (e.g. "WATER LEAK SOURCE", "DAMAGED PLASTER PAINT").
+
+  PART 4 — If watchlist rank is non-null, append exactly one sentence after the bullet list naming the registered owner and the rank as a fact (e.g. "The registered owner, ACME LLC, is ranked #42 on the NYC Public Advocate's Worst Landlord Watchlist this year."). Skip this sentence entirely when the rank is null — do NOT write "not on the watchlist" filler.
+
+  PART 5 — Closing sentence (verbatim, on its own line): "Always check the cited records yourself before relying on anything in this summary."
+
+- If no apartment recurs across records (or every record's apartment field is empty), the bullet list MUST be exactly:
+  - No specific units recurred across recent records.
+  Do not fabricate apartment numbers.
+- Prioritize: open over closed; Class B/C over Class A; safety categories (heat/hot water, gas, fire egress, smoke/CO, lead paint) over cosmetic ones; recent dates over old.
+- Cite literal counts where the lede mentions one ("12 open HPD violations" — not "many violations"). Do not invent thresholds the records don't support and do not use slur-style verdicts (slumlord, predatory, sketchy, beware).
 - Mention the registered owner only by literal name.
-- Stay factual — describe what the counts represent and what they signal in plain English, but do NOT invent thresholds the records don't support and do NOT use slur-style verdicts (slumlord, predatory, etc.).
-- Must end with this exact sentence: "Always check the cited records yourself before relying on anything in this summary."
 
 [score_explanation]
 - 1-3 sentences narrating the score handed to you.
@@ -111,7 +122,7 @@ OUTPUT FORMAT
 Output strict JSON only — no prose before or after:
 {
   "listing_summary": "<2-3 sentences on what the listing offers>",
-  "summary": "<≤180 words covering HPD violations, DOB complaints, marshal evictions, and Worst Landlord Watchlist rank in plain English, ending with the required closing sentence>",
+  "summary": "<≤220 words: pattern lede + blank line + 'At-risk apartments:' + 2-5 '- Apt. X: ...' bullets + optional watchlist sentence + closing disclaimer; literal newlines preserved>",
   "score_explanation": "<1-3 sentences narrating the score with band + top factors>",
   "value_explanation": "<2-3 sentences narrating the value score from comp data, or empty string if no value_score block was given>",
   "indicators": [
@@ -195,6 +206,35 @@ export type BuildingPayload = {
     factors: Array<{ key: string; label: string; impact: number; reason: string }>;
   } | null;
   /**
+   * Record-level context for the at-risk-apartments callouts. Each array is
+   * pre-sorted (most recent first) and capped by the orchestrator before
+   * landing here. Optional so legacy callers keep working — the prompt
+   * handles missing arrays as "no record-level data available".
+   */
+  recentHpdViolations?: Array<{
+    apartment: string | null;
+    class: string | null;
+    issuedDate: string | null;
+    description: string | null;
+    status: 'open' | 'closed';
+  }>;
+  recentHpdComplaints?: Array<{
+    apartment: string | null;
+    receivedDate: string | null;
+    status: string | null;
+  }>;
+  recentDobComplaints?: Array<{
+    date: string | null;
+    category: string | null;
+    status: string | null;
+  }>;
+  recent311Complaints?: Array<{
+    date: string | null;
+    type: string | null;
+    descriptor: string | null;
+    status: string | null;
+  }>;
+  /**
    * Apartment Value Score — deterministic 0-100 from src/scoring/value.ts.
    * Only present for rental URL lookups with rent + beds. Null = no listing data.
    * The AI narrates this in value_explanation using ONLY the comp data here.
@@ -243,6 +283,73 @@ function formatScore(s: NonNullable<BuildingPayload['score']>): string {
   return lines.join('\n');
 }
 
+const DESCRIPTION_MAX_CHARS = 90;
+
+function shortDate(d: string | null | undefined): string {
+  if (!d) return '?';
+  // Socrata floating_timestamp comes through as e.g. "2026-04-27T00:00:00.000".
+  return d.slice(0, 10);
+}
+
+function clip(s: string | null | undefined, n = DESCRIPTION_MAX_CHARS): string {
+  if (!s) return '';
+  const t = s.replace(/\s+/g, ' ').trim();
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+}
+
+function formatHpdViolationLines(
+  rows: NonNullable<BuildingPayload['recentHpdViolations']>,
+): string {
+  if (rows.length === 0) return 'Recent HPD violations (apartment-level): none';
+  const lines = [`Recent HPD violations (apartment-level), most recent first:`];
+  for (const r of rows) {
+    const apt = r.apartment ? `Apt ${r.apartment}` : 'no-unit';
+    const cls = r.class ? `Class ${r.class}` : 'class ?';
+    lines.push(
+      `- ${apt} · ${cls} · ${shortDate(r.issuedDate)} · ${r.status.toUpperCase()} · ${clip(r.description)}`,
+    );
+  }
+  return lines.join('\n');
+}
+
+function formatHpdComplaintLines(
+  rows: NonNullable<BuildingPayload['recentHpdComplaints']>,
+): string {
+  if (rows.length === 0) return 'Recent HPD complaints (apartment-level): none';
+  const lines = [`Recent HPD complaints (apartment-level), most recent first:`];
+  for (const r of rows) {
+    const apt = r.apartment ? `Apt ${r.apartment}` : 'no-unit';
+    const status = r.status ? r.status.toUpperCase() : 'STATUS ?';
+    lines.push(`- ${apt} · ${shortDate(r.receivedDate)} · ${status}`);
+  }
+  return lines.join('\n');
+}
+
+function formatDobComplaintLines(
+  rows: NonNullable<BuildingPayload['recentDobComplaints']>,
+): string {
+  if (rows.length === 0) return 'Recent DOB complaints: none';
+  const lines = [`Recent DOB complaints (building-level), most recent first:`];
+  for (const r of rows) {
+    const status = r.status ? r.status.toUpperCase() : 'STATUS ?';
+    lines.push(`- ${shortDate(r.date)} · ${status} · ${clip(r.category)}`);
+  }
+  return lines.join('\n');
+}
+
+function format311ComplaintLines(
+  rows: NonNullable<BuildingPayload['recent311Complaints']>,
+): string {
+  if (rows.length === 0) return 'Recent 311 housing complaints: none';
+  const lines = [`Recent 311 housing complaints (building-level), most recent first:`];
+  for (const r of rows) {
+    const status = r.status ? r.status.toUpperCase() : 'STATUS ?';
+    const what = clip([r.type, r.descriptor].filter(Boolean).join(' / '));
+    lines.push(`- ${shortDate(r.date)} · ${status} · ${what}`);
+  }
+  return lines.join('\n');
+}
+
 function formatValue(v: ValueScoreResult): string {
   const lines: string[] = [
     `Apartment Value Score (DETERMINISTIC — computed from rent comp data; do not change it):`,
@@ -270,6 +377,16 @@ export function buildUserPrompt(p: BuildingPayload): string {
   const scoreBlock = p.score ? `\n\n${formatScore(p.score)}` : '';
   const valueBlock = p.valueScore ? `\n\n${formatValue(p.valueScore)}` : '';
 
+  const recordsBlock = [
+    p.recentHpdViolations ? formatHpdViolationLines(p.recentHpdViolations) : null,
+    p.recentHpdComplaints ? formatHpdComplaintLines(p.recentHpdComplaints) : null,
+    p.recentDobComplaints ? formatDobComplaintLines(p.recentDobComplaints) : null,
+    p.recent311Complaints ? format311ComplaintLines(p.recent311Complaints) : null,
+  ]
+    .filter((s): s is string => s != null)
+    .join('\n\n');
+  const recordsSection = recordsBlock ? `\n\n${recordsBlock}` : '';
+
   const listingBlock =
     p.listingText && p.listingText.trim().length > 0
       ? `
@@ -296,7 +413,7 @@ Public records (last 24h cache):
 - Bedbug reports filed: ${p.bedbugReports}
 - Lead paint inspection findings: ${p.leadFlags}
 - HPD registered owner: ${p.registeredOwner ?? 'not registered'}
-- NYC Public Advocate Worst Landlord Watchlist rank: ${p.watchlistRank ?? 'not on list'}${fareLine}${listingFactsBlock}${scoreBlock}${valueBlock}
+- NYC Public Advocate Worst Landlord Watchlist rank: ${p.watchlistRank ?? 'not on list'}${fareLine}${recordsSection}${listingFactsBlock}${scoreBlock}${valueBlock}
 
 Source URLs to cite (use these exact URLs in indicator source_url):
 - https://data.cityofnewyork.us/Housing-Development/Housing-Maintenance-Code-Violations/wvxf-dwi5

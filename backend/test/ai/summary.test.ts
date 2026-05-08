@@ -138,10 +138,10 @@ describe('generateSummary', () => {
     expect(result.cost_cents).toBe(3);
   });
 
-  it('throws TokenBudgetError when combined prompt exceeds 16K chars', async () => {
+  it('throws TokenBudgetError when combined prompt exceeds 24K chars', async () => {
     const longPayload = {
       ...BASE_PAYLOAD,
-      registeredOwner: 'X'.repeat(16_000),
+      registeredOwner: 'X'.repeat(24_000),
     };
     await expect(generateSummary(longPayload, SUBJECT)).rejects.toThrow(TokenBudgetError);
   });

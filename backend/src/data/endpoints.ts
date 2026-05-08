@@ -44,6 +44,12 @@ export const ENDPOINTS: DatasetEndpoint[] = [
     primaryKey: 'complaint_number',
   },
   {
+    key: 'hpd_complaints',
+    label: 'HPD Complaints',
+    resourceId: 'uwyv-629c',
+    primaryKey: 'complaintid',
+  },
+  {
     key: 'three11_housing',
     label: '311 Service Requests (2020 - Present)',
     resourceId: 'erm2-nwe9',

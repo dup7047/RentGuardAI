@@ -362,3 +362,65 @@ export async function getBuildingByBbl(
   const res = await fetch(`${BASE}/v1/building/${bbl}`, init);
   return (await res.json()) as LookupResponse;
 }
+
+// ── Saved buildings ────────────────────────────────────────────────────────
+// All four endpoints require an authed user. The backend returns 401 when
+// the Bearer token is missing or invalid; callers should surface that as a
+// "please sign in" UX (the existing SignInModal already handles it).
+
+export type SavedBuilding = {
+  bbl: string;
+  address: string | null;
+  borough: string | null;
+  saved_at: string;
+  score: number | null;
+  score_band: ScoreBand | null;
+};
+
+export class SavedBuildingsAuthError extends Error {
+  constructor() {
+    super('Authentication required');
+    this.name = 'SavedBuildingsAuthError';
+  }
+}
+
+async function savedBuildingsFetch(path: string, init: RequestInit): Promise<Response> {
+  const auth = await authHeader();
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...auth, ...(init.headers ?? {}) },
+  });
+  if (res.status === 401) throw new SavedBuildingsAuthError();
+  return res;
+}
+
+export async function getSavedBuildingState(
+  bbl: string,
+): Promise<{ saved: boolean; saved_at?: string }> {
+  const res = await savedBuildingsFetch(`/v1/saved-buildings/${bbl}`, { method: 'GET' });
+  return (await res.json()) as { saved: boolean; saved_at?: string };
+}
+
+export async function saveBuilding(
+  bbl: string,
+): Promise<{ saved: true; saved_at: string }> {
+  const res = await savedBuildingsFetch('/v1/saved-buildings', {
+    method: 'POST',
+    body: JSON.stringify({ bbl }),
+  });
+  return (await res.json()) as { saved: true; saved_at: string };
+}
+
+export async function unsaveBuilding(bbl: string): Promise<{ saved: false }> {
+  const res = await savedBuildingsFetch(`/v1/saved-buildings/${bbl}`, { method: 'DELETE' });
+  return (await res.json()) as { saved: false };
+}
+
+export async function listSavedBuildings(): Promise<{
+  items: SavedBuilding[];
+  total_count: number;
+}> {
+  const res = await savedBuildingsFetch('/v1/saved-buildings', { method: 'GET' });
+  return (await res.json()) as { items: SavedBuilding[]; total_count: number };
+}

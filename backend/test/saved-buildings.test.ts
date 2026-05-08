@@ -9,8 +9,9 @@
 // Tests are added incrementally as endpoints land. Phase 2 covers
 // GET /v1/saved-buildings/:bbl only.
 
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
 import { SignJWT } from 'jose';
+import { logger } from '../src/logger.js';
 
 // ── Hoisted mock state for the DB ─────────────────────────────────────────
 // vi.hoisted runs before vi.mock, so the factory closures below capture this
@@ -390,5 +391,80 @@ describe('GET /v1/saved-buildings (list)', () => {
       items: Array<{ address: null; score: null; score_band: null }>;
     };
     expect(body.items[0]).toMatchObject({ address: null, score: null, score_band: null });
+  });
+});
+
+// ── Phase 2: auth middleware reason classification ─────────────────────────
+//
+// The original "save building prompts for sign-in even when authed" bug had
+// a class of failure mode (issuer mismatch from a backend SUPABASE_URL that
+// doesn't match the frontend's project) that the pre-existing tests could
+// not catch — they sign tokens with the same issuer they verify against.
+// These tests exercise the bad_iss / expired classifications and assert the
+// log shape, so a future env-config regression is visible in CI and prod.
+//
+// Coverage of the happy path (valid token → userId reaches handler) is
+// already explicit at lines 183-204: the POST test asserts
+// `mocks.insertedValues` contains TEST_USER_ID, which proves the JWT `sub`
+// claim flowed through the middleware into the route handler.
+
+describe('auth middleware reason classification', () => {
+  let infoSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => logger);
+  });
+
+  afterEach(() => {
+    infoSpy.mockRestore();
+  });
+
+  it('rejects token signed with mismatched issuer and logs reason: bad_iss', async () => {
+    const secret = new TextEncoder().encode(TEST_SECRET);
+    const badIssToken = await new SignJWT({ sub: TEST_USER_ID })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setAudience('authenticated')
+      .setIssuer('http://other-project.supabase.co/auth/v1')
+      .setExpirationTime('1h')
+      .sign(secret);
+
+    const app = createApp();
+    const res = await app.request('/v1/saved-buildings/3032227501', {
+      headers: { Authorization: `Bearer ${badIssToken}` },
+    });
+
+    expect(res.status).toBe(401);
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'bad_iss',
+        expectedIss: 'http://localhost:54321/auth/v1',
+        gotIss: 'http://other-project.supabase.co/auth/v1',
+      }),
+      'jwt verify failed — continuing as anon',
+    );
+  });
+
+  it('rejects expired token and logs reason: expired', async () => {
+    const secret = new TextEncoder().encode(TEST_SECRET);
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const expiredToken = await new SignJWT({ sub: TEST_USER_ID })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt(nowSeconds - 3600)
+      .setAudience('authenticated')
+      .setIssuer('http://localhost:54321/auth/v1')
+      .setExpirationTime(nowSeconds - 60)
+      .sign(secret);
+
+    const app = createApp();
+    const res = await app.request('/v1/saved-buildings/3032227501', {
+      headers: { Authorization: `Bearer ${expiredToken}` },
+    });
+
+    expect(res.status).toBe(401);
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'expired' }),
+      'jwt verify failed — continuing as anon',
+    );
   });
 });

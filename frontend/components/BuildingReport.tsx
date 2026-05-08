@@ -33,6 +33,7 @@ import {
   type ValueBand,
   type ValueConfidence,
 } from '@/lib/api/backend';
+import { getCurrentSession } from '@/lib/auth/session';
 import { createClient } from '@/lib/supabase/browser';
 
 type SuccessData = Extract<LookupResponse, { kind: 'success' }>;
@@ -82,21 +83,35 @@ export function BuildingReport({ data }: { data: SuccessData }) {
   // On mount + when bbl changes, check auth status. If signed in, fetch
   // whether this BBL is already saved so the button label reflects reality
   // before the user clicks anything.
+  //
+  // Also subscribe to auth state changes so a sign-in that lands AFTER mount
+  // (e.g. cookie hydration races, or completing the sign-in flow in another
+  // tab) flips `isAuthed` and refreshes the saved-state without a reload.
+  // Filter to SIGNED_IN / SIGNED_OUT only — INITIAL_SESSION fires immediately
+  // on subscribe (we already do that work in the explicit fetch below) and
+  // TOKEN_REFRESHED fires hourly (would silently spam GET /v1/saved-buildings/:bbl).
   useEffect(() => {
     let cancelled = false;
+
+    async function refreshSavedState(authed: boolean) {
+      setIsAuthed(authed);
+      if (!authed) {
+        setIsSaved(false);
+        return;
+      }
+      try {
+        const state = await getSavedBuildingState(bbl);
+        if (!cancelled) setIsSaved(state.saved);
+      } catch {
+        if (!cancelled) setIsSaved(false);
+      }
+    }
+
     (async () => {
       try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
+        const session = await getCurrentSession();
         if (cancelled) return;
-        const authed = Boolean(session);
-        setIsAuthed(authed);
-        if (authed) {
-          const state = await getSavedBuildingState(bbl);
-          if (!cancelled) setIsSaved(state.saved);
-        } else {
-          setIsSaved(false);
-        }
+        await refreshSavedState(Boolean(session));
       } catch {
         if (!cancelled) {
           setIsAuthed(false);
@@ -104,8 +119,28 @@ export function BuildingReport({ data }: { data: SuccessData }) {
         }
       }
     })();
+
+    // createClient() throws if Supabase env vars are missing (e.g. in unit
+    // tests that don't mock the client). The save flow already degrades to
+    // anon in that case via the getCurrentSession() fallback above; the
+    // subscription is purely additive, so swallow the construction error
+    // and skip subscribing rather than crashing the whole report.
+    let unsubscribe: (() => void) | null = null;
+    try {
+      const supabase = createClient();
+      const sub = supabase.auth.onAuthStateChange((event, session) => {
+        if (cancelled) return;
+        if (event === 'SIGNED_IN') void refreshSavedState(Boolean(session));
+        else if (event === 'SIGNED_OUT') void refreshSavedState(false);
+      });
+      unsubscribe = () => sub.data.subscription.unsubscribe();
+    } catch {
+      // No subscription — the explicit getCurrentSession() above still runs.
+    }
+
     return () => {
       cancelled = true;
+      unsubscribe?.();
     };
   }, [bbl]);
 

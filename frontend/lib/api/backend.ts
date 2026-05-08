@@ -218,17 +218,12 @@ const BASE =
   process.env.NEXT_PUBLIC_BACKEND_URL ??
   (process.env.NODE_ENV === 'production' ? PROD_BACKEND_URL : DEV_BACKEND_URL);
 
-async function authHeader(): Promise<HeadersInit> {
-  try {
-    const { createClient } = await import('@/lib/supabase/browser');
-    const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session ? { Authorization: `Bearer ${session.access_token}` } : {};
-  } catch {
-    return {};
-  }
+// Exported so callers and tests can prove the same auth header is built for
+// every request. Internal callers below still use it via the closure.
+export async function authHeader(): Promise<HeadersInit> {
+  const { getCurrentSession } = await import('@/lib/auth/session');
+  const session = await getCurrentSession();
+  return session ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 
 export async function postLookup(input: {

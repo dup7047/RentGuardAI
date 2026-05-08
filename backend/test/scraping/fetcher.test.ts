@@ -2,30 +2,30 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { scrapeListing } from '../../src/scraping/fetcher.js';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
-// We mock cache.ts (so no DB), scrapfly-client.ts (so no real ScrapFly call),
+// We mock cache.ts (so no DB), firecrawl-client.ts (so no real Firecrawl call),
 // and global.fetch (so no real network).
 vi.mock('../../src/scraping/cache.js', () => ({
   getCached: vi.fn().mockResolvedValue(null),
   setCached: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../../src/scraping/scrapfly-client.js', () => ({
-  scrapflyFetch: vi.fn(),
-  isScrapflyAvailable: vi.fn().mockReturnValue(true),
-  ScrapflyError: class extends Error {
+vi.mock('../../src/scraping/firecrawl-client.js', () => ({
+  firecrawlFetch: vi.fn(),
+  isFirecrawlAvailable: vi.fn().mockReturnValue(true),
+  FirecrawlError: class extends Error {
     constructor(
       msg: string,
       public readonly status?: number,
       public readonly code?: 'no_api_key' | 'quota_exceeded' | 'http_error' | 'timeout',
     ) {
       super(msg);
-      this.name = 'ScrapflyError';
+      this.name = 'FirecrawlError';
     }
   },
 }));
 
 import * as cache from '../../src/scraping/cache.js';
-import * as scrapfly from '../../src/scraping/scrapfly-client.js';
+import * as firecrawl from '../../src/scraping/firecrawl-client.js';
 
 // Simple StreetEasy-shaped HTML that the extractor can parse
 const GOOD_STREETEASY_HTML = `<!DOCTYPE html><html><head>
@@ -51,7 +51,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(cache.getCached).mockResolvedValue(null);
   vi.mocked(cache.setCached).mockResolvedValue(undefined);
-  vi.mocked(scrapfly.isScrapflyAvailable).mockReturnValue(true);
+  vi.mocked(firecrawl.isFirecrawlAvailable).mockReturnValue(true);
 });
 
 afterEach(() => vi.restoreAllMocks());
@@ -95,10 +95,10 @@ describe('scrapeListing', () => {
     expect(r.kind).toBe('ok');
     if (r.kind === 'ok') expect(r.fetchMethod).toBe('cache');
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(scrapfly.scrapflyFetch).not.toHaveBeenCalled();
+    expect(firecrawl.firecrawlFetch).not.toHaveBeenCalled();
   });
 
-  it('direct fetch success → no ScrapFly call, returns ok with fetchMethod=direct', async () => {
+  it('direct fetch success → no Firecrawl call, returns ok with fetchMethod=direct', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(
       new Response(GOOD_STREETEASY_HTML, { status: 200 }),
     );
@@ -109,39 +109,39 @@ describe('scrapeListing', () => {
       expect(r.data.address).toContain('123 Main St');
       expect(r.data.monthlyRentCents).toBe(350000); // $3,500
     }
-    expect(scrapfly.scrapflyFetch).not.toHaveBeenCalled();
+    expect(firecrawl.firecrawlFetch).not.toHaveBeenCalled();
   });
 
-  it('Cloudflare challenge HTML triggers ScrapFly fallback', async () => {
+  it('Cloudflare challenge HTML triggers Firecrawl fallback', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(
       new Response(CLOUDFLARE_CHALLENGE_HTML, { status: 200 }),
     );
-    vi.mocked(scrapfly.scrapflyFetch).mockResolvedValue({
+    vi.mocked(firecrawl.firecrawlFetch).mockResolvedValue({
       html: GOOD_STREETEASY_HTML,
       finalUrl: 'https://streeteasy.com/building/123-main/2a',
       statusCode: 200,
-      costCredits: 25,
+      costCredits: 3,
     });
     const r = await scrapeListing('https://streeteasy.com/building/123-main/2a');
     expect(r.kind).toBe('ok');
-    if (r.kind === 'ok') expect(r.fetchMethod).toBe('scrapfly');
-    expect(scrapfly.scrapflyFetch).toHaveBeenCalledTimes(1);
+    if (r.kind === 'ok') expect(r.fetchMethod).toBe('firecrawl');
+    expect(firecrawl.firecrawlFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('direct returns 403 → ScrapFly fallback', async () => {
+  it('direct returns 403 → Firecrawl fallback', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(new Response('', { status: 403 }));
-    vi.mocked(scrapfly.scrapflyFetch).mockResolvedValue({
+    vi.mocked(firecrawl.firecrawlFetch).mockResolvedValue({
       html: GOOD_STREETEASY_HTML,
       finalUrl: 'https://streeteasy.com/building/123-main/2a',
       statusCode: 200,
-      costCredits: 25,
+      costCredits: 3,
     });
     const r = await scrapeListing('https://streeteasy.com/building/123-main/2a');
     expect(r.kind).toBe('ok');
-    expect(scrapfly.scrapflyFetch).toHaveBeenCalled();
+    expect(firecrawl.firecrawlFetch).toHaveBeenCalled();
   });
 
-  it('direct returns 404 → listing_not_found (no ScrapFly call)', async () => {
+  it('direct returns 404 → listing_not_found (no Firecrawl call)', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(new Response('', { status: 404 }));
     const r = await scrapeListing('https://streeteasy.com/building/x/9999');
     expect(r.kind).toBe('error');
@@ -149,30 +149,30 @@ describe('scrapeListing', () => {
       expect(r.code).toBe('listing_not_found');
       expect(r.status).toBe(404);
     }
-    expect(scrapfly.scrapflyFetch).not.toHaveBeenCalled();
+    expect(firecrawl.firecrawlFetch).not.toHaveBeenCalled();
   });
 
-  it('SCRAPFLY_API_KEY missing + Cloudflare wall → listing_blocked, no ScrapFly call', async () => {
-    vi.mocked(scrapfly.isScrapflyAvailable).mockReturnValue(false);
+  it('FIRECRAWL_API_KEY missing + Cloudflare wall → listing_blocked, no Firecrawl call', async () => {
+    vi.mocked(firecrawl.isFirecrawlAvailable).mockReturnValue(false);
     vi.spyOn(global, 'fetch').mockResolvedValue(
       new Response(CLOUDFLARE_CHALLENGE_HTML, { status: 200 }),
     );
     const r = await scrapeListing('https://streeteasy.com/building/x/y');
     expect(r.kind).toBe('error');
     if (r.kind === 'error') expect(r.code).toBe('listing_blocked');
-    expect(scrapfly.scrapflyFetch).not.toHaveBeenCalled();
+    expect(firecrawl.firecrawlFetch).not.toHaveBeenCalled();
   });
 
-  it('ScrapFly quota exceeded → listing_blocked', async () => {
+  it('Firecrawl quota exceeded → listing_blocked', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(
       new Response(CLOUDFLARE_CHALLENGE_HTML, { status: 200 }),
     );
-    vi.mocked(scrapfly.scrapflyFetch).mockRejectedValue(
-      new (scrapfly.ScrapflyError as new (
+    vi.mocked(firecrawl.firecrawlFetch).mockRejectedValue(
+      new (firecrawl.FirecrawlError as new (
         m: string,
         s?: number,
         c?: 'quota_exceeded',
-      ) => Error)('quota', 422, 'quota_exceeded'),
+      ) => Error)('quota', 402, 'quota_exceeded'),
     );
     const r = await scrapeListing('https://streeteasy.com/building/x/y');
     expect(r.kind).toBe('error');
@@ -188,5 +188,24 @@ describe('scrapeListing', () => {
     expect(vi.mocked(cache.getCached).mock.calls[0]?.[0]).toBe(
       'https://streeteasy.com/building/x/y',
     );
+  });
+
+  it('Zillow URL skips direct fetch entirely and goes straight to Firecrawl', async () => {
+    // www.zillow.com is in ALWAYS_BOT_WALLED — direct fetch should NOT be called,
+    // even before we try Firecrawl. We don't care here whether Firecrawl's HTML
+    // happens to be parseable by the Zillow extractor (that's tested elsewhere);
+    // we only care that the call pattern is "no direct, yes Firecrawl".
+    const fetchSpy = vi.spyOn(global, 'fetch');
+    vi.mocked(firecrawl.firecrawlFetch).mockResolvedValue({
+      html: '<html>zillow page</html>',
+      finalUrl: 'https://www.zillow.com/homedetails/123-main-st-new-york-ny-10001/12345_zpid/',
+      statusCode: 200,
+      costCredits: 3,
+    });
+    await scrapeListing(
+      'https://www.zillow.com/homedetails/123-main-st-new-york-ny-10001/12345_zpid/',
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(firecrawl.firecrawlFetch).toHaveBeenCalledTimes(1);
   });
 });

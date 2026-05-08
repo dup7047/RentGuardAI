@@ -13,36 +13,40 @@ serve({ fetch: app.fetch, port }, (info) => {
     { port: info.port, commit: getCommitSha(), nodeEnv: process.env.NODE_ENV ?? 'development' },
     'rentguard backend listening'
   );
-  // Best-effort: log this month's ScrapFly credit usage so quota crunches
+  // Best-effort: log this month's Firecrawl credit usage so quota crunches
   // are visible before users hit them. Sums fetch_cost_credits stored by
-  // scraping/cache.ts on each successful ScrapFly fetch. Failures are
+  // scraping/cache.ts on each successful Firecrawl fetch. Failures are
   // swallowed so a transient DB issue can't crash the boot.
-  void logScrapflyMonthlyCreditUsage();
+  void logFirecrawlMonthlyCreditUsage();
 });
 
-async function logScrapflyMonthlyCreditUsage(): Promise<void> {
+async function logFirecrawlMonthlyCreditUsage(): Promise<void> {
   try {
     const res = await getPool().query<{ used: number }>(
       `SELECT COALESCE(SUM(fetch_cost_credits), 0)::int AS used
        FROM scraped_listings
        WHERE created_at >= date_trunc('month', NOW())
-         AND fetch_method = 'scrapfly'`,
+         AND fetch_method = 'firecrawl'`,
     );
     const used = res.rows[0]?.used ?? 0;
-    const FREE_TIER_CREDITS = 1000;
-    const pct = Math.round((used / FREE_TIER_CREDITS) * 100);
+    // Firecrawl free tier is 500 credits one-time, not monthly. Surface raw
+    // usage; the threshold env var lets ops tune the warning band per plan.
+    const FREE_TIER_CREDITS = Number.parseInt(
+      process.env.FIRECRAWL_FREE_TIER_CREDITS ?? '500',
+      10,
+    );
     if (used >= FREE_TIER_CREDITS * 0.8) {
       logger.warn(
-        { scrapfly_credits_used_this_month: used, freeTierCredits: FREE_TIER_CREDITS, pctUsed: pct },
-        'ScrapFly free-tier usage above 80% — top up before quota exhaustion',
+        { firecrawl_credits_used_this_month: used, freeTierCredits: FREE_TIER_CREDITS },
+        'Firecrawl usage above 80% of plan threshold — top up before exhaustion',
       );
     } else {
       logger.info(
-        { scrapfly_credits_used_this_month: used, freeTierCredits: FREE_TIER_CREDITS, pctUsed: pct },
-        'ScrapFly monthly usage',
+        { firecrawl_credits_used_this_month: used, freeTierCredits: FREE_TIER_CREDITS },
+        'Firecrawl monthly usage',
       );
     }
   } catch (e) {
-    logger.warn({ err: String(e) }, 'failed to read ScrapFly monthly usage');
+    logger.warn({ err: String(e) }, 'failed to read Firecrawl monthly usage');
   }
 }

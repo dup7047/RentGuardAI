@@ -367,6 +367,12 @@ export function LookupForm() {
               Please enter a valid NYC address or listing URL.
             </p>
           )}
+          {resp?.kind === 'server_error' && (
+            <p className="lookup-msg error">
+              We hit a server error while building this report. Please try
+              again in a minute.
+            </p>
+          )}
 
           {/* Listing-blocked: show the paste-fallback expansion */}
           {resp?.kind === 'listing_blocked' && showFallbackPaste && (

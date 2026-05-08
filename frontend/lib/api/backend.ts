@@ -202,6 +202,7 @@ export type LookupResponse =
   | { kind: 'cost_cap'; message: string }
   | { kind: 'rate_limited'; message: string }
   | { kind: 'invalid_input'; errors: AnyRecord }
+  | { kind: 'server_error'; message: string }
   | { kind: 'not_found' }
   // Phase 4: listing-fetch error states from the scrape pipeline
   | { kind: 'listing_blocked'; message: string | null }

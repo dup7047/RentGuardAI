@@ -872,10 +872,14 @@ h1.hero em {
   place-items: center;
   z-index: 50;
   animation: fade 0.25s ease both;
+  overflow-y: auto;
+  padding: 24px;
 }
 .modal {
   width: 440px;
   max-width: 92vw;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
   background: var(--paper);
   border-radius: 16px;
   padding: 28px;

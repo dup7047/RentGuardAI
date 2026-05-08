@@ -62,6 +62,7 @@ export function OverviewTab({
     landlord,
     stats,
     listing_unavailable,
+    at_risk_apartments,
   } = data;
 
   const factorsForFindings: ScoreFactor[] = (score_factors ?? []).slice(0, 5);
@@ -147,6 +148,19 @@ export function OverviewTab({
           <p>
             <RevealText text={summary} />
           </p>
+          {at_risk_apartments && at_risk_apartments.length > 0 && (
+            <div className="at-risk-apts">
+              <div className="at-risk-label">At-risk apartments</div>
+              <ul>
+                {at_risk_apartments.map((a) => (
+                  <li key={a.apt}>
+                    <strong>Apt. {a.apt}:</strong>{' '}
+                    <RevealText text={a.summary} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 

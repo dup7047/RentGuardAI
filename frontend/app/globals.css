@@ -817,6 +817,37 @@ h1.hero em {
   margin-top: 10px;
   font-style: italic;
 }
+.at-risk-apts {
+  margin-top: 14px;
+  position: relative;
+  z-index: 1;
+}
+.at-risk-label {
+  font-size: 11px;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  color: var(--accent-deep);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.at-risk-apts ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.at-risk-apts li {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.at-risk-apts li strong {
+  color: var(--ink);
+  font-weight: 600;
+}
 
 /* "Have a lease?" CTA strip + helper for inline toast */
 .lease-cta {

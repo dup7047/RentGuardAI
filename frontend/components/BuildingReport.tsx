@@ -6,6 +6,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { LegalFooter } from './LegalFooter';
 import { LegalFraming } from './LegalFraming';
@@ -385,23 +386,28 @@ export function BuildingReport({ data }: { data: SuccessData }) {
 
       <LegalFooter />
 
-      {modal?.kind === 'save' && (
-        <SignInModal reason="save" onClose={() => setModal(null)} />
-      )}
-      {modal?.kind === 'lease' && (
-        <SignInModal reason="lease" onClose={() => setModal(null)} />
-      )}
-      {modal?.kind === 'gate' && (
-        <SignInModal reason="gate" onClose={() => setModal(null)} />
-      )}
-      {modal?.kind === 'share' && (
-        <ShareModal bbl={bbl} onClose={() => setModal(null)} />
-      )}
-      {modal?.kind === 'maintenance-info' && (
-        <MetricInfoModal kind="maintenance" onClose={() => setModal(null)} />
-      )}
-      {modal?.kind === 'value-info' && (
-        <MetricInfoModal kind="value" onClose={() => setModal(null)} />
+      {typeof document !== 'undefined' && modal && createPortal(
+        <>
+          {modal.kind === 'save' && (
+            <SignInModal reason="save" onClose={() => setModal(null)} />
+          )}
+          {modal.kind === 'lease' && (
+            <SignInModal reason="lease" onClose={() => setModal(null)} />
+          )}
+          {modal.kind === 'gate' && (
+            <SignInModal reason="gate" onClose={() => setModal(null)} />
+          )}
+          {modal.kind === 'share' && (
+            <ShareModal bbl={bbl} onClose={() => setModal(null)} />
+          )}
+          {modal.kind === 'maintenance-info' && (
+            <MetricInfoModal kind="maintenance" onClose={() => setModal(null)} />
+          )}
+          {modal.kind === 'value-info' && (
+            <MetricInfoModal kind="value" onClose={() => setModal(null)} />
+          )}
+        </>,
+        document.body
       )}
 
       {toast && <div className="toast">{toast}</div>}

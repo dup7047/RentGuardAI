@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react';
 
+import { useLockBodyScroll } from '@/lib/useLockBodyScroll';
+
 type MetricKind = 'maintenance' | 'value';
 
 export function MetricInfoModal({
@@ -11,10 +13,7 @@ export function MetricInfoModal({
   kind: MetricKind;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, []);
+  useLockBodyScroll();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

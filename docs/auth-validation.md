@@ -1,92 +1,303 @@
 # RentGuard Auth Validation
 
-Methodology adapted from `authentication-validator` (jeremylongshore/claude-code-plugins-plus-skills); the upstream `npx skillfish add` ran into a GitHub API rate limit, so the checks below were performed manually against the same surface area (token verification, session handling, route gating, cookies, CORS, RLS, secret hygiene, tests).
+**Skill applied:** `authentication-validator` (jeremylongshore/claude-code-plugins-plus-skills, v1.0.0) — `plugins/security/authentication-validator/skills/validating-authentication-implementations/SKILL.md`. The 10-step instruction list, required output sections, and CWE / OWASP ASVS framing below come from that skill.
 
-Date: 2026-05-08
-Branch: `claude/validate-rentguard-auth-9PhLH`
+**Date:** 2026-05-08
+**Branch:** `claude/validate-rentguard-auth-9PhLH`
+**Tested:** `backend/test/saved-buildings.test.ts` + `health.test.ts` (21/21 passing)
 
-## Verdict
+---
 
-**Pass.** RentGuard's auth implementation is sound: Supabase magic-link sign-in on the Next.js side, HS256 JWT verification with `jose` on the Hono backend, RLS enabled on every user-scoped table, and the per-user dashboard / saved-buildings flows are gated correctly. Tests cover the unhappy paths (missing header, invalid token, invalid input) end-to-end and pass (21/21).
+## Executive summary
 
-A handful of small observations are listed at the bottom; none of them block ship.
+| | Count |
+|---|---|
+| Critical | 0 |
+| High | 0 |
+| Medium | 4 |
+| Low | 2 |
+| Info | 1 |
 
-## Auth surface area
+**Risk rating: Low.** RentGuard is passwordless (Supabase magic-link only), so the largest categories of auth weaknesses (weak password hashing, account lockout misconfiguration, brute-force on login, password reset enumeration) are out of scope by design. The remaining gaps are: missing `aud`/`iss` claim validation in the backend JWT middleware, an over-permissive Vercel preview wildcard in the Supabase redirect allowlist, MFA disabled across the board, and a lurking `minimum_password_length = 6` config that would matter if passwords were ever turned on.
 
-| Layer | File(s) | Role |
+**Top three fixes (in priority order):**
+1. **F1 (CWE-345):** Add `audience: 'authenticated'` and `issuer: '<supabase-project-url>/auth/v1'` to the `jose.jwtVerify` call in `backend/src/middleware/auth.ts:15`.
+2. **F2 (CWE-601):** Replace `https://*.vercel.app/auth/callback` in `supabase/config.toml:181-183` with the RentGuard-specific Vercel pattern (e.g. `https://rentguardai-*.vercel.app/auth/callback`).
+3. **F3 (CWE-308):** Plan TOTP MFA enablement before B2B / billing flows ship (Phase 7+).
+
+---
+
+## Step 1 — Authentication inventory
+
+| # | Mechanism | Entry point | File |
+|---|---|---|---|
+| 1 | Magic-link issuance (browser) | `supabase.auth.signInWithOtp` | `frontend/app/login/LoginForm.tsx:64`, `frontend/components/SignInModal.tsx:67` |
+| 2 | Magic-link verify (OTP) | `GET /auth/confirm?token_hash=…&type=…` | `frontend/app/auth/confirm/route.ts:42` |
+| 3 | OAuth-style code exchange | `GET /auth/callback?code=…` | `frontend/app/auth/callback/route.ts:7` |
+| 4 | Sign-out | `supabase.auth.signOut` server action | `frontend/app/dashboard/actions.ts:7` |
+| 5 | SSR session refresh + gate | `supabase.auth.getUser()` in Next middleware | `frontend/lib/supabase/middleware.ts:75-77` |
+| 6 | Backend JWT verification | `jose.jwtVerify` (Bearer token) | `backend/src/middleware/auth.ts:9-23` |
+| 7 | Anonymous identity (rate-limit) | `rentguard-anon` UUID cookie | `backend/src/middleware/anon-token.ts` |
+| 8 | Per-user route gates | `c.get('userId')` 401 | `backend/src/routes/saved-buildings.ts:24-27` |
+| 9 | RLS (database) | `auth.uid()` policies | `backend/drizzle/{0002,0004,0006,0007,0009,0011,0016}_*.sql` |
+| 10 | Service-role bypass | `BYPASSRLS` writes from backend | `backend/src/db/client.ts` (DATABASE_URL is service-role) |
+
+No third-party OAuth providers, no SAML, no SMS. `auth.external.*` and `auth.mfa.*` are all `enabled = false` in `supabase/config.toml`.
+
+---
+
+## Step 2 — Password storage audit
+
+**N/A — RentGuard is passwordless by design.**
+
+`grep` for `bcrypt|argon2|scrypt|pbkdf2|hashSync|md5|sha1` across `backend/src` and `frontend` returns zero application-side hits. The only mentions of "password" in code are the *absence* messages in `LoginForm.tsx:92` ("No password needed") and `SignInModal.tsx:156` ("No password. We'll email you a one-tap sign-in link"), plus a legal-pages test asserting the Privacy Policy doesn't mention "password (stored hashed)".
+
+Supabase Auth itself stores passwords with bcrypt server-side, but no code path in this repo invokes `signInWithPassword`. **Compliant with NIST SP 800-63B §5.1.1.2 by avoidance.**
+
+⚠️ Configuration drift risk recorded as F4 below: `supabase/config.toml:203` has `minimum_password_length = 6`, which is below NIST's ≥8 floor. It only takes effect if a future change adds password sign-in.
+
+---
+
+## Step 3 — JWT implementation review
+
+`backend/src/middleware/auth.ts:9-23`:
+
+```ts
+const secret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET);
+const { payload } = await jwtVerify(token, secret, { algorithms: ['HS256'] });
+if (typeof payload.sub === 'string') c.set('userId', payload.sub);
+if (typeof payload.email === 'string') c.set('userEmail', payload.email);
+```
+
+| Check | Status | Notes |
 |---|---|---|
-| Frontend sign-in | `frontend/app/login/LoginForm.tsx`, `frontend/components/SignInModal.tsx` | Magic-link via `supabase.auth.signInWithOtp` (PKCE) |
-| Frontend session | `frontend/lib/supabase/{browser,server,middleware,config}.ts` | `@supabase/ssr` clients; httpOnly cookies on the server |
-| Frontend gate | `frontend/middleware.ts` (matcher: `/dashboard/:path*`, `/login`) | Refresh session, redirect unauth → `/login`, auth → `/dashboard` |
-| Magic-link callback | `frontend/app/auth/callback/route.ts` (`exchangeCodeForSession`), `frontend/app/auth/confirm/route.ts` (`verifyOtp`) | Redirect target validated against `allowedRedirects` allowlist |
-| Frontend → Backend bridge | `frontend/lib/api/backend.ts:authHeader` | Attaches `Authorization: Bearer <access_token>` from `getSession()` |
-| Backend JWT | `backend/src/middleware/auth.ts` (`jose.jwtVerify`, HS256, `SUPABASE_JWT_SECRET`) | Optional — sets `userId`/`userEmail` on context when valid; never throws |
-| Backend anon | `backend/src/middleware/anon-token.ts` | UUID anon cookie (`rentguard-anon`) for rate-limiting / cost tracking |
-| Route gates | `backend/src/routes/saved-buildings.ts`, `backend/src/routes/lookup.ts` | Gate on `c.get('userId')`; saved-buildings 401s without it |
-| RLS | `backend/drizzle/{0002,0004,0006,0007}_*.sql`, `0009`, `0011`, `0016` | RLS on every user-scoped table; service-role for inserts |
-| Supabase project | `supabase/config.toml` | PKCE flow, refresh-token rotation, redirect allowlist |
+| Algorithm pinned (no `none`) | ✅ | `algorithms: ['HS256']` rejects `alg: none` confusion |
+| Algorithm strength | ⚠️ | HS256 is symmetric; secret leak = forge tokens. Skill flags as "weak" but tolerable when the secret is high-entropy and never logged. Supabase project secret is ≥256 bits. **Info-level F7.** |
+| `exp` validated | ✅ | `jose.jwtVerify` enforces `exp` by default (1h per `jwt_expiry = 3600`) |
+| `iat` validated | ✅ | jose enforces ordering vs `exp` |
+| `aud` validated | ❌ | **Finding F1 (Medium, CWE-345)**. Supabase tokens carry `aud: 'authenticated'`; not checking it means a token from any other Supabase project signed with a colliding secret would be accepted. |
+| `iss` validated | ❌ | Same finding (F1). Supabase tokens carry `iss: <project-url>/auth/v1`. |
+| `nbf` validated | N/A | Supabase doesn't set `nbf` |
+| Storage (browser) | ✅ | `@supabase/ssr` keeps tokens in httpOnly cookies, not `localStorage` (verified — no `localStorage` or `persistSession` overrides anywhere in `frontend/lib/supabase/`) |
+| Refresh-token rotation | ✅ | `enable_refresh_token_rotation = true`, `refresh_token_reuse_interval = 10` (`supabase/config.toml:192-195`) |
+| Sensitive data in payload | ✅ | Payload reads only `sub` + `email`; no secrets or PII embedded |
+| Tests exercise verify path | ✅ | `backend/test/saved-buildings.test.ts` signs real JWTs with `jose.SignJWT` — the middleware's verify path is tested end-to-end |
 
-## Findings
+**Token security analysis (skill output section):**
+- Algorithm: `HS256` (pinned)
+- Claims validated: `exp`, `iat` (jose default), `sub`, `email`
+- Claims missing: `aud`, `iss` ← F1
+- Storage: httpOnly cookie (server SSR), Authorization Bearer (API calls)
+- Expiration policy: 1h access token, refresh token with rotation
 
-### 1. JWT verification (backend) — OK
-`backend/src/middleware/auth.ts` uses `jose.jwtVerify` against `SUPABASE_JWT_SECRET` with `algorithms: ['HS256']` (algorithm is pinned, so an attacker can't downgrade to `none`). `jose` enforces the `exp` claim by default. Invalid tokens fall through to anonymous — intentional for the optional-auth pattern, and route-level gates (saved-buildings, dashboard) are responsible for returning 401.
+---
 
-### 2. Route gating — OK
-- `/v1/saved-buildings` (GET list, GET :bbl, POST, DELETE): all four call `getAuthedUserId(c)` and return `{ kind: 'unauthorized' }` 401 when missing. Verified by 4 dedicated 401 tests.
-- `/v1/lookup` and `/v1/lookup/stream`: intentionally optional-auth — anonymous and email-gated flows exist by design (free tier). User identity is read from context for rate-limiting (60/h vs 10/h) and persistence (`buildingLookups.userId`).
-- `/v1/building/:bbl`: intentionally public (SEO archive); reads cached data only.
-- `/v1/affiliate/click`, `/v1/waitlist/email`: intentionally public.
+## Step 4 — Session management
 
-### 3. Frontend session + Next.js middleware — OK
-`frontend/lib/supabase/middleware.ts` calls `supabase.auth.getUser()` (not `getSession()`) for the gate decision, which forces a server-validated round-trip rather than trusting a stale cookie — correct for an SSR auth check. The matcher only covers `/dashboard/:path*` and `/login`, so public pages don't pay the auth round-trip cost. The `getSupabaseUrl()` / `getSupabaseAnonKey()` failure path redirects protected routes to `/login` instead of crashing — good fail-closed behavior.
+| Check | Status | Source |
+|---|---|---|
+| Session ID regenerated after authentication | ✅ | `verifyOtp` / `exchangeCodeForSession` mint fresh access + refresh tokens |
+| Cookie `HttpOnly` | ✅ | `frontend/lib/supabase/config.ts:10` (server), `backend/src/middleware/anon-token.ts:17` |
+| Cookie `Secure` (prod) | ✅ | `secure: process.env.NODE_ENV === 'production'` in both files |
+| Cookie `SameSite` | ✅ Lax | Required for magic-link top-level GET (Strict would break the click-from-email flow). Skill accepts `Strict` or `Lax`. |
+| Idle timeout | ⚠️ | `[auth.sessions] inactivity_timeout = "8h"` is **commented out** (`supabase/config.toml:303-305`). Falls back to 1h JWT exp + refresh rotation, which works but is implicit. **Finding F6 (Low).** |
+| Absolute timeout (`timebox`) | ⚠️ | Same — commented out. F6. |
+| Session fixation protections | ✅ | PKCE flow + server-issued refresh tokens prevent fixation |
+| Logout invalidates session | ✅ | `auth.signOut()` clears cookies and revokes the refresh token |
 
-### 4. Magic-link callback redirect handling — OK
-Both `/auth/callback` and `/auth/confirm` validate redirect targets against `allowedRedirects = new Set(['/dashboard'])` and fall back to `/dashboard` on any parse failure. No open-redirect surface. The `redirect_to` parsing in `confirm` constructs a `URL` with the request origin and re-checks `origin === requestUrl.origin`, so an off-host redirect is impossible.
+---
 
-### 5. Cookies — OK
-- Frontend Supabase server cookies: `httpOnly: true`, `sameSite: 'lax'`, `secure` in production (`frontend/lib/supabase/config.ts`).
-- Backend anon token: `httpOnly: true`, `sameSite: 'Lax'`, `secure` in production, 12-month TTL matching Privacy Policy §6.1.
-- Refresh-token rotation enabled (`supabase/config.toml:192`).
+## Step 5 — OAuth / OIDC review
 
-### 6. CORS — OK
-`backend/src/middleware/cors.ts` locks origins to an explicit allowlist + `https://*.vercel.app` regex, with `credentials: true` and a tight `allowMethods`/`allowHeaders` list. Disallowed origins return `null` (i.e. no `Access-Control-Allow-Origin` header).
+No external OAuth providers configured (`auth.external.{apple,google,github,…}.enabled = false`). Magic-link is the only flow.
 
-### 7. RLS / database — OK
-Every user-scoped table has `ENABLE ROW LEVEL SECURITY`:
-- `profiles` — `select_own`, `update_own` keyed off `auth.uid() = id`.
-- `building_lookups`, `lease_reviews`, `subscriptions` — `select_own` keyed off `auth.uid() = user_id`.
-- `email_lookup_counters`, `affiliate_clicks`, `ai_usage`, `non_nyc_waitlist`, `refunds`, `cost_alerts`, `scraped_listings`, `saved_buildings` — RLS enabled with no policies (service-role only).
-- `buildings`, `landlords` — public SELECT for anon + authenticated; writes service-role only.
-- Storage: `lease-pdfs` SELECT requires `auth.uid()::text = (storage.foldername(name))[1]`; writes service-role only.
+| Check | Status | Notes |
+|---|---|---|
+| `state` parameter for CSRF | ✅ | Handled by Supabase + PKCE |
+| PKCE for public clients | ✅ | `flowType: 'pkce'` on both `createBrowserClient` and `createServerClient` |
+| Redirect URI whitelist (Supabase side) | ⚠️ | **Finding F2 (Medium, CWE-601)**. `supabase/config.toml:181-183` allows `https://*.vercel.app/auth/callback` — any preview domain on `*.vercel.app` (RentGuard's or anyone else's) is a valid post-magic-link target. |
+| Redirect URI whitelist (app side) | ✅ | `frontend/app/auth/callback/route.ts:5` and `confirm/route.ts:6` both restrict the post-verify redirect to `new Set(['/dashboard'])` and validate `redirectUrl.origin === requestUrl.origin` before honoring `redirect_to`. No open-redirect surface at the application layer. |
+| Token storage | ✅ | httpOnly cookie; Authorization header for API; never in URL fragments or localStorage |
 
-Cross-schema FKs to `auth.users` are wired with appropriate `ON DELETE` semantics (CASCADE for profiles + subscriptions, SET NULL for retention-bound rows like refunds and lease reviews).
+---
 
-### 8. Secret hygiene — OK
-- `.gitignore` excludes `.env`, `.env.local`, `.env.*.local`; only `.env.example` is tracked.
-- `backend/.env.example` and `frontend/.env.example` use placeholder secrets, never real ones.
-- `render.yaml` declares all secrets with `sync: false` so they're prompted in the dashboard.
-- `SUPABASE_JWT_SECRET` is read once via `process.env` and never logged. The default in `.env.example` is the well-known local-Supabase placeholder, which matches `supabase/config.toml`.
+## Step 6 — MFA implementation
 
-### 9. Tests — Pass
+| Method | Enabled | Source |
+|---|---|---|
+| TOTP (`auth.mfa.totp`) | ❌ enroll/verify both `false` | `supabase/config.toml:331-334` |
+| Phone (`auth.mfa.phone`) | ❌ | `supabase/config.toml:336-341` |
+| WebAuthn (`auth.mfa.web_authn`) | ❌ commented out | `supabase/config.toml:343-346` |
+
+**Finding F3 (Medium, CWE-308 Use of Single-factor Authentication).** Acceptable for a free-tier rental tool, but TOTP should be enabled before:
+- Stripe billing flows ship (lease-review checkout, Search Pass subscription) — Phase 4.6+
+- B2B firm-logos / firm-account features ship — Phase 7+
+- Any role with elevated privileges (admin dashboards) is added
+
+`secure_password_change = false` (line 249) is also relevant once MFA exists — re-auth before changing recovery factors should be enforced.
+
+---
+
+## Step 7 — Account security controls
+
+| Control | Status | Notes |
+|---|---|---|
+| Rate limiting on magic-link issuance | ✅ | `[auth.rate_limit] email_sent = 2/h`, `sign_in_sign_ups = 30/5min`, `token_verifications = 30/5min` (`supabase/config.toml:218-230`) |
+| Rate limiting on app API | ✅ | `backend/src/middleware/rate-limit.ts` — 10/h anon, 60/h authenticated |
+| Account lockout after failed attempts | N/A | No password to brute-force; magic-link OTP is single-use with 1h expiry |
+| Password reset flow | N/A | No passwords |
+| User enumeration on sign-in | ✅ | `signInWithOtp({ shouldCreateUser: true })` returns success regardless of whether the email exists. No oracle. |
+| Brute-force on OTP | ✅ | `token_verifications = 30/5min` per IP; OTP is 6 chars over 1M space; expiry = 1h |
+| CAPTCHA | ⚠️ | `[auth.captcha]` block commented out. Not a finding given Supabase's per-IP rate limits, but worth enabling if abuse appears in logs. |
+
+---
+
+## Step 8 — Credential transmission
+
+| Check | Status | Notes |
+|---|---|---|
+| HTTPS on all auth endpoints (prod) | ✅ | Vercel + Render terminate TLS; CORS allowlist (`backend/src/middleware/cors.ts:6-13`) only contains HTTPS prod origins + localhost-dev |
+| Passwords in URLs | N/A | Passwordless |
+| API keys in headers (not query) | ✅ | `frontend/lib/api/backend.ts:227` sets `Authorization: Bearer <token>`, never query-string |
+| Tokens in URLs | ⚠️ | `token_hash` is in the `/auth/confirm?token_hash=…` query string of magic-link emails. **Finding F5 (Low, CWE-532).** Mitigated by single-use + 1h TTL; still possible to leak via Referer header if the user clicks an outbound link from `/auth/confirm` before redirect. The Supabase OOB token flow puts the burden on the verify endpoint to consume the token immediately, which it does (`createClient.auth.verifyOtp` runs server-side before any redirect). |
+| Auth tokens / passwords in logs | ✅ | `grep` of `logger.{info,warn,error}` calls confirms none log `Authorization`, `token_hash`, JWT contents, or `process.env.SUPABASE_JWT_SECRET` |
+| Secrets in repo | ✅ | `.gitignore` excludes `.env`, `.env.local`, `.env.*.local`. `.env.example` placeholder. `render.yaml` uses `sync: false` for every secret. |
+
+---
+
+## Step 9 — Findings (severity + CWE + ASVS mapping)
+
+| ID | Severity | CWE | ASVS | File:Line | Description |
+|---|---|---|---|---|---|
+| F1 | **Medium** | CWE-345 (Insufficient Verification of Data Authenticity) | V2.9.1, V3.5 | `backend/src/middleware/auth.ts:15` | `jose.jwtVerify` called without `audience` or `issuer` options — accepts any HS256 token signed with the project secret regardless of `aud`/`iss` |
+| F2 | **Medium** | CWE-601 (URL Redirection to Untrusted Site) | V2.5.4 | `supabase/config.toml:181-183` | `https://*.vercel.app/auth/callback` wildcard accepts any `*.vercel.app` preview as a magic-link target |
+| F3 | **Medium** | CWE-308 (Use of Single-factor Authentication) | V2.7, V2.8 | `supabase/config.toml:331-346` | TOTP / phone / WebAuthn MFA all disabled. Acceptable pre-billing; needs enablement before Phase 7 |
+| F4 | **Medium** | CWE-521 (Weak Password Requirements) | V2.1.1 | `supabase/config.toml:203` | `minimum_password_length = 6` (below NIST ≥8). Latent — only reachable if password sign-in is ever turned on |
+| F5 | Low | CWE-532 (Insertion of Sensitive Info into Log File / URL) | V3.1.1 | `frontend/app/auth/confirm/route.ts:43-47` | Single-use OTP `token_hash` appears in URL query string; could leak via Referer if a same-page outbound click happens before `verifyOtp` redirects |
+| F6 | Low | CWE-613 (Insufficient Session Expiration) | V3.3.2, V3.3 | `supabase/config.toml:301-305` | `[auth.sessions] timebox` and `inactivity_timeout` commented out — falls back to 1h JWT + refresh rotation (not unsafe, just implicit) |
+| F7 | Info | — | — | `backend/src/middleware/auth.ts:18` | Silent `catch` on JWT verify failures. Add a `logger.debug({ err }, 'jwt verify failed')` to aid triage; do **not** log the token |
+
+---
+
+## Step 9b — OWASP ASVS V2 (Authentication) compliance matrix
+
+| Req | Description | Status | Notes |
+|---|---|---|---|
+| V2.1.1 | Min password length ≥12 | ❌ → N/A | Passwordless. F4 records the latent config. |
+| V2.1.2 | Allow Unicode passwords | N/A | — |
+| V2.1.5 | User can change creds / passwordless OK | ✅ | Magic link |
+| V2.1.7 | No password truncation | N/A | — |
+| V2.1.9 | No composition rules | ✅ | None enforced |
+| V2.2.1 | Anti-automation on credentials | ✅ | Supabase rate limits + app rate limits |
+| V2.2.3 | Account lockout / equivalent | N/A | Passwordless |
+| V2.3.1 | Verifier secure (email/SMS) | ✅ | Single-use, 1h TTL, 6-digit OTP |
+| V2.5.1 | No JWT in localStorage | ✅ | httpOnly cookies via @supabase/ssr |
+| V2.5.4 | Direct user authentication | ✅ | Magic-link + cookie session |
+| V2.5.7 | TOTP secrets encrypted at rest | N/A | MFA disabled (F3) |
+| V2.6.1 | OOB verifier secure | ✅ | Magic link |
+| V2.7.1 | Channel encrypted | ✅ | TLS in prod |
+| V2.7.x | MFA available | ❌ | F3 |
+| V2.8.x | TOTP / WebAuthn enrollment | ❌ | F3 |
+| V2.9.1 | Cryptographic verifier | ⚠️ | HS256 OK; F1 missing aud/iss |
+| V2.10.1 | Service account auth | ✅ | service-role JWT for backend → Postgres; never exposed to client |
+
+## Step 9c — OWASP ASVS V3 (Session Management) compliance matrix
+
+| Req | Description | Status | Notes |
+|---|---|---|---|
+| V3.1.1 | No session token in URL | ⚠️ | F5 — OTP token_hash in URL during verify (single-use mitigation) |
+| V3.2.1 | Server-generated tokens | ✅ | Supabase |
+| V3.2.2 | ≥64 bits entropy | ✅ | JWT signature; OTP 6-digit (≥20 bits) bounded by rate limit |
+| V3.2.3 | Cookie HttpOnly + Secure + SameSite | ✅ | Verified in code |
+| V3.2.4 | CSPRNG for tokens | ✅ | `randomUUID()` for anon; Supabase for auth |
+| V3.3.1 | Logout invalidates | ✅ | `signOut` |
+| V3.3.2 | Idle timeout | ⚠️ | F6 — implicit via 1h JWT |
+| V3.3.3 | Re-auth for sensitive ops | ⚠️ | No sensitive ops gated yet; needs revisit at billing |
+| V3.4.1 | SameSite | ✅ | Lax |
+| V3.4.2 | Secure | ✅ | Prod only |
+| V3.4.3 | HttpOnly | ✅ | Always |
+| V3.7.1 | Auth controls verified | ✅ | 21/21 tests pass |
+
+---
+
+## Step 10 — Remediation plan
+
+### F1 — Validate JWT `aud` and `iss` (Medium, CWE-345)
+
+`backend/src/middleware/auth.ts`:
+
+```ts
+const SUPABASE_AUDIENCE = 'authenticated';
+const SUPABASE_ISSUER = `${process.env.SUPABASE_URL}/auth/v1`;
+// …
+const { payload } = await jwtVerify(token, secret, {
+  algorithms: ['HS256'],
+  audience: SUPABASE_AUDIENCE,
+  issuer: SUPABASE_ISSUER,
+});
 ```
-backend/test/saved-buildings.test.ts (18 tests) ✓
-backend/test/health.test.ts (3 tests) ✓
+
+Add `SUPABASE_URL` to `backend/.env.example` and `render.yaml` (`sync: false`).
+Update `backend/test/saved-buildings.test.ts:91-98` to set the `aud` and `iss` claims on the test JWT.
+
+### F2 — Tighten Vercel preview wildcard (Medium, CWE-601)
+
+`supabase/config.toml:181-183`: replace
+```toml
+"https://*.vercel.app/auth/callback",
+"https://*.vercel.app/auth/callback/**",
+"https://*.vercel.app/auth/confirm",
 ```
-Covered: missing Authorization header → 401, invalid JWT → 401, valid signed JWT → 200, BBL validation → 400, idempotent POST/DELETE, list ordering, LEFT-JOIN nulls. The signing flow uses `jose.SignJWT` against the same `SUPABASE_JWT_SECRET`, so the auth middleware path is exercised end-to-end (no middleware mock).
+with the project-scoped pattern (replace `<vercel-project>` with the actual Vercel project name):
+```toml
+"https://<vercel-project>-*.vercel.app/auth/callback",
+"https://<vercel-project>-*.vercel.app/auth/callback/**",
+"https://<vercel-project>-*.vercel.app/auth/confirm",
+```
 
-## Non-blocking observations
+### F3 — Enable TOTP MFA before Phase 7 (Medium, CWE-308)
 
-These don't block ship — recording them so they're easy to revisit.
+Tracked as a roadmap entry, not a code change. Pre-conditions:
+- Stripe billing live → MFA on accounts with payment methods
+- B2B firm portal live → MFA enforced for firm-admin role
 
-1. **Vercel preview wildcard in `additional_redirect_urls`.** `supabase/config.toml:181-183` allowlists `https://*.vercel.app/auth/callback`. Any preview deploy on `*.vercel.app` (RentGuard's or anyone else's) can be the post-magic-link target. Practically bounded by Supabase's exact-match logic and the fact the magic link is single-use, but consider tightening to `https://rentguardai-*.vercel.app` once the project's Vercel namespace is stable.
+Config delta:
+```toml
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+```
+Plus a frontend MFA enrollment screen (out of scope for this validation).
 
-2. **Symmetric JWT (HS256).** `SUPABASE_JWT_SECRET` is the only thing standing between a leaked secret and forged user tokens. Supabase now offers asymmetric JWT signing (RS256 / ES256) where the backend verifies with a public JWK — worth migrating to once it stabilizes, since it removes a high-value secret from the backend env.
+### F4 — Bump default password length (Medium, CWE-521 — latent)
 
-3. **Silent JWT failures.** `backend/src/middleware/auth.ts:18` catches verification failures silently. That's correct for the optional-auth pattern, but a `logger.debug({ err }, 'jwt verify failed')` would help triage "why does this user keep appearing as anon?" support tickets without leaking PII.
+`supabase/config.toml:203`: change `minimum_password_length = 6` → `12`. Defensive — currently no code path reaches it.
 
-4. **CORS `*` for empty Origin.** `backend/src/middleware/cors.ts:17` returns `'*'` when `Origin` is missing. Browsers can't send credentialed requests with a `*` ACAO, so the practical surface is just non-browser tools (curl / server-to-server). The endpoints already require a Bearer token for sensitive routes, so this is fine — flagging for awareness.
+### F5 — Document OTP-in-URL acceptance (Low, CWE-532)
 
-5. **Public-routes session refresh.** `frontend/middleware.ts` only matches `/dashboard/:path*` and `/login`, so public pages don't refresh the Supabase session cookie. The browser client (`supabase.auth.getSession()` inside `authHeader()` and `SignInModal`) handles refresh client-side, which works because magic-link flows are short-lived. If we ever add long-lived authenticated server-rendered pages outside `/dashboard`, the matcher will need to grow.
+No code change. Add a SECURITY.md note acknowledging that magic-link OTPs ride in the URL query string (Supabase standard) and that single-use + 1h TTL is the mitigation.
+
+### F6 — Make session timeouts explicit (Low, CWE-613)
+
+`supabase/config.toml`: uncomment
+```toml
+[auth.sessions]
+timebox = "24h"
+inactivity_timeout = "8h"
+```
+
+### F7 — Log JWT verification failures at debug level (Info)
+
+`backend/src/middleware/auth.ts:18`: replace the silent `catch {}` with
+```ts
+} catch (err) {
+  logger.debug({ err: String(err) }, 'jwt verify failed — falling through to anon');
+}
+```
+
+Do **not** log the token contents.
+
+---
 
 ## How to re-run
 
@@ -96,8 +307,14 @@ npm ci
 npx vitest run test/saved-buildings.test.ts test/health.test.ts
 ```
 
-To re-validate the magic-link flow end-to-end:
-1. `supabase start` (uses `supabase/config.toml`)
+End-to-end magic-link smoke:
+1. `supabase start`
 2. `cd backend && npm run dev`
 3. `cd frontend && npm run dev`
-4. Visit `http://localhost:3000/login`, submit an email, open the inbucket UI at `http://localhost:54324`, click the magic link, confirm redirect to `/dashboard`.
+4. Open `http://localhost:3000/login`, submit an email
+5. Open inbucket at `http://localhost:54324`, click the magic link
+6. Confirm landing on `/dashboard`
+
+## Note on the skill
+
+`npx skillfish add jeremylongshore/claude-code-plugins-plus-skills authentication-validator` failed with a GitHub API rate limit, so the skill was retrieved via a sparse `git clone https://github.com/jeremylongshore/claude-code-plugins-plus-skills` and the methodology + output format above were sourced from `plugins/security/authentication-validator/skills/validating-authentication-implementations/SKILL.md` (v1.0.0). Two helper scripts (`jwt_analyzer.py`, `password_policy_check.py`) ship with the skill but operate on JSON config files describing the auth setup rather than scanning code; they were not run for this validation.

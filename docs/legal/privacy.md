@@ -24,7 +24,7 @@ RentGuard NYC is not a law firm and does not provide legal services. Submitting 
 
 ### 2.1 Information you give us
 
-- **Account information.** Email address, password (stored hashed), and any optional profile fields you provide (e.g., display name).
+- **Account information.** Email address (used for magic-link sign-in; we do not store passwords), and any optional profile fields you provide (e.g., display name).
 - **Payment information.** When you purchase a lease review or subscribe to Search Pass, you provide payment details to our payment processor (Stripe). We do not store full card numbers on our servers; we receive a token and the last four digits for receipts.
 - **Lease PDFs.** When you use the lease review tool, you upload a PDF lease. Lease PDFs typically contain your name, the rental address, lease term, monthly rent, security deposit terms, and other contractual details. Some leases include income or employment information; rare leases include Social Security numbers or government-issued ID numbers. We treat lease PDFs as the highest-sensitivity data class we handle.
 - **Saved searches and saved buildings.** Search Pass subscribers can save buildings they want to monitor.
@@ -47,6 +47,10 @@ RentGuard NYC is not a law firm and does not provide legal services. Submitting 
 - We do not collect health information.
 - We do not collect children's information knowingly (see Section 11).
 - We do not buy data about you from data brokers.
+
+### 2.5 Anonymous use
+
+You can run building lookups and lease reviews without creating an account. When you do, we associate the request with an anonymous browser identifier (`anon_token`) or, if you choose to receive a result by email, with the email address you provide. We treat this data under the same retention and security rules as account-linked data, and we do not attempt to identify the individual behind an `anon_token` beyond what is necessary to deliver the service.
 
 ---
 
@@ -163,7 +167,7 @@ We use cookies and similar technologies for:
 
 - **Strictly necessary cookies** — to log you in and keep you logged in, to remember your search session, to enable payment.
 - **Functional cookies** — to remember your preferences (e.g., recent buildings).
-- **Analytics cookies** — to understand product usage in aggregate. We use Plausible Analytics, a privacy-respecting analytics service that does not use cross-site tracking cookies.
+- **Analytics.** We use Cloudflare Web Analytics for page-view analytics; it is cookieless and does not require a banner. We use PostHog for event analytics on paid funnel actions (e.g., paywall views, lease unlocks); PostHog uses a first-party cookie to deduplicate events.
 
 We do not use advertising cookies. We do not allow third-party advertising trackers on our site.
 

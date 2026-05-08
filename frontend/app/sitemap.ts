@@ -35,10 +35,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
+  const legalUrls: MetadataRoute.Sitemap = [
+    'legal/terms',
+    'legal/privacy',
+    'legal/disclaimer',
+  ].map((slug) => ({
+    url: `https://www.rentguard.cc/${slug}`,
+    changeFrequency: 'yearly' as const,
+    priority: 0.3,
+  }));
+
   return [
     { url: 'https://www.rentguard.cc/', changeFrequency: 'daily', priority: 1 },
     { url: 'https://www.rentguard.cc/lookup', changeFrequency: 'daily', priority: 0.9 },
     ...marketingUrls,
+    ...legalUrls,
     ...buildingUrls,
   ];
 }

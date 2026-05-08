@@ -80,6 +80,11 @@ beforeEach(() => {
     stats: {},
     lookup_id: null,
     building_url: '/building/1008350041',
+    value_score: null,
+    value_band: null,
+    value_confidence: null,
+    value_factors: [],
+    value_explanation: null,
   });
 });
 

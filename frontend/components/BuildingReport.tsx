@@ -111,6 +111,21 @@ export function BuildingReport({ data }: { data: SuccessData }) {
       try {
         const session = await getCurrentSession();
         if (cancelled) return;
+        // Diagnostic: surface mount-time auth state so we can pin down whether
+        // a "save still prompts for sign-in" failure is stale-state (no session
+        // here despite cookies) or backend-401 (session here but rejected
+        // downstream). cookieNames lists names only, no token values.
+        if (typeof document !== 'undefined') {
+          const cookieNames = document.cookie
+            ? document.cookie.split('; ').map((c) => c.split('=')[0])
+            : [];
+          console.warn('[BuildingReport] mount auth check', {
+            hasSession: Boolean(session),
+            hostname: window.location.hostname,
+            cookieNames,
+            bbl,
+          });
+        }
         await refreshSavedState(Boolean(session));
       } catch {
         if (!cancelled) {
@@ -171,8 +186,28 @@ export function BuildingReport({ data }: { data: SuccessData }) {
   }
 
   async function handleSave() {
-    // Anon → SignInModal (existing flow, unchanged).
-    if (!isAuthed) {
+    // Diagnostic: log click-time auth state. Pair with the mount-time log to
+    // tell whether `isAuthed` was ever true during this page lifetime, or
+    // whether it was stale at click and the modal opened without a backend
+    // round-trip.
+    console.warn('[BuildingReport] save clicked', { isAuthed, bbl });
+
+    // Re-check session before opening the modal. This catches the narrow race
+    // where mount-time getCurrentSession returned null but Supabase has since
+    // hydrated cookies (Safari can lag on chunked-cookie parsing) and the
+    // SIGNED_IN onAuthStateChange handler hasn't yet flipped React state, OR
+    // where the subscription failed to register at all (the catch at the
+    // bottom of useEffect swallows construction errors). One extra local
+    // getSession() read on the rare-stale-state click; happy path unaffected.
+    let authedNow = isAuthed;
+    if (!authedNow) {
+      const session = await getCurrentSession();
+      if (session) {
+        authedNow = true;
+        setIsAuthed(true);
+      }
+    }
+    if (!authedNow) {
       setModal({ kind: 'save', reason: 'save' });
       return;
     }

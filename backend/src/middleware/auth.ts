@@ -3,6 +3,13 @@
 // If valid Supabase JWT: sets userId + userEmail on context.
 // If missing or invalid: continues as anonymous (no error thrown).
 //
+// Supports both Supabase JWT signing modes:
+//   - Asymmetric (ES256/RS256/EdDSA): tokens verified against the project's
+//     JWKS at /auth/v1/.well-known/jwks.json. This is the modern default for
+//     newer Supabase projects and is what production uses.
+//   - Legacy HMAC (HS256): tokens verified against the shared SUPABASE_JWT_SECRET.
+//     Only kept so existing tests (and any project still on legacy mode) work.
+//
 // On verify failure we log at info with a `reason` tag (`expired`, `bad_iss`,
 // `bad_aud`, `bad_signature`, `malformed`, `other`) plus the decoded but
 // unverified `iss`/`aud`/`exp` from the failing token. This is what catches
@@ -11,7 +18,13 @@
 // reason='bad_iss' and the operator can see it in logs.
 
 import { createMiddleware } from 'hono/factory';
-import { decodeJwt, jwtVerify } from 'jose';
+import {
+  createRemoteJWKSet,
+  decodeJwt,
+  jwtVerify,
+  type FlattenedJWSInput,
+  type JWSHeaderParameters,
+} from 'jose';
 import {
   JOSEError,
   JWSSignatureVerificationFailed,
@@ -25,13 +38,39 @@ const SUPABASE_AUDIENCE = 'authenticated';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET;
-const authConfig =
-  SUPABASE_URL && SUPABASE_JWT_SECRET
-    ? {
-        issuer: `${SUPABASE_URL.replace(/\/$/, '')}/auth/v1`,
-        secret: new TextEncoder().encode(SUPABASE_JWT_SECRET),
-      }
-    : null;
+
+const authConfig = SUPABASE_URL
+  ? (() => {
+      const baseUrl = SUPABASE_URL.replace(/\/$/, '');
+      const issuer = `${baseUrl}/auth/v1`;
+      const jwks = createRemoteJWKSet(
+        new URL(`${baseUrl}/auth/v1/.well-known/jwks.json`),
+      );
+      const sharedSecret = SUPABASE_JWT_SECRET
+        ? new TextEncoder().encode(SUPABASE_JWT_SECRET)
+        : null;
+
+      // Dispatches to HMAC (legacy) or JWKS (asymmetric) based on the JWT's
+      // `alg` header. createRemoteJWKSet is lazy — it only fetches when called,
+      // so HS-only test setups never hit the network.
+      const getKey = async (
+        header: JWSHeaderParameters,
+        input: FlattenedJWSInput,
+      ) => {
+        if (header.alg?.startsWith('HS')) {
+          if (!sharedSecret) {
+            throw new Error(
+              'HS-signed JWT received but SUPABASE_JWT_SECRET is not set',
+            );
+          }
+          return sharedSecret;
+        }
+        return jwks(header, input);
+      };
+
+      return { issuer, getKey };
+    })()
+  : null;
 
 if (!authConfig) {
   logger.warn(
@@ -43,7 +82,11 @@ if (!authConfig) {
   );
 } else {
   logger.info(
-    { expectedIssuer: authConfig.issuer, expectedAudience: SUPABASE_AUDIENCE },
+    {
+      expectedIssuer: authConfig.issuer,
+      expectedAudience: SUPABASE_AUDIENCE,
+      legacyHs256Fallback: Boolean(SUPABASE_JWT_SECRET),
+    },
     'supabase jwt verification enabled',
   );
 }
@@ -87,8 +130,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   if (authConfig && header?.startsWith('Bearer ')) {
     const token = header.slice('Bearer '.length);
     try {
-      const { payload } = await jwtVerify(token, authConfig.secret, {
-        algorithms: ['HS256'],
+      const { payload } = await jwtVerify(token, authConfig.getKey, {
         audience: SUPABASE_AUDIENCE,
         issuer: authConfig.issuer,
       });

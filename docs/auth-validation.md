@@ -315,6 +315,17 @@ End-to-end magic-link smoke:
 5. Open inbucket at `http://localhost:54324`, click the magic link
 6. Confirm landing on `/dashboard`
 
+End-to-end password recovery smoke:
+1. `supabase start && cd frontend && npm run dev`
+2. Sign up via `/login` (signup mode) with a test email + password
+3. From `/login` (password mode), click **Forgot your password?**
+4. Submit the email at `/forgot-password`
+5. Open inbucket (`http://localhost:54324`) and click the recovery link → lands on `/auth/reset-password`
+6. Submit a new password (≥12 chars) → redirected to `/login?reset=success`
+7. Sign in with the new password; old password is rejected
+
+Production SMTP (Resend) is configured in `supabase/config.toml` under `[auth.email.smtp]`. The operator must export `RESEND_API_KEY` before running `supabase config push`. The same key is also documented in `render.yaml` for parity (not consumed by the backend at runtime).
+
 ## Note on the skill
 
 `npx skillfish add jeremylongshore/claude-code-plugins-plus-skills authentication-validator` failed with a GitHub API rate limit, so the skill was retrieved via a sparse `git clone https://github.com/jeremylongshore/claude-code-plugins-plus-skills` and the methodology + output format above were sourced from `plugins/security/authentication-validator/skills/validating-authentication-implementations/SKILL.md` (v1.0.0). Two helper scripts (`jwt_analyzer.py`, `password_policy_check.py`) ship with the skill but operate on JSON config files describing the auth setup rather than scanning code; they were not run for this validation.

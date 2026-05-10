@@ -31,6 +31,8 @@ services:
         sync: false   # Optional but recommended (raises rate limit 1k→10k/hr)
       - key: FIRECRAWL_API_KEY
         sync: false   # Phase 4 — listing-scraping fallback (500 credits free, $19/mo for 3k)
+      - key: RESEND_API_KEY
+        sync: false   # SMTP relay for Supabase auth emails (password recovery, magic-link). Consumed by `supabase config push`, not by the backend at runtime.
       # Beehiiv is stub-safe — the route returns ok:true without these set.
       # Add only if you want real waitlist enrollment.
       # - key: BEEHIIV_API_KEY

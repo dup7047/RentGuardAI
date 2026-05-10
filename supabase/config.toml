@@ -172,15 +172,22 @@ additional_redirect_urls = [
   "http://localhost:3100/auth/confirm",
   "http://127.0.0.1:3000/auth/confirm",
   "http://127.0.0.1:3100/auth/confirm",
+  "http://localhost:3000/auth/reset-password",
+  "http://localhost:3100/auth/reset-password",
+  "http://127.0.0.1:3000/auth/reset-password",
+  "http://127.0.0.1:3100/auth/reset-password",
   "https://rentguard.cc/auth/callback",
   "https://rentguard.cc/auth/callback/**",
   "https://www.rentguard.cc/auth/callback",
   "https://www.rentguard.cc/auth/callback/**",
   "https://rentguard.cc/auth/confirm",
   "https://www.rentguard.cc/auth/confirm",
+  "https://rentguard.cc/auth/reset-password",
+  "https://www.rentguard.cc/auth/reset-password",
   "https://rent-guard-ai-*.vercel.app/auth/callback",
   "https://rent-guard-ai-*.vercel.app/auth/callback/**",
   "https://rent-guard-ai-*.vercel.app/auth/confirm",
+  "https://rent-guard-ai-*.vercel.app/auth/reset-password",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
@@ -265,15 +272,22 @@ content_path = "./templates/magic-link.html"
 subject = "Confirm your RentGuard account"
 content_path = "./templates/confirmation.html"
 
-# Use a production-ready SMTP server
-# [auth.email.smtp]
-# enabled = true
-# host = "smtp.resend.com"
-# port = 587
-# user = "resend"
-# pass = "env(RESEND_API_KEY)"
-# admin_email = "hello@rentguard.cc"
-# sender_name = "RentGuard NYC"
+[auth.email.template.recovery]
+subject = "Reset your RentGuard NYC password"
+content_path = "./templates/recovery.html"
+
+# Production SMTP via Resend. RESEND_API_KEY is read at `supabase config push`
+# time from the operator's shell, never committed. Local dev keeps using
+# Inbucket (the [inbucket] block above) — Supabase falls back to it when
+# this section is unreachable.
+[auth.email.smtp]
+enabled = true
+host = "smtp.resend.com"
+port = 465
+user = "resend"
+pass = "env(RESEND_API_KEY)"
+admin_email = "noreply@rentguard.cc"   # placeholder — swap to verified sender during deploy
+sender_name = "RentGuard NYC"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

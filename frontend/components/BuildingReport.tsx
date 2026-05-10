@@ -23,17 +23,17 @@ import { buildingJsonLd } from '@/lib/seo/structured-data';
 import {
   getBandLabel,
   getReportTone,
-  getSavedBuildingState,
   getValueBandLabel,
   getValueTone,
-  saveBuilding,
-  unsaveBuilding,
-  SavedBuildingsAuthError,
   type LookupResponse,
   type ValueBand,
   type ValueConfidence,
 } from '@/lib/api/backend';
-import { getCurrentSession } from '@/lib/auth/session';
+import {
+  getSavedBuildingStateAction,
+  saveBuildingAction,
+  unsaveBuildingAction,
+} from '@/app/building/[bbl]/actions';
 import { createClient } from '@/lib/supabase/browser';
 
 type SuccessData = Extract<LookupResponse, { kind: 'success' }>;
@@ -80,53 +80,58 @@ export function BuildingReport({ data }: { data: SuccessData }) {
   const [isSaved, setIsSaved] = useState<boolean | null>(null);
   const [saveInFlight, setSaveInFlight] = useState<boolean>(false);
 
-  // On mount + when bbl changes, check auth status. If signed in, fetch
-  // whether this BBL is already saved so the button label reflects reality
-  // before the user clicks anything.
+  // On mount + when bbl changes, ask the server whether this BBL is already
+  // saved. The server action reads the session via @/lib/supabase/server
+  // (raw HTTP cookies) — that's the path that survives Safari's chunked-
+  // cookie parsing bug, which is what was making the browser-client
+  // getSession() in the old flow return null and force the modal open.
   //
-  // Also subscribe to auth state changes so a sign-in that lands AFTER mount
-  // (e.g. cookie hydration races, or completing the sign-in flow in another
-  // tab) flips `isAuthed` and refreshes the saved-state without a reload.
-  // Filter to SIGNED_IN / SIGNED_OUT only — INITIAL_SESSION fires immediately
-  // on subscribe (we already do that work in the explicit fetch below) and
-  // TOKEN_REFRESHED fires hourly (would silently spam GET /v1/saved-buildings/:bbl).
+  // We still subscribe to onAuthStateChange so a sign-in that lands AFTER
+  // mount (e.g. completing the sign-in flow in another tab) re-fetches the
+  // saved-state. Filter to SIGNED_IN / SIGNED_OUT only — INITIAL_SESSION
+  // fires immediately (we already do that work in the explicit call below)
+  // and TOKEN_REFRESHED fires hourly (would silently spam the server action).
   useEffect(() => {
     let cancelled = false;
 
-    async function refreshSavedState(authed: boolean) {
-      setIsAuthed(authed);
-      if (!authed) {
+    async function refreshSavedState() {
+      const result = await getSavedBuildingStateAction(bbl);
+      if (cancelled) return;
+      if (result.kind === 'ok') {
+        setIsAuthed(true);
+        setIsSaved(result.saved);
+      } else {
+        setIsAuthed(false);
         setIsSaved(false);
-        return;
-      }
-      try {
-        const state = await getSavedBuildingState(bbl);
-        if (!cancelled) setIsSaved(state.saved);
-      } catch {
-        if (!cancelled) setIsSaved(false);
       }
     }
 
     (async () => {
       try {
-        const session = await getCurrentSession();
+        const result = await getSavedBuildingStateAction(bbl);
         if (cancelled) return;
-        // Diagnostic: surface mount-time auth state so we can pin down whether
-        // a "save still prompts for sign-in" failure is stale-state (no session
-        // here despite cookies) or backend-401 (session here but rejected
-        // downstream). cookieNames lists names only, no token values.
+        // Diagnostic: surface mount-time auth state. With the server-action
+        // flow, `unauthorized` here means the server saw no valid session in
+        // cookies (genuinely anon, or signed out), not a client-side cookie
+        // parsing failure.
         if (typeof document !== 'undefined') {
           const cookieNames = document.cookie
             ? document.cookie.split('; ').map((c) => c.split('=')[0])
             : [];
           console.warn('[BuildingReport] mount auth check', {
-            hasSession: Boolean(session),
+            kind: result.kind,
             hostname: window.location.hostname,
             cookieNames,
             bbl,
           });
         }
-        await refreshSavedState(Boolean(session));
+        if (result.kind === 'ok') {
+          setIsAuthed(true);
+          setIsSaved(result.saved);
+        } else {
+          setIsAuthed(false);
+          setIsSaved(false);
+        }
       } catch {
         if (!cancelled) {
           setIsAuthed(false);
@@ -137,20 +142,24 @@ export function BuildingReport({ data }: { data: SuccessData }) {
 
     // createClient() throws if Supabase env vars are missing (e.g. in unit
     // tests that don't mock the client). The save flow already degrades to
-    // anon in that case via the getCurrentSession() fallback above; the
-    // subscription is purely additive, so swallow the construction error
-    // and skip subscribing rather than crashing the whole report.
+    // anon in that case via the server action above; the subscription is
+    // purely additive, so swallow the construction error and skip
+    // subscribing rather than crashing the whole report.
     let unsubscribe: (() => void) | null = null;
     try {
       const supabase = createClient();
-      const sub = supabase.auth.onAuthStateChange((event, session) => {
+      const sub = supabase.auth.onAuthStateChange((event) => {
         if (cancelled) return;
-        if (event === 'SIGNED_IN') void refreshSavedState(Boolean(session));
-        else if (event === 'SIGNED_OUT') void refreshSavedState(false);
+        if (event === 'SIGNED_IN') void refreshSavedState();
+        else if (event === 'SIGNED_OUT') {
+          setIsAuthed(false);
+          setIsSaved(false);
+        }
       });
       unsubscribe = () => sub.data.subscription.unsubscribe();
     } catch {
-      // No subscription — the explicit getCurrentSession() above still runs.
+      // No subscription — the explicit getSavedBuildingStateAction above
+      // still runs.
     }
 
     return () => {
@@ -186,49 +195,26 @@ export function BuildingReport({ data }: { data: SuccessData }) {
   }
 
   async function handleSave() {
-    // Diagnostic: log click-time auth state. Pair with the mount-time log to
-    // tell whether `isAuthed` was ever true during this page lifetime, or
-    // whether it was stale at click and the modal opened without a backend
-    // round-trip.
-    console.warn('[BuildingReport] save clicked', { isAuthed, bbl });
-
-    // Re-check session before opening the modal. This catches the narrow race
-    // where mount-time getCurrentSession returned null but Supabase has since
-    // hydrated cookies (Safari can lag on chunked-cookie parsing) and the
-    // SIGNED_IN onAuthStateChange handler hasn't yet flipped React state, OR
-    // where the subscription failed to register at all (the catch at the
-    // bottom of useEffect swallows construction errors). One extra local
-    // getSession() read on the rare-stale-state click; happy path unaffected.
-    let authedNow = isAuthed;
-    if (!authedNow) {
-      const session = await getCurrentSession();
-      if (session) {
-        authedNow = true;
-        setIsAuthed(true);
-      }
-    }
-    if (!authedNow) {
-      setModal({ kind: 'save', reason: 'save' });
-      return;
-    }
     if (saveInFlight) return; // debounce double-clicks
-    // Authed: optimistic toggle, fire API, revert + toast on error.
+    // Optimistic toggle. The server action is the source of truth for auth
+    // state — if it returns `unauthorized` we revert and open the modal.
+    // No client-side getSession() check; that path was unreliable on Safari
+    // (see the mount effect's comment).
     const wasSaved = isSaved === true;
     setIsSaved(!wasSaved);
     setSaveInFlight(true);
     try {
-      if (wasSaved) {
-        await unsaveBuilding(bbl);
-        showToast('Removed from saved buildings');
-      } else {
-        await saveBuilding(bbl);
-        showToast('Saved to your dashboard');
+      const result = wasSaved
+        ? await unsaveBuildingAction(bbl)
+        : await saveBuildingAction(bbl);
+      console.warn('[BuildingReport] save result', { kind: result.kind, bbl, wasSaved });
+      if (result.kind === 'ok') {
+        showToast(wasSaved ? 'Removed from saved buildings' : 'Saved to your dashboard');
+        return;
       }
-    } catch (err) {
-      // Revert on failure.
+      // Revert optimistic toggle on any non-ok result.
       setIsSaved(wasSaved);
-      if (err instanceof SavedBuildingsAuthError) {
-        // Token expired or invalid — fall back to the sign-in modal.
+      if (result.kind === 'unauthorized') {
         setIsAuthed(false);
         setModal({ kind: 'save', reason: 'save' });
       } else {

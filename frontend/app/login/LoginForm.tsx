@@ -15,7 +15,10 @@ type FormState =
 
 type Mode = 'password' | 'signup' | 'magic';
 
-const MIN_PASSWORD_LENGTH = 8;
+// Matches `minimum_password_length` in supabase/config.toml so signup
+// validation fails client-side before Supabase rejects with a confusing
+// server-side error.
+const MIN_PASSWORD_LENGTH = 12;
 
 const TITLE: Record<Mode, string> = {
   password: 'Sign in',

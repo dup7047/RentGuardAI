@@ -145,10 +145,11 @@ beforeEach(() => {
   });
   vi.mocked(geosearch).mockReset();
   vi.mocked(geosearch).mockResolvedValue({
-    kind: 'success',
+    kind: 'matched',
     bbl: HAPPY_BBL,
     address: '350 5 AVENUE, New York, NY, USA',
-    borough: 'Manhattan',
+    borough: 'MANHATTAN',
+    confidence: 1,
   } as Awaited<ReturnType<typeof geosearch>>);
   vi.mocked(scrapeListing).mockReset();
 });
@@ -268,7 +269,8 @@ describe('POST /v1/lookup/stream — URL input bypasses the cache', () => {
   it('runs the full pipeline even when a cached row exists', async () => {
     mocks.cachedRow = makeCachedRow();
     vi.mocked(scrapeListing).mockResolvedValue({
-      kind: 'success',
+      kind: 'ok',
+      fetchMethod: 'direct',
       data: {
         url: 'https://streeteasy.com/building/example',
         source: 'streeteasy',

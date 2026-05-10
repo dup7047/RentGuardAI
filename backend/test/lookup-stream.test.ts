@@ -136,11 +136,11 @@ const HAPPY_BBL = '1008240001';
 beforeEach(() => {
   vi.mocked(geosearch).mockReset();
   vi.mocked(geosearch).mockResolvedValue({
-    kind: 'success',
+    kind: 'matched',
     bbl: HAPPY_BBL,
     address: '350 5th Ave',
-    borough: 'Manhattan',
-    // Geosearch returns extra fields too but the route only reads these three.
+    borough: 'MANHATTAN',
+    confidence: 1,
   } as Awaited<ReturnType<typeof geosearch>>);
   vi.mocked(scrapeListing).mockReset();
 });

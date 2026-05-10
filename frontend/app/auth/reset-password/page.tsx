@@ -1,10 +1,14 @@
+import type { EmailOtpType } from '@supabase/supabase-js';
 import Link from 'next/link';
 
 import { createClient } from '@/lib/supabase/server';
 
 import { ResetPasswordForm } from './ResetPasswordForm';
 
-type SearchParams = Promise<{ code?: string | string[] }>;
+type SearchParams = Promise<{
+  token_hash?: string | string[];
+  type?: string | string[];
+}>;
 
 function ExpiredLink() {
   return (
@@ -29,20 +33,28 @@ function ExpiredLink() {
   );
 }
 
+function pickFirst(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 export default async function ResetPasswordPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
-  const { code: rawCode } = await searchParams;
-  const code = Array.isArray(rawCode) ? rawCode[0] : rawCode;
+  const params = await searchParams;
+  const tokenHash = pickFirst(params.token_hash);
+  const type = pickFirst(params.type);
 
-  if (!code) {
+  if (!tokenHash || type !== 'recovery') {
     return <ExpiredLink />;
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const { error } = await supabase.auth.verifyOtp({
+    token_hash: tokenHash,
+    type: type as EmailOtpType,
+  });
   if (error) {
     return <ExpiredLink />;
   }

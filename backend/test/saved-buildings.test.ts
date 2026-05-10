@@ -200,8 +200,12 @@ describe('POST /v1/saved-buildings', () => {
     const body = (await res.json()) as { saved: boolean; saved_at: string };
     expect(body.saved).toBe(true);
     expect(body.saved_at).toBe(insertCreatedAt.toISOString());
-    // INSERT was called with the right user_id + bbl
-    expect(mocks.insertedValues).toEqual([{ userId: TEST_USER_ID, bbl: '3032227501' }]);
+    // The route inserts twice: first an ensure-profile upsert (so the
+    // saved_buildings FK to profiles always resolves), then the saved row.
+    expect(mocks.insertedValues).toEqual([
+      { id: TEST_USER_ID, email: 'user@example.com' },
+      { userId: TEST_USER_ID, bbl: '3032227501' },
+    ]);
   });
 
   it('is idempotent: re-saving an existing BBL returns the original saved_at via the follow-up SELECT', async () => {

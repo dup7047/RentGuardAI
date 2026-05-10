@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { getDb, getPool } from '../db/client.js';
-import { savedBuildings } from '../db/schema.js';
+import { savedBuildings, profiles } from '../db/schema.js';
 
 type Vars = { anonToken: string; userId?: string; userEmail?: string };
 
@@ -117,6 +117,18 @@ savedBuildingsRoute.post('/saved-buildings', async (c) => {
   const parsed = SaveBody.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ kind: 'invalid_input' }, 400);
   const { bbl } = parsed.data;
+
+  // Self-heal the profiles row before inserting into saved_buildings.
+  // saved_buildings.user_id has a FK to profiles(id), but Supabase signups
+  // only populate auth.users — there's no trigger creating a matching
+  // profiles row. Without this upsert the very first save by a fresh user
+  // fails with `saved_buildings_user_id_fkey` and Render returns a 500.
+  // ON CONFLICT DO NOTHING keeps the call cheap on every subsequent save.
+  const userEmail = c.get('userEmail') ?? '';
+  await getDb()
+    .insert(profiles)
+    .values({ id: userId, email: userEmail })
+    .onConflictDoNothing({ target: profiles.id });
 
   // INSERT … ON CONFLICT DO NOTHING RETURNING. When the row already exists
   // the RETURNING clause is empty, so we follow up with a SELECT to fetch

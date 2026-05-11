@@ -6,7 +6,7 @@ import { LegalFooter } from '@/components/LegalFooter';
 export const metadata: Metadata = {
   title: 'How it works — RentGuard NYC',
   description:
-    'Paste any NYC address or listing URL, and RentGuard pulls live HPD violations, DOB complaints, eviction filings, and landlord records into a plain-English risk report.',
+    'Paste any NYC address or listing URL, and RentGuard pulls current HPD violations, DOB complaints, eviction filings, and landlord records into a plain-English risk report.',
 };
 
 const STEPS = [
@@ -17,7 +17,7 @@ const STEPS = [
   },
   {
     n: '2',
-    t: 'Pull live records from NYC.gov',
+    t: 'Pull current records from NYC.gov',
     d: 'We query nine NYC Open Data sources for that BBL: HPD violations, HPD complaints, HPD multiple-dwelling registrations, DOB complaints, 311 housing complaints, marshal evictions, the bedbug registry, lead-paint history, and the Public Advocate Worst Landlord Watchlist.',
   },
   {

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -14,7 +15,10 @@ type FormState =
 
 type Mode = 'password' | 'signup' | 'magic';
 
-const MIN_PASSWORD_LENGTH = 8;
+// Matches `minimum_password_length` in supabase/config.toml so signup
+// validation fails client-side before Supabase rejects with a confusing
+// server-side error.
+const MIN_PASSWORD_LENGTH = 12;
 
 const TITLE: Record<Mode, string> = {
   password: 'Sign in',
@@ -56,6 +60,7 @@ export function LoginForm() {
   const redirectedFromDashboard = searchParams.get('redirectTo') === '/dashboard';
   const loggedOut = searchParams.get('loggedOut') === '1';
   const authError = searchParams.get('authError');
+  const resetSuccess = searchParams.get('reset') === 'success';
 
   // Use the bare /auth/callback URL (no query string). Supabase only
   // accepts URLs that exactly match `additional_redirect_urls` in the
@@ -191,6 +196,11 @@ export function LoginForm() {
       {authError ? (
         <p className="notice error">That sign-in link could not be verified.</p>
       ) : null}
+      {resetSuccess ? (
+        <p className="notice">
+          Password updated. Sign in with your new password.
+        </p>
+      ) : null}
 
       <label className="field" htmlFor="email">
         <span>Email address</span>
@@ -220,6 +230,12 @@ export function LoginForm() {
             required
           />
         </label>
+      ) : null}
+
+      {mode === 'password' ? (
+        <Link className="link-button" href="/forgot-password">
+          Forgot your password?
+        </Link>
       ) : null}
 
       {mode === 'signup' ? (

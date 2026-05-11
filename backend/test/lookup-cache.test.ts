@@ -270,6 +270,7 @@ describe('POST /v1/lookup/stream — URL input bypasses the cache', () => {
     mocks.cachedRow = makeCachedRow();
     vi.mocked(scrapeListing).mockResolvedValue({
       kind: 'ok',
+      fetchMethod: 'direct',
       data: {
         url: 'https://streeteasy.com/building/example',
         source: 'streeteasy',
@@ -296,7 +297,6 @@ describe('POST /v1/lookup/stream — URL input bypasses the cache', () => {
         brokerage: null,
         confidence: 'high',
       },
-      fetchMethod: 'direct',
     } as Awaited<ReturnType<typeof scrapeListing>>);
 
     const app = createApp();

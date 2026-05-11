@@ -55,8 +55,9 @@ async function cfFetch(path: string, init?: RequestInit) {
 
 async function getZoneId(domain: string): Promise<string> {
   const result = await cfFetch(`/zones?name=${domain}`) as { id: string }[];
-  if (!result.length) throw new Error(`Domain "${domain}" not found in this Cloudflare account`);
-  return result[0].id;
+  const zone = result[0];
+  if (!zone) throw new Error(`Domain "${domain}" not found in this Cloudflare account`);
+  return zone.id;
 }
 
 async function enableEmailRouting(zoneId: string): Promise<void> {

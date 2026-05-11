@@ -116,11 +116,12 @@ export function LookupForm() {
     } catch {
       r = { kind: 'invalid_input', errors: { _: 'network' } };
     }
-    setLoading(false);
-    setResp(r);
     if (r.kind === 'success') {
       router.push(`/building/${r.bbl}?fresh=1`);
+      return;
     }
+    setLoading(false);
+    setResp(r);
     if (r.kind === 'listing_blocked') {
       setShowFallbackPaste(true);
     }
@@ -145,11 +146,12 @@ export function LookupForm() {
     } catch {
       r = { kind: 'invalid_input', errors: { _: 'network' } };
     }
-    setLoading(false);
-    setResp(r);
     if (r.kind === 'success') {
       router.push(`/building/${r.bbl}?fresh=1`);
+      return;
     }
+    setLoading(false);
+    setResp(r);
   }
 
   function reset() {

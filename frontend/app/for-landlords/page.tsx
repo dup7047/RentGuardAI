@@ -106,7 +106,7 @@ export default function ForLandlordsPage() {
               </div>
               <div className="body">
                 <b>{s.t}</b>
-                <span>{s.d}</span>
+                <span style={{ display: 'block' }}>{s.d}</span>
                 <a
                   href={s.href}
                   target={s.href.startsWith('mailto:') ? undefined : '_blank'}

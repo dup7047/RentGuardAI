@@ -241,4 +241,34 @@ describe('GET /v1/building/:bbl — stale row regeneration', () => {
     expect(body.complaints_rows?.hpd_complaints).toEqual([]);
     expect(mocks.generateSummaryFn).not.toHaveBeenCalled();
   });
+
+  it('falls back to public-record counts when fresh summary generation fails', async () => {
+    mocks.latestRow = {
+      summary: STALE_SUMMARY,
+      questions: ['Stale q?'],
+      listingNotes: [],
+      listingSummary: 'stale listing summary',
+      scoreExplanation: 'stale score explanation',
+      score: 92,
+      scoreBand: 'minimal',
+      scoreFactors: [],
+      scrapedListing: null,
+      valueScore: null,
+      valueBand: null,
+      valueConfidence: null,
+      valueFactors: null,
+      valueExplanation: null,
+    };
+    mocks.generateSummaryFn.mockRejectedValueOnce(new Error('OpenAI unavailable'));
+
+    const app = createApp();
+    const res = await app.request(`/v1/building/${BBL}`);
+    const body = (await res.json()) as Record<string, unknown>;
+
+    expect(res.status).toBe(200);
+    expect(body.summary).toContain('Summary temporarily unavailable');
+    expect(body.score).toBe(92);
+    expect(mocks.generateSummaryFn).toHaveBeenCalledTimes(1);
+    expect(mocks.insertedRows).toHaveLength(0);
+  });
 });

@@ -360,10 +360,27 @@ export async function getBuildingByBbl(
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-ignore — Next.js extends RequestInit with `next`
           next: { revalidate: 3600 },
-        }),
+      }),
   };
-  const res = await fetch(`${BASE}/v1/building/${bbl}`, init);
-  return (await res.json()) as LookupResponse;
+  try {
+    const res = await fetch(`${BASE}/v1/building/${bbl}`, init);
+    const contentType = res.headers.get('content-type') ?? '';
+    const body = contentType.includes('application/json')
+      ? ((await res.json()) as LookupResponse)
+      : null;
+
+    if (body?.kind) return body;
+    if (res.status === 404) return { kind: 'not_found' };
+    return {
+      kind: 'server_error',
+      message: 'We could not load this building report. Please try again.',
+    };
+  } catch {
+    return {
+      kind: 'server_error',
+      message: 'We could not reach the report service. Please try again.',
+    };
+  }
 }
 
 // ── Saved buildings ────────────────────────────────────────────────────────

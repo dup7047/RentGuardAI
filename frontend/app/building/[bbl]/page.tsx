@@ -30,6 +30,12 @@ export default async function BuildingPage({ params, searchParams }: Props) {
   // immediately — bypass the Next.js fetch cache for this render.
   const isFresh = sp.fresh === '1';
   const r = await getBuildingByBbl(bbl, { noStore: isFresh });
-  if (r.kind !== 'success') notFound();
+  if (r.kind === 'not_found') notFound();
+  if (r.kind !== 'success') {
+    const message = 'message' in r && typeof r.message === 'string' ? r.message : undefined;
+    throw new Error(
+      `Building report unavailable for BBL ${bbl}${message ? `: ${message}` : ''}`,
+    );
+  }
   return <BuildingReport data={r} />;
 }

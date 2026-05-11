@@ -10,6 +10,7 @@ import Link from 'next/link';
 
 import { signOut } from '@/app/dashboard/actions';
 import { createClient } from '@/lib/supabase/server';
+import { NavMenu } from '@/components/NavMenu';
 
 function initialsFromEmail(email: string | null | undefined): string {
   if (!email) return 'R';
@@ -104,6 +105,8 @@ export function NavBar() {
           <Link href="/for-landlords">For landlords</Link>
           <Link href="/pricing">Pricing</Link>
         </div>
+
+        <NavMenu />
 
         <div className="nav-cta">
           <Suspense fallback={<NavCtaSkeleton />}>

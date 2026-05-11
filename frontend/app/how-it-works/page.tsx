@@ -76,14 +76,7 @@ export default function HowItWorksPage() {
       </div>
 
       <div className="container" style={{ paddingBottom: 56 }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            gap: 16,
-            marginTop: 8,
-          }}
-        >
+        <div className="steps-grid">
           {STEPS.map((s) => (
             <div key={s.n} className="card" style={{ padding: 22 }}>
               <div

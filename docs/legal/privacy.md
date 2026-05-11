@@ -1,6 +1,6 @@
-# Privacy Policy — RentGuard NYC
+# Privacy Policy - RentGuard NYC
 
-**Last updated:** 2026-05-08
+**Last updated:** 2026-05-11
 
 ---
 
@@ -8,242 +8,233 @@
 
 ### 1.1 Who we are
 
-RentGuard NYC ("RentGuard," "we," "us," "our") is operated by RentGuard NYC LLC and provides building risk lookups, AI-assisted lease reviews, and FARE Act compliance checks for renters in New York City. The service is available at rentguard.nyc.
+RentGuard NYC ("RentGuard," "we," "us," or "our") is operated by RentGuard NYC LLC. The current service at https://www.rentguard.cc provides free New York City building lookups, public-record risk reports, source links, saved buildings for signed-in users, and affiliate-link disclosures.
 
 ### 1.2 Scope
 
-This Privacy Policy describes what personal information we collect, how we use it, who we share it with, how long we retain it, and the rights you have over it. It applies to all users of our website and services.
+This Privacy Policy explains what information we collect, how we use it, who we share it with, how long we retain it, and the choices you have. It applies to RentGuard websites, accounts, building lookups, saved-building features, support communications, and affiliate-click flows.
 
-### 1.3 Important framing
+### 1.3 Current product boundary
 
-RentGuard NYC is not a law firm and does not provide legal services. Submitting your lease to our service does not create an attorney-client relationship and does not establish the kind of confidentiality that exists with a lawyer. Lease text you submit is governed by this Privacy Policy and our Terms of Service.
+RentGuard does not currently offer lease upload, lease PDF review, paid subscriptions, Search Pass purchases, Stripe checkout, paid report unlocks, saved lease reports, FARE Act compliance determinations, complaint-letter generation, weekly alert emails, or law-firm client portals. If those products launch later, we will update this Privacy Policy before collecting the additional data needed for them.
 
 ---
 
 ## 2. Information We Collect
 
-### 2.1 Information you give us
+### 2.1 Information you provide
 
-- **Account information.** Email address (used for magic-link sign-in; we do not store passwords), and any optional profile fields you provide (e.g., display name).
-- **Payment information.** When you purchase a lease review or subscribe to Search Pass, you provide payment details to our payment processor (Stripe). We do not store full card numbers on our servers; we receive a token and the last four digits for receipts.
-- **Lease PDFs.** When you use the lease review tool, you upload a PDF lease. Lease PDFs typically contain your name, the rental address, lease term, monthly rent, security deposit terms, and other contractual details. Some leases include income or employment information; rare leases include Social Security numbers or government-issued ID numbers. We treat lease PDFs as the highest-sensitivity data class we handle.
-- **Saved searches and saved buildings.** Search Pass subscribers can save buildings they want to monitor.
-- **Communications.** Messages you send us through support email or contact forms.
+- **Account information.** Email address, password credentials handled by Supabase Auth, magic-link requests, and optional profile details you choose to provide.
+- **Building lookup inputs.** Addresses, listing URLs, BBLs, borough details, or other text you enter to run a lookup.
+- **Saved buildings.** Buildings you save to your account dashboard.
+- **Support and correction messages.** Emails or messages you send to support, privacy, corrections, owners, security, or legal contact addresses.
+- **Affiliate-click choices.** When you choose to continue to an affiliate partner, we may record the partner, timestamp, page, and anonymous or account-linked identifier needed for our reporting.
 
-### 2.2 Information we collect automatically
+### 2.2 Information collected automatically
 
-- **Usage data.** Pages viewed, searches performed, features used, timestamps.
-- **Device data.** IP address, browser type, operating system, device identifiers.
-- **Cookies and similar technologies.** See Section 8.
+- **Usage data.** Pages viewed, lookup attempts, reports opened, tabs viewed, buttons clicked, errors, timestamps, and referring pages.
+- **Device and log data.** IP address, browser type, operating system, device type, approximate location derived from IP, request headers, and security logs.
+- **Session data.** Authentication cookies or tokens needed to keep you signed in, plus an anonymous browser identifier such as `anon_token` for free-lookup limits and fraud prevention.
+- **Performance and diagnostic data.** Server logs, API timing, build/runtime errors, and related telemetry used to operate and debug the service.
 
-### 2.3 Information from third parties
+### 2.3 Information from public sources
 
-- **Public records.** When you search a building, we retrieve public-record data from NYC.gov Open Data sources (HPD, DOB, 311, NYC Marshal, NYC Public Advocate). These records are about the building and its registered owner — not about you. We do not associate building public-record data with you except by virtue of your having searched for it.
-- **Payment processor.** Stripe returns transaction status, last four digits of the card, and similar metadata.
+When you search a building, we retrieve public-record information from NYC sources such as HPD, DOB, 311, NYC Marshal records, HPD registration records, bedbug and lead-paint datasets, and the NYC Public Advocate Worst Landlord Watchlist. These records are generally about buildings, complaints, violations, registered owners, or public filings. We associate the retrieved report with your lookup only to provide the service, enforce limits, save buildings, debug, and improve report quality.
 
-### 2.4 What we do not collect
+### 2.4 Information we do not collect in the current beta
 
-- We do not collect biometric data.
-- We do not collect health information.
-- We do not collect children's information knowingly (see Section 11).
-- We do not buy data about you from data brokers.
+We do not currently collect lease PDFs, extracted lease text, payment card numbers, Stripe customer IDs, subscription status, paid report unlocks, refund requests, law-firm client files, or DCWP complaint-letter drafts through the public product. We do not knowingly collect biometric data, health information, children's information, or data broker profiles.
 
 ### 2.5 Anonymous use
 
-You can run building lookups and lease reviews without creating an account. When you do, we associate the request with an anonymous browser identifier (`anon_token`) or, if you choose to receive a result by email, with the email address you provide. We treat this data under the same retention and security rules as account-linked data, and we do not attempt to identify the individual behind an `anon_token` beyond what is necessary to deliver the service.
+You can run limited building lookups without creating an account. Anonymous use may still be associated with an anonymous browser identifier, IP address, device logs, and lookup inputs so that we can operate the product, prevent abuse, and enforce free-lookup limits. If you later create an account from the same browser, some recent anonymous activity may become associated with that account where needed to provide continuity.
 
 ---
 
 ## 3. How We Use Information
 
-We use the information we collect to:
+We use information to:
 
-- Provide the building risk lookup, lease review, and FARE Act compliance check.
-- Process payments and manage subscriptions.
-- Send you the building violation alerts you have subscribed to.
-- Improve the product (analytics, debugging, evaluating new clause-library entries).
-- Communicate with you about your account and our services.
-- Comply with our legal obligations.
-- Enforce our Terms of Service and prevent fraud or abuse.
+- Provide building lookup, report rendering, saved-building, and dashboard features.
+- Authenticate users with password sign-in, signup, and magic-link sign-in.
+- Resolve addresses and listing URLs to BBLs.
+- Retrieve, cache, and display public-record data.
+- Generate AI summaries from public-record building data.
+- Enforce free-lookup limits and prevent spam, scraping, fraud, and abuse.
+- Respond to support, privacy, security, legal, owner, and correction requests.
+- Record affiliate-click reporting and show required affiliate disclosures.
+- Debug errors, monitor performance, maintain security, and improve reliability.
+- Comply with legal obligations and enforce our Terms of Service.
 
-We do not use customer lease data or building searches to train, fine-tune, or otherwise improve any AI model. See Section 4.
+We do not sell personal information. We do not use building lookups or account data to train, fine-tune, or improve AI models.
 
 ---
 
 ## 4. AI Processing
 
-### 4.1 What we use AI for
+### 4.1 Current AI use
 
-We use third-party AI models to:
+RentGuard currently uses AI to generate plain-English summaries of public-record building data. The current summary flow uses OpenAI models, including gpt-4o-mini or a comparable OpenAI model, hosted in the United States or regions supported by the provider.
 
-- Generate plain-English summaries of public-record building data (gpt-4o-mini, hosted by OpenAI in the United States).
-- Identify clauses in your uploaded lease that match patterns in our NYC clause library, and to render a structured report (Claude Haiku 3.5 or a comparable US-hosted model from Anthropic).
+### 4.2 Data sent for building summaries
 
-### 4.2 What we do not do
+For building reports, we may send public-record counts, public-record excerpts, source names, BBL, borough, and related building metadata to the AI provider. We design prompts to summarize the retrieved public records and cite source-derived facts. We do not currently send lease PDFs or payment data because those flows are not part of the live product.
 
-- We do **not** use customer lease data to train, fine-tune, or otherwise improve any AI model — ours, OpenAI's, or Anthropic's. We use these providers under terms that prohibit training on our submitted data.
-- We do **not** use Chinese-hosted, Russian-hosted, or other non-US-hosted AI providers for any user data.
-- We do **not** generate personalized legal recommendations. The lease review explains what clauses say and which laws they relate to; it does not tell you what to do, sign, or demand.
+### 4.3 No AI training
 
-### 4.3 Limitations you should know about
+We do not use your account information, building searches, saved buildings, support messages, or public-record report requests to train or fine-tune AI models. We use providers under terms intended to prevent customer API inputs and outputs from being used for model training.
 
-AI models can make mistakes. They can miss clauses, misclassify clauses, or describe a law inaccurately. Reports include citations to the underlying NY statute or regulation; you should verify against the cited source and consult an attorney before relying on a report.
+### 4.4 AI limitations
+
+AI summaries can make mistakes, omit important context, misread patterns, or describe records unclearly. You should verify all cited records yourself and consult qualified professionals before relying on a report.
 
 ---
 
 ## 5. Sharing Information
 
-We share information only as described below.
-
 ### 5.1 Service providers
 
-We share information with vendors that help us run the service: Stripe (payments), our cloud hosting provider, our email service provider, our error-monitoring provider, and the AI providers identified in Section 4. These vendors process information on our behalf under written agreements. A current list of sub-processors is available on request from privacy@rentguard.nyc.
+We share information with vendors that help us run RentGuard. These may include:
+
+- Supabase for authentication, database, storage, and related account services.
+- Hosting and deployment providers such as Vercel and Render.
+- Email and domain-forwarding providers used to send authentication or support emails.
+- OpenAI for building-report AI summaries.
+- Logging, security, monitoring, and analytics providers used to operate and protect the service.
+- Affiliate partners only when you click through to their sites, as described below.
+
+Service providers process information for us under their own terms and agreements. A current sub-processor list is available by request at privacy@rentguard.cc.
 
 ### 5.2 Affiliate links
 
-When you click an affiliate link to Lemonade, Bellhop, or Moved, you leave our site. We do not pass your personal information to those companies through the link itself; the affiliate link includes a tracking ID that lets the partner credit us if you complete a purchase or sign up. The partner's own privacy policy governs what they collect once you arrive.
+When you click an affiliate link to a partner such as Lemonade, Bellhop, or Moved, we may log the click and redirect you to the partner site. The affiliate URL may include a tracking identifier so the partner can credit RentGuard if you purchase or sign up. We do not intentionally send your RentGuard account password, saved-building list, or report notes through affiliate links. Once you leave RentGuard, the partner's privacy policy controls its collection and use of information.
 
-### 5.3 Legal requirements
+### 5.3 Legal and safety disclosures
 
-We may disclose information if required by law, subpoena, court order, or other valid legal process; to protect the rights, property, or safety of RentGuard, our users, or others; or in connection with an investigation of suspected fraud or abuse.
+We may disclose information if required by law, subpoena, court order, or valid legal process; to protect the rights, property, or safety of RentGuard, users, service providers, or others; to investigate abuse or security incidents; or to enforce our Terms.
 
 ### 5.4 Business transfers
 
-If RentGuard is involved in a merger, acquisition, or sale of assets, your information may be transferred as part of that transaction. We will notify you and any successor will be required to honor this Privacy Policy or provide notice of any change.
+If RentGuard is involved in a merger, acquisition, financing, reorganization, bankruptcy, or sale of assets, information may be transferred as part of that transaction. We will require any successor to honor this Privacy Policy or provide notice of changes.
 
 ### 5.5 With your consent
 
-We share information for any other purpose with your consent.
+We may share information for other purposes with your consent.
 
 ### 5.6 What we do not do
 
-- We do not sell your personal information.
-- We do not share your personal information with third parties for their direct marketing purposes.
-- We do not share lease text or building searches with landlords, real-estate brokers, or any party with a financial interest in the buildings or leases we surface.
+- We do not sell personal information.
+- We do not share personal information with landlords, owners, managers, or brokers so they can target renters.
+- We do not allow affiliate partners to change report content.
+- We do not use third-party advertising cookies in the current product.
 
 ---
 
 ## 6. Data Retention
 
-### 6.1 Default retention
+### 6.1 Default retention periods
 
 | Data type | Retention |
 |---|---|
-| Account information | While your account is active, plus 90 days after closure |
-| Lease PDFs and extracted lease text | 90 days from upload, then auto-purged. Saving the report (see next row) does not extend retention of the underlying PDF or extracted text. |
-| Saved lease reports | While your account is active; you can delete at any time |
-| Building search history | 12 months |
-| Saved buildings | While your account is active; you can delete at any time |
-| Payment records | 7 years (for tax and accounting) |
-| Logs (usage, security) | 12 months |
+| Account email and authentication records | While your account is active, plus 90 days after closure unless longer retention is required for security or legal reasons |
+| Password credentials | Managed by Supabase Auth according to its security controls; RentGuard does not store plaintext passwords |
+| Magic-link events | As needed for authentication, security, and abuse prevention |
+| Building lookup history | Up to 12 months for abuse prevention, debugging, and product quality |
+| Saved buildings | While your account is active or until you delete the saved building |
+| Anonymous browser identifiers | Up to 12 months, unless reset earlier by browser controls or account deletion workflows |
+| Affiliate-click logs | Up to 12 months for reporting, fraud prevention, and commission reconciliation |
+| Support, correction, security, privacy, or legal emails | Up to 3 years, or longer if needed for legal, safety, or dispute reasons |
+| Usage, security, and server logs | Up to 12 months, unless needed longer for security, abuse, or legal reasons |
 | Backups | Up to 35 days from creation |
 
-### 6.2 Lease PDF specifics
+### 6.2 Deletion requests
 
-Lease PDFs contain sensitive personal information. By default we delete them 90 days after upload. You can delete a lease PDF immediately at any time from your account dashboard. If you save the report, we retain the report (a structured summary) for as long as your account is active; the underlying PDF is still deleted at the 90-day mark.
+You may request deletion of your account or personal information by emailing privacy@rentguard.cc. We may retain limited records where necessary for legal obligations, security, fraud prevention, dispute resolution, or legitimate business records.
 
-### 6.3 Why we retain at all
+### 6.3 Public records
 
-We retain account, payment, and limited usage data to provide the service, process refunds, prevent fraud, debug issues, and comply with tax and legal obligations.
+Some building information in RentGuard reports comes from public sources that we do not control. Deleting your account does not delete the underlying public record from NYC.gov or other agency systems.
 
 ---
 
 ## 7. Data Security
 
-We follow the requirements of the NY SHIELD Act (Gen. Bus. Law §899-bb), including:
+We use administrative, technical, and physical safeguards designed to protect information from unauthorized access, acquisition, alteration, disclosure, or destruction. These safeguards include TLS in transit, access controls, authentication controls, vendor security practices, logging, and incident-response procedures.
 
-- Reasonable administrative, technical, and physical safeguards against unauthorized access, acquisition, alteration, or disclosure of private information.
-- Encryption in transit (TLS) and at rest for sensitive data including lease PDFs.
-- Access controls limiting access to personal information on a need-to-know basis.
-- Breach response procedures consistent with SHIELD Act notification requirements.
-
-No system is perfectly secure. If a breach occurs, we will notify affected users in compliance with applicable law.
+No system is perfectly secure. If we learn of a breach that triggers legal notice obligations, we will notify affected users and regulators as required by applicable law.
 
 ---
 
 ## 8. Cookies and Similar Technologies
 
-We use cookies and similar technologies for:
+We use cookies, local storage, and similar technologies for:
 
-- **Strictly necessary cookies** — to log you in and keep you logged in, to remember your search session, to enable payment.
-- **Functional cookies** — to remember your preferences (e.g., recent buildings).
-- **Analytics.** We use Cloudflare Web Analytics for page-view analytics; it is cookieless and does not require a banner. We use PostHog for event analytics on paid funnel actions (e.g., paywall views, lease unlocks); PostHog uses a first-party cookie to deduplicate events.
+- **Strictly necessary functions.** Authentication, session management, magic-link completion, free-lookup limits, CSRF/security protections, and keeping the service working.
+- **Functional preferences.** Remembering recent searches, saved-building state, or UI preferences where applicable.
+- **Analytics and diagnostics.** Understanding page views, errors, performance, and product usage so we can improve the service.
+- **Affiliate reporting.** Recording that you chose to continue to a partner link after seeing a disclosure.
 
-We do not use advertising cookies. We do not allow third-party advertising trackers on our site.
-
-You can control cookies through your browser settings. Disabling strictly necessary cookies will break core functionality.
+We do not use advertising cookies in the current product. Browser settings can block or delete cookies, but disabling necessary cookies may break sign-in, saved buildings, or lookup limits.
 
 ---
 
-## 9. Your Rights
+## 9. Your Rights and Choices
 
 ### 9.1 Rights available to all users
 
-Regardless of where you live, you can:
+You may ask us to:
 
-- **Access.** Request a copy of the personal information we hold about you.
-- **Correct.** Request correction of inaccurate personal information.
-- **Delete.** Request deletion of your personal information, subject to limited exceptions for records we are legally required to retain (e.g., tax records).
-- **Export.** Request your saved lease reports and search history in a machine-readable format.
-- **Unsubscribe.** Opt out of any non-essential email at any time using the link in the email or in your account settings.
+- Access the personal information we hold about you.
+- Correct inaccurate personal information.
+- Delete personal information, subject to limited exceptions.
+- Export account-linked lookup history or saved-building information where technically feasible.
+- Stop sending non-essential emails.
 
-### 9.2 California residents (CCPA / CPRA)
+Email privacy@rentguard.cc with the request and the email address associated with your account. We may need additional information to verify your identity.
 
-If you are a California resident, you have the additional rights under the California Consumer Privacy Act, as amended by the CPRA, including:
+### 9.2 California residents
 
-- The right to know what categories of personal information we collect, the sources, the purposes, and the categories of third parties we share with.
-- The right to delete personal information, subject to statutory exceptions.
-- The right to correct inaccurate personal information.
-- The right to opt out of the "sale" or "sharing" of personal information. **We do not sell or share personal information as those terms are defined under the CPRA.**
-- The right to limit the use of sensitive personal information. **We do not use sensitive personal information for any purpose other than providing the requested service.**
-- The right to non-discrimination for exercising any of these rights.
-
-To exercise these rights, email privacy@rentguard.nyc. We will respond within 45 days; we may extend by an additional 45 days where reasonably necessary.
+If you are a California resident, you may have additional rights under the California Consumer Privacy Act, as amended by the CPRA, including rights to know, access, correct, delete, and opt out of sale or sharing. We do not sell or share personal information as those terms are defined under the CPRA. To exercise rights, email privacy@rentguard.cc.
 
 ### 9.3 New York residents
 
-The NY SHIELD Act governs our security obligations to New York residents. We extend the access, correction, deletion, and export rights described in Section 9.1 to all New York users on an operational basis.
+The NY SHIELD Act governs our security obligations to New York residents. We extend the access, correction, deletion, and export choices described above to New York users on an operational basis.
 
-### 9.4 EU/UK / GDPR
+### 9.4 EU/UK users
 
-We do not market RentGuard NYC to users outside the United States. The product is NYC-specific. Where a user from the EU/UK reaches the site:
-
-- We rely on (a) consent for non-essential cookies and (b) legitimate interest or contract performance for service-related processing as the lawful basis under Article 6(1) of the GDPR.
-- We extend the access, correction, deletion, and export rights described in Section 9.1.
-- We do not transfer EU/UK personal data to third countries beyond what is necessary to provide the service to a user who has affirmatively used our US-hosted service.
-- We are not currently registered with an EU supervisory authority and do not have an EU representative.
-
-### 9.5 How to exercise your rights
-
-Email privacy@rentguard.nyc with the request and the email address associated with your account. We may ask for additional information to verify your identity. We do not charge for these requests except where they are manifestly unfounded or excessive.
+RentGuard is NYC-specific and is not marketed outside the United States. If you access the service from the EU or UK, your information is processed in the United States. Where applicable, we rely on contract performance, legitimate interests, consent, and legal obligations as lawful bases. You may email privacy@rentguard.cc to request access, correction, deletion, objection, restriction, or portability where required by law.
 
 ---
 
 ## 10. International Data Transfers
 
-We are based in the United States and we host data in the United States. If you access RentGuard NYC from outside the United States, your information will be transferred to and processed in the United States, where data protection laws may differ from those in your country.
+RentGuard is based in the United States and uses United States-based infrastructure and service providers. If you access RentGuard from outside the United States, your information may be transferred to and processed in the United States, where privacy laws may differ from those in your location.
 
 ---
 
 ## 11. Children's Privacy
 
-RentGuard NYC is not directed at children and we do not knowingly collect personal information from children under 18. If we learn we have collected personal information from a child under 18, we will delete it. If you are a parent or guardian and believe your child has provided us with personal information, please contact privacy@rentguard.nyc.
+RentGuard is not directed to children under 18, and we do not knowingly collect personal information from children under 18. If you believe a child provided personal information to RentGuard, contact privacy@rentguard.cc and we will take appropriate steps.
 
 ---
 
 ## 12. Changes to This Privacy Policy
 
-We may update this Privacy Policy from time to time. We will post the updated version on this page with a new "Last updated" date. If we make material changes, we will notify you by email or by a prominent notice on the site before the changes take effect.
+We may update this Privacy Policy from time to time. We will post the updated version with a new "Last updated" date. If we make material changes, we may notify account holders by email or another reasonable method.
 
 ---
 
 ## 13. Contact
 
-Questions or requests about this Privacy Policy:
+Privacy questions or requests:
 
-> RentGuard NYC LLC
-> [INSERT MAILING ADDRESS BEFORE PUBLISH]
-> Email: privacy@rentguard.nyc
+> RentGuard NYC LLC  
+> Mailing address: to be provided before full public launch  
+> Email: privacy@rentguard.cc
+
+Security: security@rentguard.cc  
+Support: support@rentguard.cc  
+Corrections: corrections@rentguard.cc
 
 ---
 

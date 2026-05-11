@@ -71,7 +71,7 @@ export function BuildingReport({ data }: { data: SuccessData }) {
   } = data;
 
   const [tab, setTab] = useState<Tab>('overview');
-  const [modal, setModal] = useState<null | { kind: 'save' | 'lease' | 'gate'; reason: SignInReason } | { kind: 'share' } | { kind: 'maintenance-info' } | { kind: 'value-info' }>(null);
+  const [modal, setModal] = useState<null | { kind: 'save' | 'gate'; reason: SignInReason } | { kind: 'share' } | { kind: 'maintenance-info' } | { kind: 'value-info' }>(null);
   const [toast, setToast] = useState<string | null>(null);
   // Saved-building state. `null` means "haven't checked yet" — render the
   // default unsaved label until we know. After checking, true/false drive
@@ -223,10 +223,6 @@ export function BuildingReport({ data }: { data: SuccessData }) {
     } finally {
       setSaveInFlight(false);
     }
-  }
-
-  function handleLease() {
-    setModal({ kind: 'lease', reason: 'lease' });
   }
 
   function handleDownloadPdf() {
@@ -425,17 +421,16 @@ export function BuildingReport({ data }: { data: SuccessData }) {
         {tab === 'owner' && <OwnerTab data={data} />}
         {tab === 'sources' && <SourcesTab data={data} />}
 
-        {/* Have-a-lease CTA strip */}
-        <div className="lease-cta">
+        {/* Source-first CTA strip */}
+        <div className="report-cta">
           <div className="body">
-            <div>Have a lease in hand?</div>
+            <div>Need to double-check the source?</div>
             <div>
-              Upload the PDF and we&apos;ll flag clauses that disagree with
-              NYC tenant law.
+              Open the Sources tab to verify every public record used in this report.
             </div>
           </div>
-          <button type="button" className="btn primary" onClick={handleLease}>
-            Review my lease →
+          <button type="button" className="btn primary" onClick={() => setTab('sources')}>
+            View sources →
           </button>
         </div>
       </div>
@@ -446,9 +441,6 @@ export function BuildingReport({ data }: { data: SuccessData }) {
         <>
           {modal.kind === 'save' && (
             <SignInModal reason="save" onClose={() => setModal(null)} />
-          )}
-          {modal.kind === 'lease' && (
-            <SignInModal reason="lease" onClose={() => setModal(null)} />
           )}
           {modal.kind === 'gate' && (
             <SignInModal reason="gate" onClose={() => setModal(null)} />

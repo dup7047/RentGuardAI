@@ -57,13 +57,14 @@ describe('marketing pages', () => {
     expect(legalFooterPresent(container)).toBe(true);
     const text = container.textContent ?? '';
     expect(text).toContain('Coming soon');
-    expect(text).toContain('Join waitlist');
+    expect(text).toContain('Join research list');
     // FTC mail-order rules attach to "preorder"; CTAs must not say Subscribe/Buy/Preorder.
     expect(text).not.toMatch(/Preorder|Subscribe now|Buy now/i);
-    // Lease review CTA is mailto, Search Pass CTA goes to login redirect.
+    // Planned tools are waitlist-only mailto links, not live purchase/login flows.
     const hs = hrefs(container);
     expect(hs.some((h) => h.startsWith('mailto:lease-review-waitlist@'))).toBe(true);
-    expect(hs.some((h) => h === '/login?redirectTo=/dashboard')).toBe(true);
+    expect(hs.some((h) => h.startsWith('mailto:search-pass-waitlist@'))).toBe(true);
+    expect(hs).not.toContain('/login?redirectTo=/dashboard');
   });
 
   it('how-we-make-money renders the affiliate disclosure verbatim', () => {

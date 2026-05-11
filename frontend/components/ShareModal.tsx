@@ -20,7 +20,7 @@ export function ShareModal({
   const url =
     typeof window !== 'undefined'
       ? `${window.location.origin}/building/${bbl}`
-      : `https://rentguard.cc/building/${bbl}`;
+      : `https://www.rentguard.cc/building/${bbl}`;
   const [copied, setCopied] = useState(false);
 
   useLockBodyScroll();

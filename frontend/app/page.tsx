@@ -33,7 +33,7 @@ export default function HomePage() {
           <p className="hero-sub">
             RentGuard pulls HPD violations, DOB complaints, owner records, and
             the Worst Landlord Watchlist into one plain-English risk report.
-            Free for renters.
+            Free for renters — 3 building lookups per month.
           </p>
 
           {/* Interactive search — client JS, shows skeleton until hydrated */}

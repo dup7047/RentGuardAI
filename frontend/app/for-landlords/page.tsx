@@ -137,11 +137,11 @@ export default function ForLandlordsPage() {
           </p>
         </div>
 
-        <div className="lease-cta" style={{ marginTop: 32 }}>
+        <div className="report-cta" style={{ marginTop: 32 }}>
           <div className="body">
-            <div>Manage a portfolio?</div>
+            <div>Questions about a report?</div>
             <div>
-              We’re building violation alerts for managers and would like to talk. Email{' '}
+              Send the BBL and source link so we can compare RentGuard against the cited public record. Email{' '}
               <a href="mailto:owners@rentguard.cc">owners@rentguard.cc</a>.
             </div>
           </div>

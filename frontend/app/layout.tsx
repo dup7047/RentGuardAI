@@ -23,11 +23,11 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'RentGuard NYC — AI Rental Copilot',
   description:
-    'Free building risk lookup and AI lease review for NYC renters. Check any address against HPD violations, DOB complaints, and landlord records.',
+    'Free building risk lookup for NYC renters. Check any address against HPD violations, DOB complaints, eviction records, and landlord data.',
   metadataBase: new URL('https://rentguard.cc'),
   openGraph: {
     title: 'RentGuard NYC',
-    description: 'AI-powered NYC rental copilot. Avoid bad apartments.',
+    description: 'AI-powered NYC building lookup from public records.',
     type: 'website',
   },
 };

@@ -142,7 +142,7 @@ export default function CoveragePage() {
           ))}
         </div>
 
-        <div className="trust" style={{ marginTop: 40, justifyContent: 'center' }}>
+        <div className="trust" style={{ marginTop: 40 }}>
           <div className="item">
             <b>Manhattan</b>
             <span>Borough 1</span>

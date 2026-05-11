@@ -429,10 +429,13 @@ h1.hero em {
 }
 
 .trust {
-  display: inline-flex;
+  display: flex;
   align-items: stretch;
+  justify-content: center;
   gap: 0;
-  margin-top: 36px;
+  margin: 36px auto 0;
+  width: fit-content;
+  max-width: 100%;
   flex-wrap: wrap;
   padding: 0;
   border: 1px solid var(--line);
@@ -443,7 +446,7 @@ h1.hero em {
   animation: rise 0.55s cubic-bezier(0.2, 0.75, 0.2, 1) both;
   animation-delay: 0.4s;
 }
-.hero-center .trust { justify-content: center; margin-top: 42px; display: inline-flex; }
+.hero-center .trust { margin-top: 42px; }
 .trust .item {
   display: flex;
   flex-direction: column;
@@ -1215,6 +1218,12 @@ h1.hero em {
   font-weight: 500;
   font-size: 14px;
   padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
 }
 .primary-button {
   background: var(--accent);
@@ -1286,12 +1295,22 @@ h1.hero em {
 .legal-footer strong { color: var(--ink-2); }
 
 /* ── Long-form legal documents (terms / privacy / disclaimer) ─ */
+.legal-page {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.legal-page > .eyebrow {
+  margin-left: 4px;
+}
 .legal-prose {
   max-width: 720px;
   margin: 0 auto;
   color: var(--ink);
   font-size: 15px;
   line-height: 1.7;
+}
+.legal-page .card.panel .legal-prose {
+  max-width: none;
 }
 .legal-prose h1 {
   font-size: 32px;
@@ -1480,6 +1499,8 @@ h1.hero em {
     flex-direction: column;
     width: 100%;
     max-width: 300px;
+    margin-left: auto;
+    margin-right: auto;
     border-radius: 28px;
   }
   .trust .item {

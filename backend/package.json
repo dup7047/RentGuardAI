@@ -24,7 +24,8 @@
     "stripe:setup": "tsx scripts/stripe-setup.ts",
     "stripe:setup:dry-run": "tsx scripts/stripe-setup.ts --dry-run",
     "import:watchlist": "tsx scripts/import-watchlist.ts",
-    "import:watchlist:dry-run": "tsx scripts/import-watchlist.ts --dry-run"
+    "import:watchlist:dry-run": "tsx scripts/import-watchlist.ts --dry-run",
+    "email:forwarding": "tsx scripts/setup-email-forwarding.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",

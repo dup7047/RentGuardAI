@@ -1,7 +1,7 @@
 'use client';
 
 // Affiliate CTA button with disclosure modal.
-// Logs click events to backend; shows FARE Act affiliate disclaimer before redirect.
+// Logs click events to backend; shows affiliate disclosure before redirect.
 // Text sourced from docs/legal/disclaimers.md (affiliateClickThrough).
 
 import { useState } from 'react';

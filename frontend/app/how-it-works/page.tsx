@@ -32,8 +32,8 @@ const STEPS = [
   },
   {
     n: '5',
-    t: 'Optional: review your lease',
-    d: 'Coming soon: upload your lease PDF for a $29 clause-by-clause review against NYC tenant law (HSTPA security deposit caps, FARE Act broker-fee rules, illegal late fees, and more). Preview is free; full report unlocks after payment.',
+    t: 'Save buildings you want to revisit',
+    d: 'Create an account with a password or magic link to keep reports on your dashboard. Saved buildings make it easier to compare apartments and re-check cited records before you sign.',
   },
 ] as const;
 
@@ -110,7 +110,7 @@ export default function HowItWorksPage() {
           ))}
         </div>
 
-        <div className="lease-cta" style={{ marginTop: 32 }}>
+        <div className="report-cta" style={{ marginTop: 32 }}>
           <div className="body">
             <div>Ready to look up a building?</div>
             <div>Free, no signup for the first lookup.</div>

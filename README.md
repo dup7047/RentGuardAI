@@ -1,8 +1,8 @@
 # RentGuard NYC
 
-AI-powered NYC rental copilot. Helps renters avoid bad apartments by analyzing listings, buildings, landlords, and leases against NYC public records and tenant law.
+AI-powered NYC building lookup for renters. The current product summarizes public records for a building, links back to the sources, and lets signed-in users save buildings for later review.
 
-This repository follows the phased plan in `RENTGUARD_ROADMAP_v6.md` (kept outside the repo). Current state: foundation complete — backend schema and storage through **Phase 1.7**, identity wired through **Phase 2.1 — Supabase Auth + Next.js client**. Phase 0 prerequisites: NYC Open Data verifier (0.3) and Stripe setup script (0.4) committed; legal docs (0.1) and staging Supabase (0.2 follow-up) still pending.
+This repository follows the phased plan in `RENTGUARD_ROADMAP_v6.md` (kept outside the repo). Current state: **Phase 3 free building lookup is deployed but not full-launch ready**. This branch aligns the public site and legal copy with the shipped beta: free NYC building lookup, public-record AI summary, source links, saved buildings, and affiliate disclosures. Lease Review, Search Pass, paid alerts, FARE Act tools, and law-firm products remain planned or waitlist-only.
 
 ## Layout
 
@@ -16,7 +16,7 @@ RentGuardAI/
 │   ├── RUNBOOK.md            # backup/restore procedures (Phase 1.7)
 │   ├── drizzle.config.ts
 │   └── package.json
-├── frontend/                 # Next.js 15 on Vercel (Phase 2.1: magic-link auth)
+├── frontend/                 # Next.js 15 on Vercel (building lookup + auth)
 │   ├── app/                  # /login, /dashboard, /auth/callback, /auth/confirm
 │   ├── lib/supabase/         # browser, server, middleware, config helpers (@supabase/ssr)
 │   ├── middleware.ts         # session refresh + route guards
@@ -110,7 +110,7 @@ Frontends should retry the first call once on cold start.
 
 ## Frontend — local development
 
-The Next.js 15 app under `frontend/` runs the marketing landing page and the Phase 2.1 Supabase Auth UI (`/login`, `/auth/callback`, `/auth/confirm`, `/dashboard`).
+The Next.js 15 app under `frontend/` runs the public lookup flow, marketing pages, legal pages, and Supabase Auth UI (`/login`, `/auth/callback`, `/auth/confirm`, `/dashboard`). Signup/sign-in supports passwords and magic links.
 
 ```sh
 cd frontend

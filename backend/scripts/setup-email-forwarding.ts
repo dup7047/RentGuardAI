@@ -7,8 +7,8 @@
  *   3. Creates a forwarding rule for every project alias
  *
  * Prerequisites (one-time, in Cloudflare dashboard):
- *   - Both domains added to Cloudflare and using Cloudflare nameservers
- *   - Email Routing enabled per domain (Dashboard → Email → Email Routing → Enable)
+ *   - rentguard.cc added to Cloudflare and using Cloudflare nameservers
+ *   - Email Routing enabled for the domain (Dashboard → Email → Email Routing → Enable)
  *   - Destination address dantino12@gmail.com verified
  *     (Dashboard → Email → Email Routing → Destination addresses → Add)
  *   - API token with Zone / Email Routing Rules / Edit permission for both domains
@@ -28,8 +28,19 @@ const FORWARD_TO = process.env.FORWARD_TO_EMAIL ?? 'dantino12@gmail.com';
 const BASE = 'https://api.cloudflare.com/client/v4';
 
 const ALIASES: Record<string, string[]> = {
-  'rentguard.nyc': ['support', 'privacy', 'legal', 'ops'],
-  'rentguard.cc':  ['corrections', 'owners', 'lease-review-waitlist', 'firms', 'noreply'],
+  'rentguard.cc': [
+    'support',
+    'privacy',
+    'legal',
+    'ops',
+    'security',
+    'corrections',
+    'owners',
+    'lease-review-waitlist',
+    'search-pass-waitlist',
+    'firms',
+    'noreply',
+  ],
 };
 
 if (!TOKEN) {
@@ -123,7 +134,6 @@ async function main(): Promise<void> {
 
   console.log('All rules configured. Verify at:');
   console.log('  https://dash.cloudflare.com → rentguard.cc → Email → Email Routing');
-  console.log('  https://dash.cloudflare.com → rentguard.nyc → Email → Email Routing\n');
 }
 
 main();

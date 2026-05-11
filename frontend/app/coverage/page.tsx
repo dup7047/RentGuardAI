@@ -186,7 +186,7 @@ export default function CoveragePage() {
           </p>
         </div>
 
-        <div className="lease-cta" style={{ marginTop: 32 }}>
+        <div className="report-cta" style={{ marginTop: 32 }}>
           <div className="body">
             <div>Try a real building</div>
             <div>Free, no signup for the first lookup.</div>

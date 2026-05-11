@@ -36,12 +36,11 @@ describe('legal long-form documents', () => {
     });
   }
 
-  // Roadmap §pre-launch alignment edits to the Privacy Policy
-  // (RENTGUARD_ROADMAP_v6.md lines 840-861).
   describe('privacy.md production-stack alignment', () => {
     const md = readFileSync(join(ROOT, 'docs/legal/privacy.md'), 'utf8');
 
-    it('uses magic-link wording (no plaintext password mention)', () => {
+    it('documents password and magic-link auth without plaintext password storage claims', () => {
+      expect(md).toMatch(/password sign-in/);
       expect(md).toMatch(/magic-link sign-in/);
       expect(md).not.toMatch(/password \(stored hashed\)/);
     });
@@ -51,10 +50,16 @@ describe('legal long-form documents', () => {
       expect(md).toMatch(/anon_token/);
     });
 
-    it('reflects the production analytics stack (no Plausible reference)', () => {
+    it('does not name analytics tools that are not documented in the current app', () => {
       expect(md).not.toMatch(/Plausible/i);
-      expect(md).toMatch(/Cloudflare Web Analytics/);
-      expect(md).toMatch(/PostHog/);
+      expect(md).not.toMatch(/Cloudflare Web Analytics/);
+      expect(md).not.toMatch(/PostHog/);
+    });
+
+    it('keeps unavailable product data flows framed as not collected today', () => {
+      expect(md).toMatch(/does not currently offer lease upload/);
+      expect(md).toMatch(/do not currently collect lease PDFs/);
+      expect(md).not.toMatch(/Anthropic|Claude|rentguard\.nyc/);
     });
   });
 });

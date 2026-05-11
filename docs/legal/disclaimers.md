@@ -9,11 +9,11 @@ Do NOT rephrase or shorten any section without legal review.
 ---
 
 <!-- BEGIN preOutputFraming -->
-RentGuard summarizes public NYC records — HPD violations, DOB complaints, evictions, and watchlist data. This is not legal advice. Only DCWP, courts, and licensed attorneys make legal determinations. Always verify records yourself before making any rental decision.
+RentGuard summarizes public NYC records such as HPD violations, DOB complaints, 311 housing complaints, eviction filings, registration records, and watchlist data. The AI summary is not a verdict on the building, owner, manager, or broker, and it is not advice about whether to rent here. Always verify the cited public records yourself before relying on the report.
 <!-- END preOutputFraming -->
 
 <!-- BEGIN fareActFraming -->
-The NYC FARE Act (effective Jan 1, 2025) prohibits landlords and brokers from charging tenants a broker fee for a broker the tenant did not hire. RentGuard flags possible FARE Act language in listings. This is informational only — only DCWP can determine whether a specific listing violates the law. To file a complaint, visit the DCWP FARE Act page at https://www.nyc.gov/site/dca/about/FARE-Act.page.
+FARE Act analysis is not part of the current RentGuard public beta. If RentGuard launches FARE Act tooling later, it will be informational only and will not be a DCWP determination, legal advice, or a complaint filed on your behalf.
 <!-- END fareActFraming -->
 
 <!-- BEGIN affiliateClickThrough -->

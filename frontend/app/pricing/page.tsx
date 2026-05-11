@@ -6,7 +6,7 @@ import { LegalFooter } from '@/components/LegalFooter';
 export const metadata: Metadata = {
   title: 'Pricing — RentGuard NYC',
   description:
-    'Free building lookups today. Lease review and Search Pass tiers are launching soon — join the waitlist.',
+    'Free NYC building lookups today. Planned renter tools are waitlist-only and not available for purchase yet.',
 };
 
 type Tier = {
@@ -29,52 +29,53 @@ const TIERS: ReadonlyArray<Tier> = [
       '1 building lookup before email capture',
       '3 lookups/mo after email capture',
       'AI risk summary with cited NYC.gov sources',
-      'FARE Act compliance check on listings',
+      'Saved buildings for signed-in users',
     ],
     ctaLabel: 'Run a lookup →',
     ctaHref: '/',
   },
   {
     name: 'Lease Review',
-    price: '$29',
-    cadence: 'one-time',
+    price: 'Planned',
+    cadence: 'waitlist',
     status: 'waitlist',
     bullets: [
-      'Upload your lease PDF',
-      'Clause-by-clause review against NYC tenant law',
-      'Free preview of top findings',
-      'Full report unlocks after payment',
+      'Not part of the current beta',
+      'Researching lease-language summaries for NYC renters',
+      'No lease uploads or paid reports are available today',
+      'Join the research list for product updates',
     ],
-    ctaLabel: 'Join waitlist',
+    ctaLabel: 'Join research list',
     ctaHref:
       'mailto:lease-review-waitlist@rentguard.cc?subject=Lease%20review%20waitlist',
   },
   {
     name: 'Search Pass',
-    price: '$14.99',
-    cadence: 'per month',
+    price: 'Planned',
+    cadence: 'waitlist',
     status: 'waitlist',
     bullets: [
-      'Unlimited building lookups',
-      '1 lease review/mo included',
-      'Saved-building violation alerts (weekly)',
-      'Cancel anytime',
+      'Not part of the current beta',
+      'Researching higher lookup limits for frequent searchers',
+      'Saved-building notifications are planned, not live',
+      'No subscription purchase is available today',
     ],
-    ctaLabel: 'Join waitlist',
-    ctaHref: '/login?redirectTo=/dashboard',
+    ctaLabel: 'Join research list',
+    ctaHref:
+      'mailto:search-pass-waitlist@rentguard.cc?subject=Search%20Pass%20waitlist',
   },
 ];
 
 const FIRM_TIER = {
   name: 'For Law Firms',
-  range: '$199 – $499/mo',
+  range: 'Planned research',
   bullets: [
-    'Unlimited lease reviews for clients',
-    'Branded report PDFs (your firm logo)',
-    'Multi-attorney seats and audit log on the Firm plan',
-    'CSV bulk client onboarding',
+    'Not part of the current beta',
+    'Exploring public-record report workflows for tenant advocates',
+    'No client portal, branded PDFs, or bulk tools are available today',
+    'Research conversations only',
   ] as const,
-  ctaHref: 'mailto:firms@rentguard.cc?subject=RentGuard%20for%20firms',
+  ctaHref: 'mailto:firms@rentguard.cc?subject=RentGuard%20firm%20research',
 };
 
 function ComingSoonChip() {
@@ -117,10 +118,10 @@ export default function PricingPage() {
               Pricing
             </div>
             <h1 className="hero">
-              Free for renters. <em>Pay only when you need more.</em>
+              Free building lookup. <em>Future tools are research-only.</em>
             </h1>
             <p className="hero-sub">
-              Building lookups are free today. Lease review and Search Pass open up shortly — join the waitlist below to get notified at launch.
+              Building lookups are free today. Lease Review, Search Pass, and law-firm products are planned ideas, not active products or purchase flows.
             </p>
           </div>
         </div>
@@ -183,7 +184,7 @@ export default function PricingPage() {
             <div>
               <h3 style={{ margin: 0 }}>{FIRM_TIER.name}</h3>
               <p style={{ marginTop: 4, fontSize: 14, color: 'var(--ink-2)' }}>
-                White-label lease review for NYC tenant attorneys. Branded PDFs, unlimited client reviews.
+                We are talking with tenant advocates and attorneys about where public-record reports could help. No firm product is live today.
               </p>
             </div>
             <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--ink)' }}>{FIRM_TIER.range}</div>
@@ -208,12 +209,12 @@ export default function PricingPage() {
             ))}
           </ul>
           <a className="btn ghost" href={FIRM_TIER.ctaHref}>
-            Book a demo →
+            Join research list →
           </a>
         </div>
 
         <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 24, textAlign: 'center', lineHeight: 1.6 }}>
-          Lease Review and Search Pass are not yet available for purchase; pricing shown is target pricing at launch. See{' '}
+          Planned tools are shown for transparency only. They are not available to use or purchase in the current beta. See{' '}
           <Link href="/how-we-make-money">how we make money</Link> for the full transparency note.
         </p>
       </div>

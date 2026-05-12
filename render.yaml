@@ -32,7 +32,13 @@ services:
       - key: FIRECRAWL_API_KEY
         sync: false   # Phase 4 — listing-scraping fallback (500 credits free, $19/mo for 3k)
       - key: RESEND_API_KEY
-        sync: false   # SMTP relay for Supabase auth emails (password recovery, magic-link). Consumed by `supabase config push`, not by the backend at runtime.
+        sync: false   # Resend API key. Used (1) by Supabase via `supabase config push` for auth emails AND (2) by the backend at runtime for transactional sends (e.g. account-deletion undo email — Phase 11.7). Stub-safe: if unset, the backend logs and returns ok.
+      - key: RESEND_FROM
+        sync: false   # Optional. Override the default "RentGuard NYC <hello@rentguard.cc>" sender. Set if your verified Resend domain differs.
+      - key: ACCOUNT_UNDO_SECRET
+        sync: false   # ≥32-char random string (e.g. `openssl rand -base64 48`). Signs the 30-day undo-delete JWT (Phase 11.7). Rotating it invalidates all in-flight undo links.
+      - key: PUBLIC_APP_ORIGIN
+        value: https://www.rentguard.cc
       # Beehiiv is stub-safe — the route returns ok:true without these set.
       # Add only if you want real waitlist enrollment.
       # - key: BEEHIIV_API_KEY

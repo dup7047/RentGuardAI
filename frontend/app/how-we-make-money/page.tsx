@@ -73,9 +73,22 @@ export default function HowWeMakeMoneyPage() {
       <div className="container" style={{ paddingBottom: 40 }}>
         <div className="card panel">
           <h3>Affiliate disclosure</h3>
-          <p style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-            {DISCLAIMERS.affiliateClickThrough}
-          </p>
+          {/* Phase 11.6: this is the long-form transparency language from
+              disclaimer.md §4.2. The byte-for-byte source lives in
+              docs/legal/disclaimers.md under the affiliateLongForm anchor
+              and is regenerated into disclaimers.json by
+              scripts/build-disclaimers.ts. The short click-through
+              language (§4.1) is rendered in the AffiliateLink modal
+              instead. */}
+          {DISCLAIMERS.affiliateLongForm.split(/\n\n+/).map((para, i) => (
+            <p
+              // eslint-disable-next-line react/no-array-index-key
+              key={i}
+              style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.6, marginBottom: i === 0 ? 12 : 8 }}
+            >
+              {para}
+            </p>
+          ))}
         </div>
 
         <div className="card panel" style={{ marginTop: 24 }}>

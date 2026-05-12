@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Mark } from './Mark';
+import { useColdStartHint } from '@/lib/hooks/useColdStartHint';
 
 const STEPS = [
   { k: 'parse', label: 'Parsing your input' },
@@ -75,6 +76,10 @@ export function Loading({ phase }: Props = {}) {
     return () => clearTimeout(t);
   }, [controlled, displayIdx]);
 
+  // Cold-start hint — true while at least one in-flight request has crossed
+  // the 5s threshold. Hooked up to fetchWithRetry in lib/api/backend.ts.
+  const coldStart = useColdStartHint();
+
   // Elapsed-seconds counter — shown under the subtitle so impatient users
   // have a sense of progress on cold starts (Render can take 25–35 s).
   const [elapsed, setElapsed] = useState(0);
@@ -110,9 +115,11 @@ export function Loading({ phase }: Props = {}) {
           <div>
             <h3>Reading the listing & public records…</h3>
             <span>
-              {elapsed < 5
-                ? "This usually takes 10–30 seconds. Don't close this tab."
-                : `${elapsed}s elapsed · usually 10–30 seconds.`}
+              {coldStart
+                ? 'Warming up… first request takes a sec while the server wakes.'
+                : elapsed < 5
+                  ? "This usually takes 10–30 seconds. Don't close this tab."
+                  : `${elapsed}s elapsed · usually 10–30 seconds.`}
             </span>
           </div>
         </div>

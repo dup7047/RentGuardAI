@@ -67,12 +67,21 @@ describe('marketing pages', () => {
     expect(hs).not.toContain('/login?redirectTo=/dashboard');
   });
 
-  it('how-we-make-money renders the affiliate disclosure verbatim', () => {
+  it('how-we-make-money renders the §4.2 long-form affiliate disclosure verbatim', () => {
+    // Phase 11.6 acceptance: the page must render disclaimer.md §4.2
+    // (long-form transparency language), not the §4.1 click-through
+    // language used in the modal. Each of the three paragraphs is
+    // rendered as its own <p>, so we check each paragraph independently
+    // instead of the joined source — whitespace around <p> boundaries
+    // does not survive textContent concatenation.
     const { container } = render(<HowWeMakeMoneyPage />);
     expect(legalFooterPresent(container)).toBe(true);
-    expect(container.textContent).toContain(DISCLAIMERS.affiliateClickThrough);
-    expect(container.textContent).toContain('Lemonade');
-    expect(container.textContent).toContain('Bellhop');
-    expect(container.textContent).toContain('Moved');
+    const text = container.textContent ?? '';
+    for (const paragraph of DISCLAIMERS.affiliateLongForm.split(/\n\n+/)) {
+      expect(text).toContain(paragraph);
+    }
+    expect(text).toContain('Lemonade');
+    expect(text).toContain('Bellhop');
+    expect(text).toContain('Moved');
   });
 });

@@ -42,6 +42,7 @@ import { getDb } from '../db/client.js';
 import { buildingLookups, buildings, nonNycWaitlist } from '../db/schema.js';
 import { and, desc, eq, gt, isNotNull, isNull, like, or, sql as drizzleSql } from 'drizzle-orm';
 import { LIMITS, countAnonLookups, countEmailLookups, incrementEmailCounter } from '../lib/counters.js';
+import { fromZodIssues } from '../lib/errors.js';
 import { logger } from '../logger.js';
 import type { Borough } from '../data/types.js';
 
@@ -823,9 +824,19 @@ export const lookupRoute = new Hono<{
   Variables: { anonToken: string; userId?: string; userEmail?: string };
 }>();
 
+// Pre-handler body validation. Lets a malformed-JSON request fail fast with
+// the standardized error envelope (handled by app.ts onError) instead of
+// reaching runLookup's internal kind:'invalid_input' fallback. runLookup
+// still does its own safeParse as defense-in-depth.
+function validateLookupBody(input: unknown): void {
+  const r = Body.safeParse(input);
+  if (!r.success) throw fromZodIssues(r.error.issues);
+}
+
 // JSON variant — original behavior, single response. Backed by runLookup.
 lookupRoute.post('/lookup', async (c) => {
   const input = await c.req.json().catch(() => ({}));
+  validateLookupBody(input);
   const ctx: LookupCtx = {
     anonToken: c.get('anonToken'),
     userId: c.get('userId'),
@@ -846,6 +857,7 @@ lookupRoute.post('/lookup', async (c) => {
 // Each phase boundary emits a line; the final line carries the full response.
 lookupRoute.post('/lookup/stream', async (c) => {
   const input = await c.req.json().catch(() => ({}));
+  validateLookupBody(input);
   const ctx: LookupCtx = {
     anonToken: c.get('anonToken'),
     userId: c.get('userId'),

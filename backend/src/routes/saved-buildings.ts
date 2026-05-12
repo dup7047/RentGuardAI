@@ -10,6 +10,7 @@ import { and, eq } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { getDb, getPool } from '../db/client.js';
 import { savedBuildings, profiles } from '../db/schema.js';
+import { AppError } from '../lib/errors.js';
 
 type Vars = { anonToken: string; userId?: string; userEmail?: string };
 
@@ -18,12 +19,21 @@ export const savedBuildingsRoute = new Hono<{ Variables: Vars }>();
 const BblParam = z.string().regex(/^\d{10}$/);
 
 /**
- * Resolve the authed user ID or return null. Callers MUST short-circuit
- * with a 401 response when this returns null.
+ * Resolve the authed user ID or throw `unauthorized`. Returns a non-empty
+ * string so callers don't need to null-check.
  */
-function getAuthedUserId(c: Context<{ Variables: Vars }>): string | null {
+function requireAuthedUserId(c: Context<{ Variables: Vars }>): string {
   const userId = c.get('userId');
-  return typeof userId === 'string' && userId.length > 0 ? userId : null;
+  if (typeof userId !== 'string' || userId.length === 0) {
+    throw new AppError('unauthorized', 'Sign in to use saved buildings.');
+  }
+  return userId;
+}
+
+function parseBblOrThrow(value: string | undefined): string {
+  const r = BblParam.safeParse(value);
+  if (!r.success) throw new AppError('validation_failed', 'BBL must be a 10-digit number.');
+  return r.data;
 }
 
 type SavedBuildingRow = {
@@ -40,8 +50,7 @@ type SavedBuildingRow = {
 // row for each BBL (via LATERAL) to surface the most recent score on the
 // dashboard list. Both joins are LEFT — defensively handles missing rows.
 savedBuildingsRoute.get('/saved-buildings', async (c) => {
-  const userId = getAuthedUserId(c);
-  if (!userId) return c.json({ kind: 'unauthorized' }, 401);
+  const userId = requireAuthedUserId(c);
 
   const pool = getPool();
   const listResult = await pool.query<SavedBuildingRow>(
@@ -88,12 +97,8 @@ savedBuildingsRoute.get('/saved-buildings', async (c) => {
 
 // GET /v1/saved-buildings/:bbl — has the current user saved this BBL?
 savedBuildingsRoute.get('/saved-buildings/:bbl', async (c) => {
-  const userId = getAuthedUserId(c);
-  if (!userId) return c.json({ kind: 'unauthorized' }, 401);
-
-  const bblParse = BblParam.safeParse(c.req.param('bbl'));
-  if (!bblParse.success) return c.json({ kind: 'invalid_input' }, 400);
-  const bbl = bblParse.data;
+  const userId = requireAuthedUserId(c);
+  const bbl = parseBblOrThrow(c.req.param('bbl'));
 
   const rows = await getDb()
     .select({ createdAt: savedBuildings.createdAt })
@@ -111,11 +116,12 @@ savedBuildingsRoute.get('/saved-buildings/:bbl', async (c) => {
 const SaveBody = z.object({ bbl: BblParam });
 
 savedBuildingsRoute.post('/saved-buildings', async (c) => {
-  const userId = getAuthedUserId(c);
-  if (!userId) return c.json({ kind: 'unauthorized' }, 401);
+  const userId = requireAuthedUserId(c);
 
   const parsed = SaveBody.safeParse(await c.req.json().catch(() => ({})));
-  if (!parsed.success) return c.json({ kind: 'invalid_input' }, 400);
+  if (!parsed.success) {
+    throw new AppError('validation_failed', 'BBL must be a 10-digit number.');
+  }
   const { bbl } = parsed.data;
 
   // Self-heal the profiles row before inserting into saved_buildings.
@@ -161,12 +167,8 @@ savedBuildingsRoute.post('/saved-buildings', async (c) => {
 // DELETE /v1/saved-buildings/:bbl — unsave. Idempotent: deleting a row that
 // doesn't exist is not an error; the response shape is the same.
 savedBuildingsRoute.delete('/saved-buildings/:bbl', async (c) => {
-  const userId = getAuthedUserId(c);
-  if (!userId) return c.json({ kind: 'unauthorized' }, 401);
-
-  const bblParse = BblParam.safeParse(c.req.param('bbl'));
-  if (!bblParse.success) return c.json({ kind: 'invalid_input' }, 400);
-  const bbl = bblParse.data;
+  const userId = requireAuthedUserId(c);
+  const bbl = parseBblOrThrow(c.req.param('bbl'));
 
   await getDb()
     .delete(savedBuildings)

@@ -275,20 +275,20 @@ describe('POST /v1/lookup/stream', () => {
     expect(complete.response.kind).toBe('listing_blocked');
   });
 
-  it('returns invalid_input through the complete event for empty body', async () => {
+  it('returns the standardized validation_failed envelope for empty body (no stream opened)', async () => {
+    // Phase 11.2: pre-handler validation throws AppError before the stream
+    // context is entered, so the response is a plain JSON envelope rather
+    // than an NDJSON complete event. The frontend's withRetry/error path
+    // treats this as a regular 400 to surface to the user.
     const app = createApp();
     const res = await app.request('/v1/lookup/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{}',
     });
-    const lines = await readNdjson(res);
-
-    expect(lines.filter((l) => l.event === 'phase')).toEqual([]);
-    const completes = lines.filter((l) => l.event === 'complete');
-    expect(completes).toHaveLength(1);
-    const complete = completes[0] as { status: number; response: { kind: string } };
-    expect(complete.status).toBe(400);
-    expect(complete.response.kind).toBe('invalid_input');
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error?: { code?: string; requestId?: string } };
+    expect(body.error?.code).toBe('validation_failed');
+    expect(typeof body.error?.requestId).toBe('string');
   });
 });

@@ -50,9 +50,12 @@ describe('legal long-form documents', () => {
       expect(md).toMatch(/anon_token/);
     });
 
-    it('does not name analytics tools that are not documented in the current app', () => {
+    it('names Cloudflare Web Analytics (deployed in Phase 11.8) and no analytics vendor we have not deployed', () => {
+      // Phase 11.5/11.8: privacy.md must name the vendor we actually ship.
+      expect(md).toMatch(/Cloudflare Web Analytics/);
+      // Vendors we are NOT shipping in v7 must not be named — listing a
+      // tool we do not use would misstate the data flow.
       expect(md).not.toMatch(/Plausible/i);
-      expect(md).not.toMatch(/Cloudflare Web Analytics/);
       expect(md).not.toMatch(/PostHog/);
     });
 

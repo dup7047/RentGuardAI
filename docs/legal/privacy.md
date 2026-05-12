@@ -1,6 +1,6 @@
 # Privacy Policy - RentGuard NYC
 
-**Last updated:** 2026-05-11
+**Last updated:** 2026-05-12
 
 ---
 
@@ -171,7 +171,7 @@ We use cookies, local storage, and similar technologies for:
 
 - **Strictly necessary functions.** Authentication, session management, magic-link completion, free-lookup limits, CSRF/security protections, and keeping the service working.
 - **Functional preferences.** Remembering recent searches, saved-building state, or UI preferences where applicable.
-- **Analytics and diagnostics.** Understanding page views, errors, performance, and product usage so we can improve the service.
+- **Analytics and diagnostics.** Understanding page views, errors, performance, and product usage so we can improve the service. We use [Cloudflare Web Analytics](https://www.cloudflare.com/web-analytics/), a cookieless, privacy-respecting analytics service that does not store IP addresses or identifiers in cookies. We may add other privacy-respecting, event-only analytics tools later; we will update this policy and the *Last updated* date above before any change takes effect.
 - **Affiliate reporting.** Recording that you chose to continue to a partner link after seeing a disclosure.
 
 We do not use advertising cookies in the current product. Browser settings can block or delete cookies, but disabling necessary cookies may break sign-in, saved buildings, or lookup limits.

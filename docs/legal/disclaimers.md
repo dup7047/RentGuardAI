@@ -20,6 +20,14 @@ FARE Act analysis is not part of the current RentGuard public beta. If RentGuard
 RentGuard may earn a referral fee if you purchase a product or service from a partner link. This does not affect the editorial independence of our building reports. Partner recommendations are not endorsements.
 <!-- END affiliateClickThrough -->
 
+<!-- BEGIN affiliateLongForm -->
+RentGuard may earn affiliate commissions from partner links, including renters insurance, moving, or moving-concierge providers. We disclose this relationship before click-through and on the "How we make money" page.
+
+Affiliate partners cannot pay to change a building report, remove a source, alter a score, soften a finding, hide a public record, or influence whether a building appears in search results. RentGuard does not accept payment from landlords, owners, property managers, or brokers to change report content.
+
+Once a user leaves RentGuard for a partner site, the partner's terms, pricing, privacy policy, eligibility rules, and customer support govern that relationship.
+<!-- END affiliateLongForm -->
+
 <!-- BEGIN weAreNotFooter -->
 RentGuard is not a law firm and does not provide legal advice. Building reports are generated from public NYC datasets and AI summarization. Records may be incomplete or out of date. Always verify information with primary sources. RentGuard is not responsible for decisions made based on this information.
 <!-- END weAreNotFooter -->

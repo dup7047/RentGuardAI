@@ -1,33 +1,43 @@
 import { Hono } from 'hono';
 import { getCommitSha } from './commit.js';
 import { requestLogger } from './middleware/request-logger.js';
+import { requestIdMiddleware } from './middleware/request-id.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { anonTokenMiddleware } from './middleware/anon-token.js';
 import { authMiddleware } from './middleware/auth.js';
 import { rateLimitMiddleware } from './middleware/rate-limit.js';
 import { v1Router } from './routes/v1.js';
 import { logger } from './logger.js';
+import { AppError, isAppError, toEnvelope } from './lib/errors.js';
 
-export function createApp(): Hono {
-  const app = new Hono();
+export function createApp(): Hono<{ Variables: { requestId: string } }> {
+  const app = new Hono<{ Variables: { requestId: string } }>();
 
   app.onError((err, c) => {
     const path = c.req.path;
-    logger.error({ err, path }, 'unhandled request error');
-    // Keep API failures machine-readable so frontends can render branded
-    // recovery states instead of framework default error screens.
+    const requestId = c.get('requestId') ?? 'unknown';
+    // AppError is "expected": validation, auth, rate-limit, etc. Log at warn
+    // (with code) so a flood of 4xx doesn't drown the error log; only
+    // unexpected throws hit the error level.
+    if (isAppError(err)) {
+      logger.warn({ err, path, requestId, code: err.code }, 'app error');
+      if (path.startsWith('/v1/')) {
+        return c.json(toEnvelope(err, requestId), err.status as 400 | 401 | 403 | 404 | 429 | 402 | 500);
+      }
+      return c.text(err.message, err.status as 400 | 401 | 403 | 404 | 429 | 402 | 500);
+    }
+    logger.error({ err, path, requestId }, 'unhandled request error');
     if (path.startsWith('/v1/')) {
-      return c.json(
-        {
-          kind: 'server_error',
-          message: 'We hit a server error while loading this information. Please try again.',
-        },
-        500,
+      const wrapped = new AppError(
+        'internal_error',
+        'We hit a server error while loading this information. Please try again.',
       );
+      return c.json(toEnvelope(wrapped, requestId), 500);
     }
     return c.text('Internal Server Error', 500);
   });
 
+  app.use('*', requestIdMiddleware);
   app.use('*', requestLogger);
 
   // /v1/* middleware stack

@@ -3,6 +3,7 @@
 // Used by the ISR /building/[bbl] Next.js page.
 
 import { Hono } from 'hono';
+import { AppError } from '../lib/errors.js';
 import { getDb } from '../db/client.js';
 import { buildings, buildingLookups } from '../db/schema.js';
 import { eq, desc } from 'drizzle-orm';
@@ -60,10 +61,12 @@ async function loadForBuildingPage<T>(
 
 buildingByBblRoute.get('/building/:bbl', async (c) => {
   const bbl = c.req.param('bbl');
-  if (!/^\d{10}$/.test(bbl)) return c.json({ kind: 'not_found' }, 404);
+  if (!/^\d{10}$/.test(bbl)) {
+    throw new AppError('not_found', 'No building found for that BBL.');
+  }
 
   const [b] = await getDb().select().from(buildings).where(eq(buildings.bbl, bbl)).limit(1);
-  if (!b) return c.json({ kind: 'not_found' }, 404);
+  if (!b) throw new AppError('not_found', 'No building found for that BBL.');
 
   // Prefer the most recent AI output already generated for this building.
   // Also pull the new questions/listing_notes columns (Phase 3.7 follow-up)

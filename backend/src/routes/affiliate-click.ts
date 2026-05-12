@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
 import { affiliateClicks } from '../db/schema.js';
+import { validate } from '../middleware/validate.js';
 
 const Body = z.object({
   partner: z.enum(['lemonade', 'bellhop', 'moved']),
@@ -12,14 +13,12 @@ const Body = z.object({
   proceeded: z.boolean(),
 });
 
-export const affiliateClickRoute = new Hono<{
-  Variables: { anonToken: string; userId?: string };
-}>();
+type Vars = { anonToken: string; userId?: string; validated: { body: z.infer<typeof Body> } };
 
-affiliateClickRoute.post('/affiliate/click', async (c) => {
-  const parsed = Body.safeParse(await c.req.json().catch(() => ({})));
-  if (!parsed.success) return c.json({ kind: 'invalid_input' }, 400);
-  const { partner, referrerUrl, proceeded } = parsed.data;
+export const affiliateClickRoute = new Hono<{ Variables: Vars }>();
+
+affiliateClickRoute.post('/affiliate/click', validate({ body: Body }), async (c) => {
+  const { partner, referrerUrl, proceeded } = c.get('validated').body;
   await getDb().insert(affiliateClicks).values({
     userId: c.get('userId') ?? null,
     anonToken: c.get('anonToken'),

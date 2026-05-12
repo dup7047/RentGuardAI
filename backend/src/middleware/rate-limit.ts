@@ -4,6 +4,7 @@
 // handler after body parsing, since we can't peek the body here safely.
 
 import { createMiddleware } from 'hono/factory';
+import { AppError } from '../lib/errors.js';
 
 const buckets = new Map<string, number[]>();
 const HOUR_MS = 60 * 60 * 1000;
@@ -36,10 +37,7 @@ export const rateLimitMiddleware = createMiddleware<{
   }
   if (!check(key, limit)) {
     c.header('Retry-After', '3600');
-    return c.json(
-      { kind: 'rate_limited', message: 'Too many lookups in the last hour. Try again later.' },
-      429,
-    );
+    throw new AppError('rate_limited', 'Too many lookups in the last hour. Try again later.');
   }
   return next();
 });

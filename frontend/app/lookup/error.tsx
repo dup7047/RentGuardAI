@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 
-export default function Error({
+export default function LookupError({
   error,
   reset,
 }: {
@@ -11,7 +11,7 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[root error boundary]', error);
+    console.error('[lookup error boundary]', error);
   }, [error]);
 
   return (
@@ -21,12 +21,12 @@ export default function Error({
           <div className="center-card-icn" aria-hidden="true">
             !
           </div>
-          <p className="auth-panel-kicker">Something went wrong</p>
-          <h1>RentGuard hit a loading issue.</h1>
+          <p className="auth-panel-kicker">Lookup error</p>
+          <h1>We hit a snag running this lookup.</h1>
           <p>
-            Try again. If it keeps happening, this is on us — drop us a line at{' '}
+            Try the lookup again. If it keeps failing, email{' '}
             <a href="mailto:hello@rentguard.cc">hello@rentguard.cc</a> and we
-            will dig in.
+            will take a look.
           </p>
           {error.digest && (
             <p className="mono muted" style={{ fontSize: 12, marginTop: -8 }}>

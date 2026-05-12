@@ -18,6 +18,16 @@ import 'dotenv/config';
 import { getPool } from '../src/db/client.js';
 import { matchByNormalized, type WatchlistRow } from '../src/landlord/watchlist-match.js';
 
+// Phase 11.10: the 2026 list was released by Public Advocate Jumaane
+// Williams on 2026-01-22. The site (landlordwatchlist.com) does not yet
+// publish a canonical CSV URL we can hard-code — discover the link from
+// the site's network requests and pass it via the env var:
+//
+//   WORST_LANDLORD_WATCHLIST_URL=https://… npm run import:watchlist
+//
+// The 2025 default below is retained as a fallback so the script does not
+// fail closed before the env var is set, but it imports STALE data — set
+// the env var before running in production.
 const WATCHLIST_URL =
   process.env.WORST_LANDLORD_WATCHLIST_URL ??
   'https://landlordwatchlist.com/data/2025-watchlist.csv';

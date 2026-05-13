@@ -581,8 +581,8 @@ h1.hero em {
 .lookup-fallback textarea { resize: vertical; min-height: 100px; font-family: inherit; }
 .lookup-fallback .actions { margin-top: 4px; display: flex; gap: 8px; }
 
-/* Email-gate inline form */
-.lookup-email-gate {
+/* Signup-gate inline prompt shown after the free anonymous lookups are used up */
+.lookup-signup-gate {
   margin: 16px auto 0;
   max-width: 620px;
   padding: 16px 20px;
@@ -592,12 +592,6 @@ h1.hero em {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-.lookup-email-gate input {
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font-size: 14px;
 }
 
 /* Full-viewport overlay for loading / outside-nyc / ambiguous states.

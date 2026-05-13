@@ -3,7 +3,7 @@
 // Shape: `{error: {code, message, requestId, details?}}`. Used for
 // validation failures, auth failures, rate-limit hits, and unexpected
 // handler crashes. Domain-level discriminated outcomes (e.g. `ambiguous`,
-// `email_gate`, `success`) are NOT errors — they keep their existing
+// `signup_gate`, `success`) are NOT errors — they keep their existing
 // `{kind: ...}` shape.
 //
 // Mid-stream errors on /v1/lookup/stream MUST continue to use the NDJSON

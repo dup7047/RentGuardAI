@@ -7,7 +7,7 @@ import { getDb } from '../db/client.js';
 import { emailLookupCounters, buildingLookups } from '../db/schema.js';
 import { eq, sql, and, isNull } from 'drizzle-orm';
 
-export const FREE_ANON_LIMIT = 1;
+export const FREE_ANON_LIMIT = 3;
 export const FREE_EMAIL_LIMIT_30D = 3;
 const RESET_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000;
 

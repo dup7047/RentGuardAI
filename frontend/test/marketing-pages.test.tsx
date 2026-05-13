@@ -52,19 +52,20 @@ describe('marketing pages', () => {
     expect(hrefs(container).some((h) => h.startsWith('mailto:corrections@'))).toBe(true);
   });
 
-  it('pricing shows "Coming soon — join waitlist" chips and never says Subscribe/Buy/Preorder', () => {
+  it('pricing shows only the free tier and never says Subscribe/Buy/Preorder', () => {
     const { container } = render(<PricingPage />);
     expect(legalFooterPresent(container)).toBe(true);
     const text = container.textContent ?? '';
-    expect(text).toContain('Coming soon');
-    expect(text).toContain('Join research list');
+    expect(text).toContain('Free');
+    expect(text).toContain('$0');
+    expect(text).toContain('3 building lookups without an account');
     // FTC mail-order rules attach to "preorder"; CTAs must not say Subscribe/Buy/Preorder.
     expect(text).not.toMatch(/Preorder|Subscribe now|Buy now/i);
-    // Planned tools are waitlist-only mailto links, not live purchase/login flows.
+    // Future tiers are no longer surfaced — no waitlist mailtos, no firm research links.
     const hs = hrefs(container);
-    expect(hs.some((h) => h.startsWith('mailto:lease-review-waitlist@'))).toBe(true);
-    expect(hs.some((h) => h.startsWith('mailto:search-pass-waitlist@'))).toBe(true);
-    expect(hs).not.toContain('/login?redirectTo=/dashboard');
+    expect(hs.some((h) => h.startsWith('mailto:lease-review-waitlist@'))).toBe(false);
+    expect(hs.some((h) => h.startsWith('mailto:search-pass-waitlist@'))).toBe(false);
+    expect(hs).toContain('/');
   });
 
   it('how-we-make-money renders the §4.2 long-form affiliate disclosure verbatim', () => {

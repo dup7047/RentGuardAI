@@ -48,7 +48,9 @@ export function LoginForm() {
       };
     }
   }, []);
-  const [mode, setMode] = useState<Mode>('password');
+  const initialMode: Mode =
+    searchParams.get('mode') === 'signup' ? 'signup' : 'password';
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');

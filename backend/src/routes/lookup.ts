@@ -41,7 +41,7 @@ import { getCachedBatch } from '../data/cache.js';
 import { getDb } from '../db/client.js';
 import { buildingLookups, buildings, nonNycWaitlist } from '../db/schema.js';
 import { and, desc, eq, gt, isNotNull, isNull, like, or, sql as drizzleSql } from 'drizzle-orm';
-import { LIMITS, countAnonLookups, countEmailLookups, incrementEmailCounter } from '../lib/counters.js';
+import { LIMITS, countAnonLookups, incrementEmailCounter } from '../lib/counters.js';
 import { fromZodIssues } from '../lib/errors.js';
 import { logger } from '../logger.js';
 import type { Borough } from '../data/types.js';
@@ -403,26 +403,18 @@ export async function runLookup(
     });
 
   // ── 4. Counter check ─────────────────────────────────────────────────────────
+  // Anonymous users get FREE_ANON_LIMIT lookups before we ask them to sign up.
+  // Signed-in users are unlimited on the free tier.
   if (!userId) {
-    if (!userEmail) {
-      const n = await timePhase('counter_check', () => countAnonLookups(anonToken));
-      if (n >= LIMITS.FREE_ANON_LIMIT) {
-        return {
-          status: 200,
-          body: { kind: 'email_gate', message: 'Drop your email to keep looking.' },
-        };
-      }
-    } else {
-      const n = await timePhase('counter_check', () => countEmailLookups(userEmail));
-      if (n >= LIMITS.FREE_EMAIL_LIMIT_30D) {
-        return {
-          status: 200,
-          body: {
-            kind: 'email_gate',
-            message: 'You have used your 3 free lookups this month.',
-          },
-        };
-      }
+    const n = await timePhase('counter_check', () => countAnonLookups(anonToken));
+    if (n >= LIMITS.FREE_ANON_LIMIT) {
+      return {
+        status: 200,
+        body: {
+          kind: 'signup_gate',
+          message: "You've used your 3 free lookups — create a free account to keep going.",
+        },
+      };
     }
   }
 

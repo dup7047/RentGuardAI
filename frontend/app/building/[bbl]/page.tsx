@@ -46,14 +46,14 @@ export default async function BuildingPage({ params, searchParams }: Props) {
   const shareTitle = `${r.address ?? `BBL ${bbl}`} — RentGuard NYC`;
   const shareText = `${openViolations} open HPD violations · grade ${grade} · check your building free`;
 
-  const jsonLd = {
+  const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Residence',
     name: r.address ?? `BBL ${bbl}`,
     address: {
       '@type': 'PostalAddress',
-      streetAddress: r.address ?? '',
-      addressLocality: r.borough ?? '',
+      ...(r.address ? { streetAddress: r.address } : {}),
+      ...(r.borough ? { addressLocality: r.borough } : {}),
       addressRegion: 'NY',
       addressCountry: 'US',
     },
@@ -69,6 +69,7 @@ export default async function BuildingPage({ params, searchParams }: Props) {
         url={`${siteBase}/building/${bbl}`}
         title={shareTitle}
         text={shareText}
+        className="btn primary"
       />
       <BuildingReport data={r} />
     </>

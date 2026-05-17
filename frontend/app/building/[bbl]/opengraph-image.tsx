@@ -47,6 +47,7 @@ export default async function Image({ params }: { params: Promise<{ bbl: string 
             flexDirection: 'column',
             justifyContent: 'center',
             padding: 80,
+            position: 'relative',
             background: '#0a0a0a',
             color: 'white',
             fontFamily: 'system-ui, sans-serif',

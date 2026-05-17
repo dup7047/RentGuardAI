@@ -79,6 +79,18 @@ describe('ShareCard', () => {
     expect(screen.getByRole('button').textContent).toBe('Share this report');
   });
 
+  it('shows error state when neither share nor clipboard is available', async () => {
+    vi.stubGlobal('navigator', {});
+    render(<ShareCard url="https://x.test" title="t" />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button'));
+      await flushMicrotasks();
+    });
+    expect(screen.getByRole('button').textContent).toBe(
+      "Couldn't share — try again",
+    );
+  });
+
   it('swallows AbortError silently (no error state)', async () => {
     vi.useFakeTimers();
     const abortErr = new Error('cancelled');

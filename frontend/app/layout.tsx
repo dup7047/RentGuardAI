@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
 import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/next';
 import { NavBar } from '@/components/NavBar';
 import { SiteFooter } from '@/components/SiteFooter';
 import './globals.css';
@@ -69,6 +70,7 @@ export default function RootLayout({
             strategy="afterInteractive"
           />
         )}
+        <Analytics />
       </body>
     </html>
   );

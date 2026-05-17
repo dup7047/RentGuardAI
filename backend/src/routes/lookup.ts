@@ -825,6 +825,23 @@ function validateLookupBody(input: unknown): void {
   if (!r.success) throw fromZodIssues(r.error.issues);
 }
 
+/**
+ * Hono middleware variant: validate the body BEFORE the rate-limit
+ * middleware runs. Without this, a script POSTing malformed JSON would
+ * burn the per-anon /v1/lookup quota on every rejection, since
+ * rateLimitMiddleware is wired ahead of the route handler in app.ts. The
+ * handler still calls validateLookupBody() directly as defense-in-depth
+ * (no-op on a second pass thanks to Hono's body cache).
+ */
+export async function validateLookupBodyMiddleware(
+  c: import('hono').Context,
+  next: () => Promise<void>,
+): Promise<void> {
+  const input = await c.req.json().catch(() => ({}));
+  validateLookupBody(input);
+  await next();
+}
+
 // JSON variant — original behavior, single response. Backed by runLookup.
 lookupRoute.post('/lookup', async (c) => {
   const input = await c.req.json().catch(() => ({}));

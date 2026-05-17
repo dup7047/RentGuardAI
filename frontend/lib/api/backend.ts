@@ -223,8 +223,11 @@ const BASE =
 // request after spin-down can take 20-30s. Without retry, users hit a 502/503
 // or naked timeout. withRetry handles two things:
 //   1. Exponential backoff for network errors and 5xx (capped at 3 retries).
-//   2. Emits 'rentguard:request-slow' on the window when a request crosses
-//      5s in-flight, so the UI can render a "Warming up…" hint.
+//   2. Emits a single 'rentguard:request-slow' on the window when the FIRST
+//      attempt within this call crosses 5s in-flight, and a matching
+//      'rentguard:request-slow-end' when the whole call resolves. The UI
+//      hook (useColdStartHint) counts events as ±1, so emitting more than
+//      once per call would leak a positive counter on retried slow requests.
 // 4xx is never retried — those are client problems, retries won't help.
 
 const RETRY_DELAYS_MS = [1_000, 3_000, 9_000] as const; // total ≤ 13s
@@ -233,8 +236,6 @@ const SLOW_THRESHOLD_MS = 5_000;
 export type RetryOptions = {
   /** Skip emitting the slow-request hint (e.g. for ambient polling calls). */
   silent?: boolean;
-  /** Per-attempt timeout. Default 60s, well above Render's cold-start ceiling. */
-  timeoutMs?: number;
 };
 
 function dispatchSlow(silent: boolean): void {
@@ -262,10 +263,18 @@ export async function withRetry<T>(
 ): Promise<T> {
   const silent = opts.silent === true;
   let slowTimer: ReturnType<typeof setTimeout> | undefined;
+  // `slowEmitted` gates BOTH the slow dispatch (set inside the timer
+  // callback) and the slow-end dispatch (outer finally). It is set ONCE
+  // per withRetry call and never reset between attempts, so a request
+  // that retries through multiple >5s attempts still produces exactly
+  // one slow + one slow-end pair. Without this guard, attempt 1 firing
+  // slow and attempt 2 firing slow would leak +1 in the consumer's
+  // pending counter.
   let slowEmitted = false;
 
   const armSlowTimer = () => {
     slowTimer = setTimeout(() => {
+      if (slowEmitted) return;
       slowEmitted = true;
       dispatchSlow(silent);
     }, SLOW_THRESHOLD_MS);

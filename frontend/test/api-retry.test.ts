@@ -91,6 +91,46 @@ describe('withRetry', () => {
     await p;
     window.removeEventListener('rentguard:request-slow', slowSpy);
   });
+
+  // Phase 11 follow-up: prevent counter drift when multiple attempts in
+  // the SAME withRetry call each cross the 5s threshold. The hook
+  // (useColdStartHint) counts events ±1, so two slow events + one
+  // slow-end would leak +1 in `pending` forever and pin the
+  // "Warming up…" hint on after the request finishes.
+  it('emits exactly one slow + one slow-end across a retried slow call', async () => {
+    const slowSpy = vi.fn();
+    const slowEndSpy = vi.fn();
+    window.addEventListener('rentguard:request-slow', slowSpy);
+    window.addEventListener('rentguard:request-slow-end', slowEndSpy);
+
+    let attempt = 0;
+    const fn = vi.fn(async () => {
+      attempt++;
+      // Hold the attempt open past the 5s threshold so the slow timer
+      // fires on EVERY attempt. Without the fix, that means N slow
+      // events for an N-attempt call.
+      await new Promise((resolve) => setTimeout(resolve, 6_000));
+      if (attempt < 3) {
+        const err = new Error('retryable') as Error & { status: number };
+        err.status = 503;
+        throw err;
+      }
+      return 'ok';
+    });
+
+    const p = withRetry(fn);
+    // Drive the clock far enough to cover three 6s attempts plus the
+    // 1s + 3s backoffs between them — total 22s.
+    await vi.advanceTimersByTimeAsync(22_000);
+    await expect(p).resolves.toBe('ok');
+
+    expect(fn).toHaveBeenCalledTimes(3);
+    expect(slowSpy).toHaveBeenCalledTimes(1);
+    expect(slowEndSpy).toHaveBeenCalledTimes(1);
+
+    window.removeEventListener('rentguard:request-slow', slowSpy);
+    window.removeEventListener('rentguard:request-slow-end', slowEndSpy);
+  });
 });
 
 describe('fetchWithRetry', () => {

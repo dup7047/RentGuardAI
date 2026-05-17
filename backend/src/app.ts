@@ -6,6 +6,7 @@ import { corsMiddleware } from './middleware/cors.js';
 import { anonTokenMiddleware } from './middleware/anon-token.js';
 import { authMiddleware } from './middleware/auth.js';
 import { rateLimitMiddleware } from './middleware/rate-limit.js';
+import { validateLookupBodyMiddleware } from './routes/lookup.js';
 import { v1Router } from './routes/v1.js';
 import { logger } from './logger.js';
 import { AppError, isAppError, toEnvelope } from './lib/errors.js';
@@ -44,6 +45,11 @@ export function createApp(): Hono<{ Variables: { requestId: string } }> {
   app.use('/v1/*', corsMiddleware);
   app.use('/v1/*', anonTokenMiddleware);
   app.use('/v1/*', authMiddleware);
+  // Body validation MUST run before rate-limit so malformed-JSON spam
+  // does not burn the per-anon quota (the rate-limit middleware
+  // increments a sliding-window counter unconditionally on entry).
+  app.use('/v1/lookup', validateLookupBodyMiddleware);
+  app.use('/v1/lookup/stream', validateLookupBodyMiddleware);
   app.use('/v1/lookup', rateLimitMiddleware);
   app.use('/v1/lookup/stream', rateLimitMiddleware);
 

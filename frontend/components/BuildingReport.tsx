@@ -20,6 +20,7 @@ import { ShareModal } from './ShareModal';
 import { SignInModal, type SignInReason } from './SignInModal';
 import { MetricInfoModal } from './MetricInfoModal';
 import { buildingJsonLd } from '@/lib/seo/structured-data';
+import { computeBuildingGrade } from '@/lib/building-grade';
 import {
   getBandLabel,
   getReportTone,
@@ -231,6 +232,28 @@ export function BuildingReport({ data }: { data: SuccessData }) {
     }
   }
 
+  async function handleShare() {
+    const openViolations = stats?.hpd_violations_open ?? 0;
+    const grade = computeBuildingGrade(openViolations);
+    const shareUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/building/${bbl}`
+        : `https://www.rentguard.cc/building/${bbl}`;
+    const shareTitle = `${address ?? `BBL ${bbl}`} — RentGuard NYC`;
+    const shareText = `${openViolations} open HPD violations · grade ${grade} · check your building free`;
+
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ url: shareUrl, title: shareTitle, text: shareText });
+        return;
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        // Any other failure: fall through to the modal so the user still has a path.
+      }
+    }
+    setModal({ kind: 'share' });
+  }
+
   return (
     <div className="building-report report screen-fade">
       <script
@@ -299,7 +322,7 @@ export function BuildingReport({ data }: { data: SuccessData }) {
               <button
                 type="button"
                 className="btn ghost"
-                onClick={() => setModal({ kind: 'share' })}
+                onClick={handleShare}
               >
                 ↗ Share report
               </button>

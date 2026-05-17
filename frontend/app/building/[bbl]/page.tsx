@@ -6,8 +6,6 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getBuildingByBbl } from '@/lib/api/backend';
 import { BuildingReport } from '@/components/BuildingReport';
-import { ShareCard } from '@/components/ShareCard';
-import { computeBuildingGrade } from '@/lib/building-grade';
 
 export const revalidate = 86400; // 24h ISR (upper bound on staleness)
 
@@ -39,12 +37,6 @@ export default async function BuildingPage({ params, searchParams }: Props) {
       `Building report unavailable for BBL ${bbl}${message ? `: ${message}` : ''}`,
     );
   }
-  // TODO: make configurable via NEXT_PUBLIC_SITE_URL when set
-  const siteBase = 'https://www.rentguard.cc';
-  const openViolations = r.stats?.hpd_violations_open ?? 0;
-  const grade = computeBuildingGrade(openViolations);
-  const shareTitle = `${r.address ?? `BBL ${bbl}`} — RentGuard NYC`;
-  const shareText = `${openViolations} open HPD violations · grade ${grade} · check your building free`;
 
   const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org',
@@ -64,12 +56,6 @@ export default async function BuildingPage({ params, searchParams }: Props) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
-      <ShareCard
-        url={`${siteBase}/building/${bbl}`}
-        title={shareTitle}
-        text={shareText}
-        className="btn primary"
       />
       <BuildingReport data={r} />
     </>

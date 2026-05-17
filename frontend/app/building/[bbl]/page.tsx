@@ -46,8 +46,25 @@ export default async function BuildingPage({ params, searchParams }: Props) {
   const shareTitle = `${r.address ?? `BBL ${bbl}`} — RentGuard NYC`;
   const shareText = `${openViolations} open HPD violations · grade ${grade} · check your building free`;
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Residence',
+    name: r.address ?? `BBL ${bbl}`,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: r.address ?? '',
+      addressLocality: r.borough ?? '',
+      addressRegion: 'NY',
+      addressCountry: 'US',
+    },
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <ShareCard
         url={`${siteBase}/building/${bbl}`}
         title={shareTitle}

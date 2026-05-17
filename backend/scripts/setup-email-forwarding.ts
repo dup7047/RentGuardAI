@@ -28,8 +28,7 @@ const FORWARD_TO = process.env.FORWARD_TO_EMAIL ?? 'dantino12@gmail.com';
 const BASE = 'https://api.cloudflare.com/client/v4';
 
 const ALIASES: Record<string, string[]> = {
-  'rentguard.nyc': ['support', 'privacy', 'legal', 'ops'],
-  'rentguard.cc':  ['corrections', 'owners', 'lease-review-waitlist', 'firms', 'noreply'],
+  'rentguard.cc': ['corrections', 'owners', 'lease-review-waitlist', 'firms', 'noreply', 'support', 'privacy', 'legal'],
 };
 
 if (!TOKEN) {

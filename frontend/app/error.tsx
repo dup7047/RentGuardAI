@@ -1,13 +1,19 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 
 export default function Error({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    console.error('[root error boundary]', error);
+  }, [error]);
+
   return (
     <div className="container screen-fade">
       <div className="center-card">
@@ -18,9 +24,15 @@ export default function Error({
           <p className="auth-panel-kicker">Something went wrong</p>
           <h1>RentGuard hit a loading issue.</h1>
           <p>
-            Try reloading this view. If it keeps happening, run a fresh lookup
-            or contact support with the page you were trying to open.
+            Try again. If it keeps happening, this is on us — drop us a line at{' '}
+            <a href="mailto:hello@rentguard.cc">hello@rentguard.cc</a> and we
+            will dig in.
           </p>
+          {error.digest && (
+            <p className="mono muted" style={{ fontSize: 12, marginTop: -8 }}>
+              Error reference: {error.digest}
+            </p>
+          )}
           <div className="center-card-actions">
             <button type="button" className="btn primary" onClick={reset}>
               Try again

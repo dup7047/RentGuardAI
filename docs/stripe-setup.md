@@ -131,8 +131,8 @@ Stripe-only half today:
      -d mode=subscription \
      -d "line_items[0][price]=$STRIPE_SEARCH_PASS_PRICE_ID" \
      -d "line_items[0][quantity]=1" \
-     -d success_url=https://rentguard.nyc/success \
-     -d cancel_url=https://rentguard.nyc/cancel
+     -d success_url=https://www.rentguard.cc/success \
+     -d cancel_url=https://www.rentguard.cc/cancel
    ```
 
    Open the `url` from the response in a browser. You should see a Stripe

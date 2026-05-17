@@ -207,9 +207,9 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-# Set to 12 per NIST SP 800-63B §5.1.1.2. Latent — passwords aren't used today
-# (magic-link only), but defensively configured so a future password-auth path
-# would meet the floor.
+# Set to 12 per NIST SP 800-63B §5.1.1.2. The live auth UI supports
+# password signup/sign-in plus magic links, so keep Supabase's password
+# floor aligned with frontend validation.
 minimum_password_length = 12
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
@@ -266,15 +266,15 @@ otp_expiry = 3600
 
 [auth.email.template.magic_link]
 subject = "Sign in to RentGuard NYC"
-content_path = "./templates/magic-link.html"
+content_path = "./supabase/templates/magic-link.html"
 
 [auth.email.template.confirmation]
 subject = "Confirm your RentGuard account"
-content_path = "./templates/confirmation.html"
+content_path = "./supabase/templates/confirmation.html"
 
 [auth.email.template.recovery]
 subject = "Reset your RentGuard NYC password"
-content_path = "./templates/recovery.html"
+content_path = "./supabase/templates/recovery.html"
 
 # Production SMTP via Resend. RESEND_API_KEY is read at `supabase config push`
 # time from the operator's shell, never committed. Local dev keeps using

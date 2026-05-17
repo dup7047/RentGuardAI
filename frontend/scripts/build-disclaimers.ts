@@ -23,6 +23,7 @@ const out = {
   preOutputFraming: extractSection('preOutputFraming'),
   fareActFraming: extractSection('fareActFraming'),
   affiliateClickThrough: extractSection('affiliateClickThrough'),
+  affiliateLongForm: extractSection('affiliateLongForm'),
   weAreNotFooter: extractSection('weAreNotFooter'),
 };
 
@@ -40,6 +41,7 @@ writeFileSync(
     '  preOutputFraming: string;',
     '  fareActFraming: string;',
     '  affiliateClickThrough: string;',
+    '  affiliateLongForm: string;',
     '  weAreNotFooter: string;',
     '}>;',
     '',

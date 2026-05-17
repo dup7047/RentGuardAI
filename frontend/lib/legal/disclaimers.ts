@@ -5,5 +5,6 @@ export const DISCLAIMERS = json as Readonly<{
   preOutputFraming: string;
   fareActFraming: string;
   affiliateClickThrough: string;
+  affiliateLongForm: string;
   weAreNotFooter: string;
 }>;

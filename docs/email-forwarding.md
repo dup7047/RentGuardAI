@@ -1,87 +1,51 @@
 # Email Forwarding Setup
 
-All project email addresses on `rentguard.nyc` and `rentguard.cc` forward to
-**dantino12@gmail.com** via [ForwardEmail.net](https://forwardemail.net).
+Project email addresses on `rentguard.cc` forward to **dantino12@gmail.com** via Cloudflare Email Routing.
 
 ## Addresses
 
 | Address | Domain |
 |---|---|
-| support@rentguard.nyc | rentguard.nyc |
-| privacy@rentguard.nyc | rentguard.nyc |
-| legal@rentguard.nyc | rentguard.nyc |
-| ops@rentguard.nyc | rentguard.nyc |
+| support@rentguard.cc | rentguard.cc |
+| privacy@rentguard.cc | rentguard.cc |
+| legal@rentguard.cc | rentguard.cc |
+| ops@rentguard.cc | rentguard.cc |
+| security@rentguard.cc | rentguard.cc |
 | corrections@rentguard.cc | rentguard.cc |
 | owners@rentguard.cc | rentguard.cc |
 | lease-review-waitlist@rentguard.cc | rentguard.cc |
+| search-pass-waitlist@rentguard.cc | rentguard.cc |
 | firms@rentguard.cc | rentguard.cc |
 | noreply@rentguard.cc | rentguard.cc |
 
 ---
 
-## One-time DNS setup (do this at your registrar for each domain)
+## One-time Cloudflare setup
 
-### MX records (same for both domains)
+1. Add `rentguard.cc` to Cloudflare and confirm it uses Cloudflare nameservers.
+2. Open **Email → Email Routing** for the zone and enable routing.
+3. Add and verify the destination address `dantino12@gmail.com`.
+4. Create an API token with **Zone → Email Routing Rules → Edit** scoped to `rentguard.cc`.
 
-| Type | Priority | Value |
-|---|---|---|
-| MX | 10 | mx1.forwardemail.net |
-| MX | 20 | mx2.forwardemail.net |
+## Alias configuration
 
-Remove any existing MX records before adding these.
+Set the API token in `backend/.env`:
 
-### TXT record — domain verification
-
-ForwardEmail generates a unique verification token per domain. Get it from:
-
-> **ForwardEmail dashboard → My Account → Domains → _your domain_ → DNS Records**
-
-Add it as a TXT record on the root (`@`) of each domain:
-
-```
-"forward-email-site-verification=<token>"
+```bash
+CLOUDFLARE_API_TOKEN=your_token_here
 ```
 
-### TXT record — catch-all fallback (optional)
+Run the setup script from the `backend/` directory:
 
-If you want any unrecognised address on a domain to also forward (catch-all),
-add a second TXT record on the root:
-
-```
-"forward-email=dantino12@gmail.com"
+```bash
+npm run email:forwarding
 ```
 
----
-
-## Alias configuration (run once after DNS propagates)
-
-1. Create a free ForwardEmail account at <https://forwardemail.net>.
-2. Add both domains inside the dashboard and verify them.
-3. Grab your API key from **My Account → Security**.
-4. Set it in `backend/.env`:
-
-   ```
-   FORWARDEMAIL_API_KEY=your_key_here
-   ```
-
-5. Run the setup script from the `backend/` directory:
-
-   ```bash
-   npm run email:forwarding
-   ```
-
-   The script is idempotent — re-running it is safe (existing aliases return
-   HTTP 409 and are counted as success).
-
----
+The script is idempotent. Existing aliases are treated as success.
 
 ## Verifying forwarding works
 
-Send a test email to any address above from an external mail client. It should
-arrive at dantino12@gmail.com within a few seconds. ForwardEmail's dashboard
-also shows delivery logs per domain.
-
----
+Send a test email to any address above from an external mail client. It should arrive at dantino12@gmail.com within a few seconds. Cloudflare's Email Routing dashboard also shows routing events for the domain.
 
 ## Changing the forwarding destination
 
@@ -91,4 +55,4 @@ Pass `FORWARD_TO_EMAIL` when running the script:
 FORWARD_TO_EMAIL=new@example.com npm run email:forwarding
 ```
 
-This creates/updates all aliases to point to the new address.
+This creates or updates all aliases to point to the new address.

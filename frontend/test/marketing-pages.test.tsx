@@ -52,26 +52,37 @@ describe('marketing pages', () => {
     expect(hrefs(container).some((h) => h.startsWith('mailto:corrections@'))).toBe(true);
   });
 
-  it('pricing shows "Coming soon — join waitlist" chips and never says Subscribe/Buy/Preorder', () => {
+  it('pricing shows only the free tier and never says Subscribe/Buy/Preorder', () => {
     const { container } = render(<PricingPage />);
     expect(legalFooterPresent(container)).toBe(true);
     const text = container.textContent ?? '';
-    expect(text).toContain('Coming soon');
-    expect(text).toContain('Join waitlist');
+    expect(text).toContain('Free');
+    expect(text).toContain('$0');
+    expect(text).toContain('3 building lookups without an account');
     // FTC mail-order rules attach to "preorder"; CTAs must not say Subscribe/Buy/Preorder.
     expect(text).not.toMatch(/Preorder|Subscribe now|Buy now/i);
-    // Lease review CTA is mailto, Search Pass CTA goes to login redirect.
+    // Future tiers are no longer surfaced — no waitlist mailtos, no firm research links.
     const hs = hrefs(container);
-    expect(hs.some((h) => h.startsWith('mailto:lease-review-waitlist@'))).toBe(true);
-    expect(hs.some((h) => h === '/login?redirectTo=/dashboard')).toBe(true);
+    expect(hs.some((h) => h.startsWith('mailto:lease-review-waitlist@'))).toBe(false);
+    expect(hs.some((h) => h.startsWith('mailto:search-pass-waitlist@'))).toBe(false);
+    expect(hs).toContain('/');
   });
 
-  it('how-we-make-money renders the affiliate disclosure verbatim', () => {
+  it('how-we-make-money renders the §4.2 long-form affiliate disclosure verbatim', () => {
+    // Phase 11.6 acceptance: the page must render disclaimer.md §4.2
+    // (long-form transparency language), not the §4.1 click-through
+    // language used in the modal. Each of the three paragraphs is
+    // rendered as its own <p>, so we check each paragraph independently
+    // instead of the joined source — whitespace around <p> boundaries
+    // does not survive textContent concatenation.
     const { container } = render(<HowWeMakeMoneyPage />);
     expect(legalFooterPresent(container)).toBe(true);
-    expect(container.textContent).toContain(DISCLAIMERS.affiliateClickThrough);
-    expect(container.textContent).toContain('Lemonade');
-    expect(container.textContent).toContain('Bellhop');
-    expect(container.textContent).toContain('Moved');
+    const text = container.textContent ?? '';
+    for (const paragraph of DISCLAIMERS.affiliateLongForm.split(/\n\n+/)) {
+      expect(text).toContain(paragraph);
+    }
+    expect(text).toContain('Lemonade');
+    expect(text).toContain('Bellhop');
+    expect(text).toContain('Moved');
   });
 });

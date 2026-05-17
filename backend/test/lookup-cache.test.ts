@@ -94,6 +94,12 @@ vi.mock('../src/data/datasets/hpd-registrations.js', () => ({
   getHpdRegistrations: vi.fn().mockResolvedValue([]),
   decomposeBbl: () => ({ boroid: '1', block: '1', lot: '1' }),
 }));
+vi.mock('../src/data/datasets/hpd-complaints.js', () => ({
+  getHpdComplaints: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('../src/data/datasets/three11-housing.js', () => ({
+  get311HousingRequests: vi.fn().mockResolvedValue([]),
+}));
 
 vi.mock('../src/ai/summary.js', () => ({
   generateSummary: mocks.generateSummaryFn,

@@ -29,6 +29,10 @@ const NULL_RECORD: Omit<LandlordRecord, 'last_fetched_at'> = {
   watchlist_rank: null,
 };
 
+function toIsoString(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
 /**
  * Look up the registered owner for a building BBL.
  * Returns a cached LandlordRecord if fresh, otherwise fetches from HPD Open Data
@@ -115,6 +119,6 @@ export async function lookupLandlord(bbl: string): Promise<LandlordRecord> {
       : null,
     head_officer_business_address: headOfficer ? buildAddress(headOfficer) || null : null,
     watchlist_rank: ll.watchlist_rank,
-    last_fetched_at: ll.last_fetched_at,
+    last_fetched_at: toIsoString(ll.last_fetched_at),
   };
 }

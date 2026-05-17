@@ -20,7 +20,7 @@ this if you're just running 0.3's acceptance check.
 4. **Create an app token.** Click "Create New App Token". Fill in:
    - Application Name: `RentGuard backend (staging)`
    - Description: `Server-side ingestion of HPD/DOB/311/Marshal/Bedbug/Lead datasets for the RentGuard renter-protection service.`
-   - Website URL: `https://rentguard.nyc` (placeholder; the form is permissive)
+   - Website URL: `https://www.rentguard.cc`
    - Public token: leave the "Public" toggle ON. The public/anonymous token is
      the one we send in the `X-App-Token` header. There is also a private
      "App Token Secret" — we don't currently need it.

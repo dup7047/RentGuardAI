@@ -198,7 +198,7 @@ export type LookupResponse =
   | { kind: 'requires_address'; reason: string }
   | { kind: 'outside_nyc'; detected_city: string | null; detected_state: string | null }
   | { kind: 'ambiguous'; matches: Array<{ bbl: string; address: string; borough: string }> }
-  | { kind: 'email_gate'; message: string }
+  | { kind: 'signup_gate'; message: string }
   | { kind: 'cost_cap'; message: string }
   | { kind: 'rate_limited'; message: string }
   | { kind: 'invalid_input'; errors: AnyRecord }
@@ -217,6 +217,135 @@ const DEV_BACKEND_URL = 'http://localhost:8080';
 const BASE =
   process.env.NEXT_PUBLIC_BACKEND_URL ??
   (process.env.NODE_ENV === 'production' ? PROD_BACKEND_URL : DEV_BACKEND_URL);
+
+// ── Retry + cold-start hint ──────────────────────────────────────────────────
+// Render's free tier spins the backend down after ~15 min of idle. First
+// request after spin-down can take 20-30s. Without retry, users hit a 502/503
+// or naked timeout. withRetry handles two things:
+//   1. Exponential backoff for network errors and 5xx (capped at 3 retries).
+//   2. Emits a single 'rentguard:request-slow' on the window when the FIRST
+//      attempt within this call crosses 5s in-flight, and a matching
+//      'rentguard:request-slow-end' when the whole call resolves. The UI
+//      hook (useColdStartHint) counts events as ±1, so emitting more than
+//      once per call would leak a positive counter on retried slow requests.
+// 4xx is never retried — those are client problems, retries won't help.
+
+const RETRY_DELAYS_MS = [1_000, 3_000, 9_000] as const; // total ≤ 13s
+const SLOW_THRESHOLD_MS = 5_000;
+
+export type RetryOptions = {
+  /** Skip emitting the slow-request hint (e.g. for ambient polling calls). */
+  silent?: boolean;
+};
+
+function dispatchSlow(silent: boolean): void {
+  if (silent) return;
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('rentguard:request-slow'));
+}
+
+function dispatchSlowEnd(silent: boolean): void {
+  if (silent) return;
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('rentguard:request-slow-end'));
+}
+
+function isRetryableStatus(status: number): boolean {
+  // 502, 503, 504 = Render proxy / cold-start signals.
+  // 500 is included as well; if the backend is throwing 500s a retry is
+  // cheap and may catch a transient.
+  return status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  opts: RetryOptions = {},
+): Promise<T> {
+  const silent = opts.silent === true;
+  let slowTimer: ReturnType<typeof setTimeout> | undefined;
+  // `slowEmitted` gates BOTH the slow dispatch (set inside the timer
+  // callback) and the slow-end dispatch (outer finally). It is set ONCE
+  // per withRetry call and never reset between attempts, so a request
+  // that retries through multiple >5s attempts still produces exactly
+  // one slow + one slow-end pair. Without this guard, attempt 1 firing
+  // slow and attempt 2 firing slow would leak +1 in the consumer's
+  // pending counter.
+  let slowEmitted = false;
+
+  const armSlowTimer = () => {
+    slowTimer = setTimeout(() => {
+      if (slowEmitted) return;
+      slowEmitted = true;
+      dispatchSlow(silent);
+    }, SLOW_THRESHOLD_MS);
+  };
+  const disarmSlowTimer = () => {
+    if (slowTimer) clearTimeout(slowTimer);
+    slowTimer = undefined;
+  };
+
+  try {
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+      armSlowTimer();
+      try {
+        const result = await fn();
+        disarmSlowTimer();
+        return result;
+      } catch (err) {
+        disarmSlowTimer();
+        const status = (err as { status?: number }).status;
+        const retryable = typeof status === 'number' ? isRetryableStatus(status) : true;
+        const isLast = attempt === RETRY_DELAYS_MS.length;
+        if (!retryable || isLast) throw err;
+        const delay = RETRY_DELAYS_MS[attempt];
+        if (delay !== undefined) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+    // Unreachable — the loop returns or throws inside.
+    throw new Error('withRetry: exhausted retries');
+  } finally {
+    disarmSlowTimer();
+    if (slowEmitted) dispatchSlowEnd(silent);
+  }
+}
+
+/** Status-aware fetch error so retry logic can distinguish 4xx from 5xx. */
+export class FetchHttpError extends Error {
+  readonly status: number;
+  readonly body: unknown;
+  constructor(status: number, body: unknown, message?: string) {
+    super(message ?? `HTTP ${status}`);
+    this.name = 'FetchHttpError';
+    this.status = status;
+    this.body = body;
+  }
+}
+
+/** Fetch + withRetry combo. Throws FetchHttpError on non-2xx so the caller
+ *  can switch on `err.status` (4xx for validation/auth, 5xx already retried). */
+export async function fetchWithRetry(
+  input: string,
+  init: RequestInit = {},
+  retry: RetryOptions = {},
+): Promise<Response> {
+  return withRetry(async () => {
+    const res = await fetch(input, init);
+    if (!res.ok && isRetryableStatus(res.status)) {
+      // Trigger retry by throwing — the body is preserved on the error for
+      // diagnostics, though most retryable 5xx have empty bodies anyway.
+      let body: unknown = null;
+      try {
+        body = await res.clone().json();
+      } catch {
+        // 5xx often returns HTML/text; ignore parse failure.
+      }
+      throw new FetchHttpError(res.status, body, `Retryable HTTP ${res.status}`);
+    }
+    return res;
+  }, retry);
+}
 
 // Exported so callers and tests can prove the same auth header is built for
 // every request. Internal callers below still use it via the closure.
@@ -241,7 +370,7 @@ export async function postLookup(input: {
   bbl?: string;
 }): Promise<LookupResponse> {
   const auth = await authHeader();
-  const res = await fetch(`${BASE}/v1/lookup`, {
+  const res = await fetchWithRetry(`${BASE}/v1/lookup`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...auth },
@@ -277,7 +406,11 @@ export async function postLookupStream(
   onPhase: (name: LookupPhase) => void,
 ): Promise<LookupResponse> {
   const auth = await authHeader();
-  const res = await fetch(`${BASE}/v1/lookup/stream`, {
+  // Retry only the initial connect; mid-stream failures are not safe to
+  // restart (we'd lose any progressive events already consumed). The retry
+  // helper unwinds via FetchHttpError on 5xx; pre-stream envelope errors
+  // (e.g. validation_failed → 400) flow through unchanged.
+  const res = await fetchWithRetry(`${BASE}/v1/lookup/stream`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...auth },
@@ -323,16 +456,22 @@ export async function postAffiliateClick(input: {
   proceeded: boolean;
 }): Promise<void> {
   const auth = await authHeader();
-  await fetch(`${BASE}/v1/affiliate/click`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...auth },
-    body: JSON.stringify(input),
-  });
+  // Fire-and-forget telemetry — silent so a slow logging call doesn't flash
+  // the "Warming up…" hint while the user is mid-flow.
+  await fetchWithRetry(
+    `${BASE}/v1/affiliate/click`,
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...auth },
+      body: JSON.stringify(input),
+    },
+    { silent: true },
+  );
 }
 
 export async function postWaitlistEmail(email: string): Promise<void> {
-  await fetch(`${BASE}/v1/waitlist/email`, {
+  await fetchWithRetry(`${BASE}/v1/waitlist/email`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -406,11 +545,18 @@ export class SavedBuildingsAuthError extends Error {
 
 async function savedBuildingsFetch(path: string, init: RequestInit): Promise<Response> {
   const auth = await authHeader();
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...auth, ...(init.headers ?? {}) },
-  });
+  // Saved-buildings calls run in the dashboard — silent so the cold-start
+  // hint only fires on the user-initiated lookup flow, not on ambient list
+  // refreshes that happen on page-load.
+  const res = await fetchWithRetry(
+    `${BASE}${path}`,
+    {
+      ...init,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...auth, ...(init.headers ?? {}) },
+    },
+    { silent: true },
+  );
   if (res.status === 401) throw new SavedBuildingsAuthError();
   return res;
 }

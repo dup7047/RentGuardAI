@@ -8,7 +8,7 @@ export const dynamic = 'force-static';
 export const metadata: Metadata = {
   title: 'Disclaimers — RentGuard NYC',
   description:
-    'Master disclaimer language for RentGuard NYC, including building risk reports, lease reviews, FARE Act checks, and affiliate disclosures.',
+    'Disclaimer language for RentGuard NYC building reports, AI summaries, public records, and affiliate disclosures.',
   alternates: { canonical: '/legal/disclaimer' },
 };
 

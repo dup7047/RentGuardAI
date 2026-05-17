@@ -41,7 +41,8 @@ import { getCachedBatch } from '../data/cache.js';
 import { getDb } from '../db/client.js';
 import { buildingLookups, buildings, nonNycWaitlist } from '../db/schema.js';
 import { and, desc, eq, gt, isNotNull, isNull, like, or, sql as drizzleSql } from 'drizzle-orm';
-import { LIMITS, countAnonLookups, countEmailLookups, incrementEmailCounter } from '../lib/counters.js';
+import { LIMITS, countAnonLookups, incrementEmailCounter } from '../lib/counters.js';
+import { fromZodIssues } from '../lib/errors.js';
 import { logger } from '../logger.js';
 import type { Borough } from '../data/types.js';
 
@@ -402,26 +403,18 @@ export async function runLookup(
     });
 
   // ── 4. Counter check ─────────────────────────────────────────────────────────
+  // Anonymous users get FREE_ANON_LIMIT lookups before we ask them to sign up.
+  // Signed-in users are unlimited on the free tier.
   if (!userId) {
-    if (!userEmail) {
-      const n = await timePhase('counter_check', () => countAnonLookups(anonToken));
-      if (n >= LIMITS.FREE_ANON_LIMIT) {
-        return {
-          status: 200,
-          body: { kind: 'email_gate', message: 'Drop your email to keep looking.' },
-        };
-      }
-    } else {
-      const n = await timePhase('counter_check', () => countEmailLookups(userEmail));
-      if (n >= LIMITS.FREE_EMAIL_LIMIT_30D) {
-        return {
-          status: 200,
-          body: {
-            kind: 'email_gate',
-            message: 'You have used your 3 free lookups this month.',
-          },
-        };
-      }
+    const n = await timePhase('counter_check', () => countAnonLookups(anonToken));
+    if (n >= LIMITS.FREE_ANON_LIMIT) {
+      return {
+        status: 200,
+        body: {
+          kind: 'signup_gate',
+          message: "You've used your 3 free lookups — create a free account to keep going.",
+        },
+      };
     }
   }
 
@@ -823,9 +816,36 @@ export const lookupRoute = new Hono<{
   Variables: { anonToken: string; userId?: string; userEmail?: string };
 }>();
 
+// Pre-handler body validation. Lets a malformed-JSON request fail fast with
+// the standardized error envelope (handled by app.ts onError) instead of
+// reaching runLookup's internal kind:'invalid_input' fallback. runLookup
+// still does its own safeParse as defense-in-depth.
+function validateLookupBody(input: unknown): void {
+  const r = Body.safeParse(input);
+  if (!r.success) throw fromZodIssues(r.error.issues);
+}
+
+/**
+ * Hono middleware variant: validate the body BEFORE the rate-limit
+ * middleware runs. Without this, a script POSTing malformed JSON would
+ * burn the per-anon /v1/lookup quota on every rejection, since
+ * rateLimitMiddleware is wired ahead of the route handler in app.ts. The
+ * handler still calls validateLookupBody() directly as defense-in-depth
+ * (no-op on a second pass thanks to Hono's body cache).
+ */
+export async function validateLookupBodyMiddleware(
+  c: import('hono').Context,
+  next: () => Promise<void>,
+): Promise<void> {
+  const input = await c.req.json().catch(() => ({}));
+  validateLookupBody(input);
+  await next();
+}
+
 // JSON variant — original behavior, single response. Backed by runLookup.
 lookupRoute.post('/lookup', async (c) => {
   const input = await c.req.json().catch(() => ({}));
+  validateLookupBody(input);
   const ctx: LookupCtx = {
     anonToken: c.get('anonToken'),
     userId: c.get('userId'),
@@ -846,6 +866,7 @@ lookupRoute.post('/lookup', async (c) => {
 // Each phase boundary emits a line; the final line carries the full response.
 lookupRoute.post('/lookup/stream', async (c) => {
   const input = await c.req.json().catch(() => ({}));
+  validateLookupBody(input);
   const ctx: LookupCtx = {
     anonToken: c.get('anonToken'),
     userId: c.get('userId'),

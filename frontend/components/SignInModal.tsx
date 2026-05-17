@@ -1,6 +1,6 @@
 // Sign-in gate modal — shown when an anon user clicks Save building, Share,
-// Lease review, or any quota-gate. Defaults to email + password; can switch
-// to magic link or sign up.
+// or any quota-gate. Defaults to email + password; can switch to magic link
+// or sign up.
 
 'use client';
 
@@ -11,7 +11,7 @@ import { useLockBodyScroll } from '@/lib/useLockBodyScroll';
 
 import { Mark } from './Mark';
 
-export type SignInReason = 'save' | 'share' | 'lease' | 'gate';
+export type SignInReason = 'save' | 'share' | 'gate';
 
 type Mode = 'password' | 'signup' | 'magic';
 
@@ -25,10 +25,6 @@ const COPY: Record<SignInReason, { title: string; body: string }> = {
   share: {
     title: 'Sign in to share',
     body: 'Generate a shareable URL that stays in sync with the latest data.',
-  },
-  lease: {
-    title: 'Sign in to review your lease',
-    body: 'Upload a lease PDF and we\'ll flag clauses that disagree with NYC tenant law.',
   },
   gate: {
     title: 'Free quota reached',
@@ -44,10 +40,6 @@ const SIGNUP_COPY: Record<SignInReason, { title: string; body: string }> = {
   share: {
     title: 'Create an account to share',
     body: 'Generate a shareable URL that stays in sync with the latest data.',
-  },
-  lease: {
-    title: 'Create an account to review your lease',
-    body: "Upload a lease PDF and we'll flag clauses that disagree with NYC tenant law.",
   },
   gate: {
     title: 'Create an account to keep going',

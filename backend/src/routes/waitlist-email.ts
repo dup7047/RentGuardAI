@@ -4,15 +4,17 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { logger } from '../logger.js';
+import { validate } from '../middleware/validate.js';
+import { AppError } from '../lib/errors.js';
 
 const Body = z.object({ email: z.string().email() });
 
-export const waitlistEmailRoute = new Hono();
+type Vars = { validated: { body: z.infer<typeof Body> } };
 
-waitlistEmailRoute.post('/waitlist/email', async (c) => {
-  const parsed = Body.safeParse(await c.req.json().catch(() => ({})));
-  if (!parsed.success) return c.json({ kind: 'invalid_input' }, 400);
-  const { email } = parsed.data;
+export const waitlistEmailRoute = new Hono<{ Variables: Vars }>();
+
+waitlistEmailRoute.post('/waitlist/email', validate({ body: Body }), async (c) => {
+  const { email } = c.get('validated').body;
 
   const apiKey = process.env.BEEHIIV_API_KEY;
   const pubId = process.env.BEEHIIV_PUBLICATION_ID;
@@ -34,6 +36,8 @@ waitlistEmailRoute.post('/waitlist/email', async (c) => {
     },
   );
 
-  if (!res.ok) return c.json({ ok: false, status: res.status }, 502);
+  if (!res.ok) {
+    throw new AppError('internal_error', `Waitlist provider returned ${res.status}.`);
+  }
   return c.json({ ok: true });
 });

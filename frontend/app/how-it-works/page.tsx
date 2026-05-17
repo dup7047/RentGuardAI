@@ -6,7 +6,7 @@ import { LegalFooter } from '@/components/LegalFooter';
 export const metadata: Metadata = {
   title: 'How it works — RentGuard NYC',
   description:
-    'Paste any NYC address or listing URL, and RentGuard pulls live HPD violations, DOB complaints, eviction filings, and landlord records into a plain-English risk report.',
+    'Paste any NYC address or listing URL, and RentGuard pulls current HPD violations, DOB complaints, eviction filings, and landlord records into a plain-English risk report.',
 };
 
 const STEPS = [
@@ -17,7 +17,7 @@ const STEPS = [
   },
   {
     n: '2',
-    t: 'Pull live records from NYC.gov',
+    t: 'Pull current records from NYC.gov',
     d: 'We query nine NYC Open Data sources for that BBL: HPD violations, HPD complaints, HPD multiple-dwelling registrations, DOB complaints, 311 housing complaints, marshal evictions, the bedbug registry, lead-paint history, and the Public Advocate Worst Landlord Watchlist.',
   },
   {
@@ -32,8 +32,8 @@ const STEPS = [
   },
   {
     n: '5',
-    t: 'Optional: review your lease',
-    d: 'Coming soon: upload your lease PDF for a $29 clause-by-clause review against NYC tenant law (HSTPA security deposit caps, FARE Act broker-fee rules, illegal late fees, and more). Preview is free; full report unlocks after payment.',
+    t: 'Save buildings you want to revisit',
+    d: 'Create an account with a password or magic link to keep reports on your dashboard. Saved buildings make it easier to compare apartments and re-check cited records before you sign.',
   },
 ] as const;
 
@@ -110,7 +110,7 @@ export default function HowItWorksPage() {
           ))}
         </div>
 
-        <div className="lease-cta" style={{ marginTop: 32 }}>
+        <div className="report-cta" style={{ marginTop: 32 }}>
           <div className="body">
             <div>Ready to look up a building?</div>
             <div>Free, no signup for the first lookup.</div>

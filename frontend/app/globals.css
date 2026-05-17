@@ -581,8 +581,8 @@ h1.hero em {
 .lookup-fallback textarea { resize: vertical; min-height: 100px; font-family: inherit; }
 .lookup-fallback .actions { margin-top: 4px; display: flex; gap: 8px; }
 
-/* Email-gate inline form */
-.lookup-email-gate {
+/* Signup-gate inline prompt shown after the free anonymous lookups are used up */
+.lookup-signup-gate {
   margin: 16px auto 0;
   max-width: 620px;
   padding: 16px 20px;
@@ -592,12 +592,6 @@ h1.hero em {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-.lookup-email-gate input {
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font-size: 14px;
 }
 
 /* Full-viewport overlay for loading / outside-nyc / ambiguous states.
@@ -915,8 +909,8 @@ h1.hero em {
   font-style: italic;
 }
 
-/* "Have a lease?" CTA strip + helper for inline toast */
-.lease-cta {
+/* Report CTA strip + helper for inline toast */
+.report-cta {
   margin-top: 24px;
   padding: 18px 22px;
   border: 1px solid var(--line);
@@ -927,8 +921,8 @@ h1.hero em {
   gap: 24px;
   background: linear-gradient(90deg, var(--accent-soft), transparent);
 }
-.lease-cta .body div:first-child { font-size: 15px; font-weight: 600; }
-.lease-cta .body div + div { font-size: 13.5px; color: var(--ink-2); margin-top: 3px; }
+.report-cta .body div:first-child { font-size: 15px; font-weight: 600; }
+.report-cta .body div + div { font-size: 13.5px; color: var(--ink-2); margin-top: 3px; }
 .toast {
   position: fixed;
   bottom: 32px;
@@ -1458,7 +1452,7 @@ h1.hero em {
   .nav-inner { padding: 14px 20px; }
   .container { padding: 0 20px; }
   body[data-density='comfy'] .landing { padding: 60px 0 40px; }
-  .lease-cta { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .report-cta { flex-direction: column; align-items: flex-start; gap: 12px; }
   .site-footer-inner { grid-template-columns: 1fr; gap: 24px; }
   .site-footer-base { flex-direction: column; gap: 6px; align-items: flex-start; }
   .site-footer { padding: 32px 20px 20px; }

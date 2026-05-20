@@ -246,6 +246,55 @@ describe('POST /v1/lookup schema', () => {
     expect(res.status).toBe(400);
     assertEnvelope(await res.json(), 'validation_failed');
   });
+
+  // Stored-XSS regression: the address field must reject HTML metacharacters
+  // so a payload like `</script><script>...</script>` can never reach
+  // buildings.address (rendered into a JSON-LD <script> on the SEO archive).
+  it('invalid: address contains `<` (XSS payload rejected)', async () => {
+    const app = createApp();
+    const res = await app.request('/v1/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: '</script><script>alert(1)</script>', bbl: '1000019999' }),
+    });
+    expect(res.status).toBe(400);
+    assertEnvelope(await res.json(), 'validation_failed');
+  });
+
+  // SSRF regression: listingUrl must be on the StreetEasy/Zillow allowlist.
+  // Without this, an attacker could probe internal services on the host.
+  it('invalid: listingUrl points at internal IP (SSRF guard)', async () => {
+    const app = createApp();
+    const res = await app.request('/v1/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ listingUrl: 'http://169.254.169.254/latest/meta-data/' }),
+    });
+    expect(res.status).toBe(400);
+    assertEnvelope(await res.json(), 'validation_failed');
+  });
+
+  it('invalid: listingUrl uses non-http scheme (file://)', async () => {
+    const app = createApp();
+    const res = await app.request('/v1/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ listingUrl: 'file:///etc/passwd' }),
+    });
+    expect(res.status).toBe(400);
+    assertEnvelope(await res.json(), 'validation_failed');
+  });
+
+  it('invalid: listingUrl points at non-allowlisted public host', async () => {
+    const app = createApp();
+    const res = await app.request('/v1/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ listingUrl: 'https://attacker.example/payload' }),
+    });
+    expect(res.status).toBe(400);
+    assertEnvelope(await res.json(), 'validation_failed');
+  });
 });
 
 // ── GET /v1/building/:bbl — param: /^\d{10}$/ (404 envelope when malformed) ──

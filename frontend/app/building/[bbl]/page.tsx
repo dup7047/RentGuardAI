@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getBuildingByBbl } from '@/lib/api/backend';
 import { BuildingReport } from '@/components/BuildingReport';
+import { serializeJsonLd } from '@/lib/seo/structured-data';
 
 export const revalidate = 86400; // 24h ISR (upper bound on staleness)
 
@@ -55,7 +56,7 @@ export default async function BuildingPage({ params, searchParams }: Props) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <BuildingReport data={r} />
     </>

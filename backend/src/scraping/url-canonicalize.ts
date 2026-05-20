@@ -44,15 +44,19 @@ export function canonicalizeListingUrl(input: string): string {
 
 /**
  * Detect the host family for routing to per-source extractors.
- * Returns null when the URL parser fails.
+ * Returns null when the URL parser fails, the scheme isn't http/https, or
+ * the host isn't on the allowlist. Returning null causes the fetcher to
+ * short-circuit with `unsupported_url` before any network request — this is
+ * the SSRF guard.
  */
-export function detectListingHost(input: string): { host: string; source: 'streeteasy' | 'zillow' | 'generic' } | null {
+export function detectListingHost(input: string): { host: string; source: 'streeteasy' | 'zillow' } | null {
   let parsed: URL;
   try {
     parsed = new URL(input.trim());
   } catch {
     return null;
   }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
   const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
   if (host === 'streeteasy.com' || host.endsWith('.streeteasy.com')) {
     return { host, source: 'streeteasy' };
@@ -60,5 +64,5 @@ export function detectListingHost(input: string): { host: string; source: 'stree
   if (host === 'zillow.com' || host.endsWith('.zillow.com')) {
     return { host, source: 'zillow' };
   }
-  return { host, source: 'generic' };
+  return null;
 }

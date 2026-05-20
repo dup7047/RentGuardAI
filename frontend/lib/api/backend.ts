@@ -10,7 +10,7 @@ type AnyRecord = Record<string, any>;
  */
 export type ScrapedListingPublic = {
   url: string;
-  source: 'streeteasy' | 'zillow' | 'generic';
+  source: 'streeteasy' | 'zillow';
   source_kind: 'rental' | 'building' | 'sale' | 'unknown';
   fetchedAt: string;
   address: string | null;

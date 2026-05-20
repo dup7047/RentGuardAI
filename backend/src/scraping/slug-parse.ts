@@ -28,8 +28,7 @@ const STREETEASY_CITY_NORMALIZED = new Set([
 
 export function parseAddressFromUrl(canonicalUrl: string, source: ListingSource): string | null {
   if (source === 'zillow') return parseZillowUrl(canonicalUrl);
-  if (source === 'streeteasy') return parseStreetEasyUrl(canonicalUrl);
-  return null;
+  return parseStreetEasyUrl(canonicalUrl);
 }
 
 /**

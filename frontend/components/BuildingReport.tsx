@@ -19,7 +19,7 @@ import { SourcesTab } from './SourcesTab';
 import { ShareModal } from './ShareModal';
 import { SignInModal, type SignInReason } from './SignInModal';
 import { MetricInfoModal } from './MetricInfoModal';
-import { buildingJsonLd } from '@/lib/seo/structured-data';
+import { buildingJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 import { computeBuildingGrade } from '@/lib/building-grade';
 import {
   getBandLabel,
@@ -258,7 +258,7 @@ export function BuildingReport({ data }: { data: SuccessData }) {
     <div className="building-report report screen-fade">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       <LegalFraming />

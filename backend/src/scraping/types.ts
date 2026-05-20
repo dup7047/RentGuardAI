@@ -4,7 +4,7 @@
 
 export type FareFee = 'no_fee' | 'fee' | 'unknown';
 
-export type ListingSource = 'streeteasy' | 'zillow' | 'generic';
+export type ListingSource = 'streeteasy' | 'zillow';
 
 /**
  * StreetEasy distinguishes /rental/, /building/, /sale/. Other sources collapse

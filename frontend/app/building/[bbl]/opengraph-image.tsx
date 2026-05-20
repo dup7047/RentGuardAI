@@ -26,7 +26,15 @@ export default async function Image({ params }: { params: Promise<{ bbl: string 
 
   let data: Data = { kind: 'not_found' };
   try {
-    const base = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8080';
+    // Mirror the URL resolution in lib/api/backend.ts so the OG image works on
+    // Vercel prod without requiring a dashboard-side NEXT_PUBLIC_BACKEND_URL.
+    // Without this, prod fell back to localhost and every shared card rendered
+    // the generic "Building report" template instead of the score card.
+    const base =
+      process.env.NEXT_PUBLIC_BACKEND_URL ??
+      (process.env.NODE_ENV === 'production'
+        ? 'https://rentguardai.onrender.com'
+        : 'http://localhost:8080');
     const res = await fetch(`${base}/v1/building/${bbl}`, {
       // @ts-ignore next extended fetch
       next: { revalidate: 86400 },

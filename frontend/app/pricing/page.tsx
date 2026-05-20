@@ -6,6 +6,7 @@ import { LegalFooter } from '@/components/LegalFooter';
 export const metadata: Metadata = {
   title: 'Pricing — RentGuard NYC',
   description: 'NYC building lookups are free. Three lookups without an account, then sign up to keep going.',
+  alternates: { canonical: '/pricing' },
 };
 
 const FREE_TIER = {

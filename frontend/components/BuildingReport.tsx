@@ -265,7 +265,7 @@ export function BuildingReport({ data }: { data: SuccessData }) {
 
       <div className="container">
         <div className="breadcrumb">
-          <a href="/lookup">Search</a>
+          <a href="/">Search</a>
           <span>›</span>
           <span>{borough}</span>
           <span>›</span>
@@ -279,10 +279,10 @@ export function BuildingReport({ data }: { data: SuccessData }) {
               <span className="dot" />
               {label}
             </span>
-            <h2 style={{ marginTop: 12 }}>
+            <h1 style={{ marginTop: 12, fontSize: 28, fontWeight: 700, lineHeight: 1.2 }}>
               {address}
               {unit ? `, ${unit}` : ''}
-            </h2>
+            </h1>
             <div style={{ color: 'var(--ink-2)', fontSize: 14 }}>
               {borough} · NYC
             </div>

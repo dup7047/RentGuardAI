@@ -3,6 +3,10 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
 
+  // Drop the `x-powered-by: Next.js` response header — it leaks the framework
+  // and contributes nothing useful.
+  poweredByHeader: false,
+
   // Serve images as AVIF first, then WebP — significantly smaller than PNG.
   // next/image handles negotiation automatically via the Accept header.
   images: {
@@ -17,6 +21,21 @@ const nextConfig: NextConfig = {
   // so a year-long TTL is safe.
   async headers() {
     return [
+      {
+        // Global security headers. CSP is intentionally omitted here — it
+        // needs a report-only iteration against the live origin set
+        // (Supabase + Cloudflare beacon + Vercel) before enforcing.
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=(self)',
+          },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        ],
+      },
       {
         source: '/_next/static/:path*',
         headers: [
@@ -44,6 +63,14 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+    ];
+  },
+
+  // /lookup is a legacy URL — the homepage IS the lookup surface.
+  // Permanent (301) so search engines retire the duplicate URL.
+  async redirects() {
+    return [
+      { source: '/lookup', destination: '/', permanent: true },
     ];
   },
 };

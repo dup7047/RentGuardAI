@@ -21,17 +21,56 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
+const SITE_URL = 'https://www.rentguard.cc';
+
 export const metadata: Metadata = {
   title: 'RentGuard NYC — AI Rental Copilot',
   description:
     'Free building risk lookup for NYC renters. Check any address against HPD violations, DOB complaints, eviction records, and landlord data.',
-  metadataBase: new URL('https://rentguard.cc'),
+  metadataBase: new URL(SITE_URL),
+  alternates: { canonical: '/' },
   openGraph: {
     title: 'RentGuard NYC',
     description: 'AI-powered NYC building lookup from public records.',
+    url: SITE_URL,
+    siteName: 'RentGuard NYC',
     type: 'website',
+    locale: 'en_US',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'RentGuard NYC',
+    description: 'AI-powered NYC building lookup from public records.',
   },
 };
+
+const siteJsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    '@id': `${SITE_URL}/#org`,
+    name: 'RentGuard NYC',
+    legalName: 'RentGuard NYC LLC',
+    url: SITE_URL,
+    logo: `${SITE_URL}/logo-lockup.png`,
+    areaServed: { '@type': 'City', name: 'New York City' },
+    email: 'support@rentguard.cc',
+    sameAs: [],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': `${SITE_URL}/#website`,
+    url: SITE_URL,
+    name: 'RentGuard NYC',
+    publisher: { '@id': `${SITE_URL}/#org` },
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: `${SITE_URL}/?q={search_term_string}`,
+      'query-input': 'required name=search_term_string',
+    },
+  },
+];
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -53,7 +92,10 @@ export default function RootLayout({
         {supabaseUrl && (
           <link rel="preconnect" href={supabaseUrl} crossOrigin="anonymous" />
         )}
-        {/* Google Fonts is handled by next/font (self-hosted), so no preconnect needed */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd) }}
+        />
       </head>
       <body data-density="comfy">
         <div className="shell">

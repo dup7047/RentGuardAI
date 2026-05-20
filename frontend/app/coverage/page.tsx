@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: 'Coverage — what data RentGuard checks',
   description:
     'Every NYC Open Data source RentGuard reads on every building lookup, with refresh cadence and a link to the raw catalog.',
+  alternates: { canonical: '/coverage' },
 };
 
 const SOURCES: ReadonlyArray<{
@@ -170,7 +171,7 @@ export default function CoveragePage() {
         </div>
 
         <div className="card panel" style={{ marginTop: 40 }}>
-          <h3>What we don’t cover yet</h3>
+          <h2>What we don’t cover yet</h2>
           {DEFERRED.map((d) => (
             <div key={d} className="finding">
               <div className="icn warn" aria-hidden="true">

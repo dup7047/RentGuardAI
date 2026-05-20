@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: 'How we make money — RentGuard NYC',
   description:
     'How RentGuard pays the bills and why our reports stay editorially independent.',
+  alternates: { canonical: '/how-we-make-money' },
 };
 
 const PARTNERS: ReadonlyArray<{
@@ -72,7 +73,7 @@ export default function HowWeMakeMoneyPage() {
 
       <div className="container" style={{ paddingBottom: 40 }}>
         <div className="card panel">
-          <h3>Affiliate disclosure</h3>
+          <h2>Affiliate disclosure</h2>
           {/* Phase 11.6: this is the long-form transparency language from
               disclaimer.md §4.2. The byte-for-byte source lives in
               docs/legal/disclaimers.md under the affiliateLongForm anchor
@@ -92,7 +93,7 @@ export default function HowWeMakeMoneyPage() {
         </div>
 
         <div className="card panel" style={{ marginTop: 24 }}>
-          <h3>Partners we earn from</h3>
+          <h2>Partners we earn from</h2>
           <p style={{ fontSize: 13, color: 'var(--ink-2)', marginTop: -4, marginBottom: 14 }}>
             Each link below opens a disclosure modal first, logs the click for our own reporting, and then opens the partner site in a new tab.
           </p>
@@ -115,14 +116,14 @@ export default function HowWeMakeMoneyPage() {
         </div>
 
         <div className="card panel" style={{ marginTop: 24 }}>
-          <h3>Planned products</h3>
+          <h2>Planned products</h2>
           <p style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.6 }}>
             Lease Review, Search Pass, saved-building notifications, and law-firm workflows are not live in the current beta. We may test those ideas later, but there is no paid purchase flow, subscription, or client portal today.
           </p>
         </div>
 
         <div className="card panel" style={{ marginTop: 24 }}>
-          <h3>What we don’t take money from</h3>
+          <h2>What we don’t take money from</h2>
           {NEVER.map((line) => (
             <div key={line} className="finding">
               <div className="icn good" aria-hidden="true">
@@ -136,7 +137,7 @@ export default function HowWeMakeMoneyPage() {
         </div>
 
         <div className="card panel" style={{ marginTop: 24 }}>
-          <h3>Editorial independence</h3>
+          <h2>Editorial independence</h2>
           <p style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.6 }}>
             RentGuard reports are generated from public NYC datasets and a small AI summary model. No partner sees the report before it’s rendered. No partner can pay to change a violation count, soften a finding, or remove a building from the watchlist surface. If you spot a partner-influenced problem, email us.
           </p>

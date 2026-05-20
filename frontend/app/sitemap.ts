@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 export const revalidate = 3600; // Regenerate sitemap every hour via ISR
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const now = new Date();
+
   let buildingUrls: MetadataRoute.Sitemap = [];
   try {
     const supabase = await createClient();
@@ -17,7 +19,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `https://www.rentguard.cc/building/${row.bbl}`,
       lastModified: new Date(row.last_fetched_at as string),
       changeFrequency: 'weekly' as const,
-      priority: 0.7,
     }));
   } catch {
     // Sitemap generates even if DB is unreachable (empty building list)
@@ -31,8 +32,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     'how-we-make-money',
   ].map((slug) => ({
     url: `https://www.rentguard.cc/${slug}`,
+    lastModified: now,
     changeFrequency: 'monthly' as const,
-    priority: 0.7,
   }));
 
   const legalUrls: MetadataRoute.Sitemap = [
@@ -41,13 +42,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     'legal/disclaimer',
   ].map((slug) => ({
     url: `https://www.rentguard.cc/${slug}`,
+    lastModified: now,
     changeFrequency: 'yearly' as const,
-    priority: 0.3,
   }));
 
   return [
-    { url: 'https://www.rentguard.cc/', changeFrequency: 'daily', priority: 1 },
-    { url: 'https://www.rentguard.cc/lookup', changeFrequency: 'daily', priority: 0.9 },
+    {
+      url: 'https://www.rentguard.cc/',
+      lastModified: now,
+      changeFrequency: 'daily',
+    },
     ...marketingUrls,
     ...legalUrls,
     ...buildingUrls,

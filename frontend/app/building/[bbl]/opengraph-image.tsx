@@ -1,25 +1,30 @@
 import { ImageResponse } from 'next/og';
 
-import { computeBuildingGrade, type BuildingGrade } from '@/lib/building-grade';
-
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
+
+type ScoreBand = 'minimal' | 'moderate' | 'elevated' | 'high';
 
 type Data = {
   kind: string;
   address?: string;
   borough?: string;
+  score?: number | null;
+  score_band?: ScoreBand | null;
   stats?: { hpd_violations_open: number };
   landlord?: { watchlist_rank: number | null };
 };
 
-const GRADE_COLORS: Record<BuildingGrade, string> = {
-  A: '#22A559',
-  B: '#86C232',
-  C: '#E8A33D',
-  D: '#E07B3C',
-  F: '#C44537',
+// Color the score by the backend's classification band. Higher score = better
+// building, so 'minimal' (low risk) is green and 'high' (worst) is red.
+const BAND_COLORS: Record<ScoreBand, string> = {
+  minimal: '#22A559',
+  moderate: '#E8A33D',
+  elevated: '#E07B3C',
+  high: '#C44537',
 };
+// Used when a building hasn't been scored yet (rare on cached pages).
+const NEUTRAL_COLOR = '#9ca3af';
 
 export default async function Image({ params }: { params: Promise<{ bbl: string }> }) {
   const { bbl } = await params;
@@ -100,8 +105,8 @@ export default async function Image({ params }: { params: Promise<{ bbl: string 
   }
 
   const openViolations = data.stats?.hpd_violations_open ?? 0;
-  const grade = computeBuildingGrade(openViolations);
-  const gradeColor = GRADE_COLORS[grade];
+  const score = data.score ?? null;
+  const scoreColor = data.score_band ? BAND_COLORS[data.score_band] : NEUTRAL_COLOR;
   const address = data.address ?? `BBL ${bbl}`;
   const borough = data.borough ? ` · ${data.borough}` : '';
   const rank = data.landlord?.watchlist_rank;
@@ -171,6 +176,7 @@ export default async function Image({ params }: { params: Promise<{ bbl: string 
         <div
           style={{
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
             paddingLeft: 60,
@@ -178,13 +184,23 @@ export default async function Image({ params }: { params: Promise<{ bbl: string 
         >
           <span
             style={{
-              fontSize: 240,
+              fontSize: 200,
               fontWeight: 900,
               lineHeight: 1,
-              color: gradeColor,
+              color: scoreColor,
             }}
           >
-            {grade}
+            {score ?? '—'}
+          </span>
+          <span
+            style={{
+              fontSize: 32,
+              marginTop: 8,
+              color: '#9ca3af',
+              letterSpacing: 1,
+            }}
+          >
+            {score != null ? '/ 100' : 'score pending'}
           </span>
         </div>
 

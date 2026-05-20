@@ -32,9 +32,11 @@ vi.mock('@/lib/api/backend', async () => {
   };
 });
 
-// next/navigation is not available in jsdom; stub useRouter.
+// next/navigation is not available in jsdom; stub useRouter and
+// useSearchParams (LookupForm seeds its input from ?q= via the latter).
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 import * as geosearch from '@/lib/api/geosearch';

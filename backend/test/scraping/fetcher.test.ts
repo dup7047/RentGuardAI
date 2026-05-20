@@ -190,6 +190,23 @@ describe('scrapeListing', () => {
     );
   });
 
+  it('rejects non-allowlisted hosts before any fetch (SSRF guard)', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch');
+    for (const url of [
+      'http://127.0.0.1:6379/',
+      'http://169.254.169.254/latest/meta-data/',
+      'http://10.0.0.5:8080/admin',
+      'https://attacker.example/payload',
+      'file:///etc/passwd',
+    ]) {
+      const r = await scrapeListing(url);
+      expect(r.kind).toBe('error');
+      if (r.kind === 'error') expect(r.code).toBe('unsupported_url');
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(firecrawl.firecrawlFetch).not.toHaveBeenCalled();
+  });
+
   it('Zillow URL skips direct fetch entirely and goes straight to Firecrawl', async () => {
     // www.zillow.com is in ALWAYS_BOT_WALLED — direct fetch should NOT be called,
     // even before we try Firecrawl. We don't care here whether Firecrawl's HTML

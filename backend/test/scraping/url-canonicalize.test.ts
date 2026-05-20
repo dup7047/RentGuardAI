@@ -70,9 +70,17 @@ describe('detectListingHost', () => {
     expect(detectListingHost('https://www.zillow.com/homedetails/123')?.source).toBe('zillow');
   });
 
-  it('returns generic for unknown hosts', () => {
-    expect(detectListingHost('https://renthop.com/listing/abc')?.source).toBe('generic');
-    expect(detectListingHost('https://newyork.craigslist.org/abc')?.source).toBe('generic');
+  it('returns null for unknown hosts (SSRF guard)', () => {
+    expect(detectListingHost('https://renthop.com/listing/abc')).toBeNull();
+    expect(detectListingHost('https://newyork.craigslist.org/abc')).toBeNull();
+    expect(detectListingHost('http://127.0.0.1/')).toBeNull();
+    expect(detectListingHost('http://169.254.169.254/latest/meta-data/')).toBeNull();
+    expect(detectListingHost('http://10.0.0.5:6379/')).toBeNull();
+  });
+
+  it('returns null for non-http(s) schemes', () => {
+    expect(detectListingHost('file:///etc/passwd')).toBeNull();
+    expect(detectListingHost('ftp://streeteasy.com/rental/1')).toBeNull();
   });
 
   it('returns null for unparseable URLs', () => {

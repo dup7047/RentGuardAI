@@ -15,6 +15,8 @@ vi.mock('../src/db/client.js', () => ({
     insert: () => ({
       values: () => ({
         onConflictDoNothing: async () => undefined,
+        // rate-limit middleware UPSERT — count=1 means "first hit in window, not over limit"
+        onConflictDoUpdate: () => ({ returning: async () => [{ count: 1 }] }),
         returning: async () => [],
       }),
     }),

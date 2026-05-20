@@ -13,11 +13,15 @@ const Body = z.object({
   proceeded: z.boolean(),
 });
 
+// Exported so app.ts can run validation BEFORE rate-limit middleware —
+// otherwise malformed POSTs would burn the per-anon quota on each rejection.
+export const validateAffiliateClickBody = validate({ body: Body });
+
 type Vars = { anonToken: string; userId?: string; validated: { body: z.infer<typeof Body> } };
 
 export const affiliateClickRoute = new Hono<{ Variables: Vars }>();
 
-affiliateClickRoute.post('/affiliate/click', validate({ body: Body }), async (c) => {
+affiliateClickRoute.post('/affiliate/click', validateAffiliateClickBody, async (c) => {
   const { partner, referrerUrl, proceeded } = c.get('validated').body;
   await getDb().insert(affiliateClicks).values({
     userId: c.get('userId') ?? null,

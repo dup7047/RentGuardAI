@@ -12,6 +12,9 @@ vi.mock('../src/db/client.js', () => ({
     insert: () => ({
       values: () => ({
         onConflictDoNothing: async () => undefined,
+        // Rate-limit middleware chains onConflictDoUpdate().returning() →
+        // count=1 keeps every test under any per-route hourly limit.
+        onConflictDoUpdate: () => ({ returning: async () => [{ count: 1 }] }),
         returning: async () => [{ createdAt: new Date('2026-05-12T00:00:00Z') }],
       }),
       // For waitlist + affiliate which call values() then return directly.

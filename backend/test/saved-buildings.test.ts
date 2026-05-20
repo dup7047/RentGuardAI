@@ -55,6 +55,9 @@ vi.mock('../src/db/client.js', () => ({
             returning: async () =>
               mocks.insertReturnsRow ? [{ createdAt: mocks.insertCreatedAt }] : [],
           }),
+          // saved-buildings routes aren't rate-limited (auth-only), but the
+          // chain is provided so any incidental rate-limit call wouldn't blow up.
+          onConflictDoUpdate: () => ({ returning: async () => [{ count: 1 }] }),
         };
       },
     }),

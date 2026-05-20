@@ -5,8 +5,10 @@ import { requestIdMiddleware } from './middleware/request-id.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { anonTokenMiddleware } from './middleware/anon-token.js';
 import { authMiddleware } from './middleware/auth.js';
-import { rateLimitMiddleware } from './middleware/rate-limit.js';
+import { rateLimitMiddleware, makeRateLimit } from './middleware/rate-limit.js';
 import { validateLookupBodyMiddleware } from './routes/lookup.js';
+import { validateAffiliateClickBody } from './routes/affiliate-click.js';
+import { validateWaitlistEmailBody } from './routes/waitlist-email.js';
 import { v1Router } from './routes/v1.js';
 import { logger } from './logger.js';
 import { AppError, isAppError, toEnvelope } from './lib/errors.js';
@@ -47,11 +49,38 @@ export function createApp(): Hono<{ Variables: { requestId: string } }> {
   app.use('/v1/*', authMiddleware);
   // Body validation MUST run before rate-limit so malformed-JSON spam
   // does not burn the per-anon quota (the rate-limit middleware
-  // increments a sliding-window counter unconditionally on entry).
+  // increments a counter on entry).
   app.use('/v1/lookup', validateLookupBodyMiddleware);
   app.use('/v1/lookup/stream', validateLookupBodyMiddleware);
   app.use('/v1/lookup', rateLimitMiddleware);
   app.use('/v1/lookup/stream', rateLimitMiddleware);
+
+  // Rate limits on the remaining public, anon-accessible routes. Without
+  // these, attackers could enumerate every NYC building on GET /v1/building
+  // (each cache-miss triggers 8 dataset fetches + an OpenAI call), spam
+  // affiliate-click rows, or fan-out arbitrary emails to Beehiiv.
+  // Per-route limits intentionally differ — reads are cheaper than writes;
+  // the Beehiiv-fronted waitlist is the strictest because abuse there
+  // damages our sender reputation.
+  //
+  // For POST routes, body validation MUST run before rate-limit (same
+  // reasoning as /v1/lookup): otherwise malformed JSON spam burns the
+  // anon quota and locks out legitimate users. The route handlers re-run
+  // validate() as defense-in-depth; the second pass is idempotent.
+  app.use(
+    '/v1/building/:bbl',
+    makeRateLimit({ name: 'building', anonPerHour: 30, userPerHour: 120 }),
+  );
+  app.use('/v1/affiliate/click', validateAffiliateClickBody);
+  app.use(
+    '/v1/affiliate/click',
+    makeRateLimit({ name: 'affiliate', anonPerHour: 50, userPerHour: 200 }),
+  );
+  app.use('/v1/waitlist/email', validateWaitlistEmailBody);
+  app.use(
+    '/v1/waitlist/email',
+    makeRateLimit({ name: 'waitlist', anonPerHour: 10, userPerHour: 50 }),
+  );
 
   app.get('/health', (c) => {
     return c.json({ status: 'ok', commit: getCommitSha() });

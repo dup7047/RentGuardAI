@@ -14,11 +14,30 @@
 
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 
+// Rate-limit middleware uses Postgres-backed counters via an UPSERT chain;
+// the mock tracks per-key counts so the test below can drive a real
+// "21st request exceeds the 10/h limit" assertion via the DB path. Each
+// test uses a unique anon token so its bucket is isolated.
+const mockRateLimitBuckets = new Map<string, number>();
+
 vi.mock('../src/db/client.js', () => ({
   getDb: () => ({
     insert: () => ({
-      values: () => ({
+      values: (v: { key?: string; windowStart?: Date }) => ({
         onConflictDoNothing: async () => undefined,
+        onConflictDoUpdate: () => ({
+          returning: async () => {
+            // Only the rate-limit middleware passes (key, windowStart);
+            // all other inserts ignore the chain.
+            if (typeof v?.key === 'string' && v.windowStart) {
+              const bucketKey = `${v.key}@${v.windowStart.getTime()}`;
+              const next = (mockRateLimitBuckets.get(bucketKey) ?? 0) + 1;
+              mockRateLimitBuckets.set(bucketKey, next);
+              return [{ count: next }];
+            }
+            return [{ count: 1 }];
+          },
+        }),
         returning: async () => [],
       }),
     }),
@@ -30,6 +49,7 @@ vi.mock('../src/db/client.js', () => ({
         }),
       }),
     }),
+    delete: () => ({ where: async () => undefined }),
   }),
   getPool: () => ({ query: async () => ({ rows: [] }) }),
 }));
@@ -41,9 +61,9 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
-  // The rate-limit module owns a process-global Map keyed by anon_token.
-  // Each test below uses a unique cookie value to keep its bucket isolated
-  // — no module-reset needed.
+  // Each test below uses a unique anon_token cookie so its rate-limit
+  // bucket is isolated from sibling tests — no module-reset needed.
+  mockRateLimitBuckets.clear();
 });
 
 function cookieFor(anonToken: string): string {

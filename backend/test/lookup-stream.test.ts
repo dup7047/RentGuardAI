@@ -18,10 +18,12 @@ vi.mock('../src/db/client.js', () => ({
     insert: () => ({
       values: () => ({
         onConflictDoNothing: async () => undefined,
-        onConflictDoUpdate: async () => undefined,
+        // Rate-limit middleware: count=1 keeps tests under per-route limit.
+        onConflictDoUpdate: () => ({ returning: async () => [{ count: 1 }] }),
         returning: async () => [{ id: 'fake-lookup-id' }],
       }),
     }),
+    delete: () => ({ where: async () => undefined }),
     // Phase 8: findRecentLookup queries building_lookups for a recent row.
     // The streaming tests want CACHE-MISS behavior (full pipeline runs), so
     // the chained select returns []. The dedicated lookup-cache.test.ts file

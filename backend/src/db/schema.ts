@@ -4,6 +4,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -271,3 +272,20 @@ export const costAlerts = pgTable('cost_alerts', {
   thresholdCents: integer('threshold_cents').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Persistent rate-limit counters. One row per (route, subject) per hour
+// bucket. The middleware UPSERTs on entry and returns the post-increment
+// count; if it exceeds the per-route limit, the request gets 429.
+// Replaces an in-memory Map that reset on restart and could be bypassed by
+// round-robin across multi-process deployments.
+export const rateLimitCounters = pgTable(
+  'rate_limit_counters',
+  {
+    key: text('key').notNull(),
+    windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.key, t.windowStart] }),
+  }),
+);

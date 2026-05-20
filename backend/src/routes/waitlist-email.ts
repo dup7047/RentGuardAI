@@ -9,11 +9,15 @@ import { AppError } from '../lib/errors.js';
 
 const Body = z.object({ email: z.string().email() });
 
+// Exported so app.ts can run validation BEFORE rate-limit middleware —
+// otherwise malformed POSTs would burn the per-anon quota on each rejection.
+export const validateWaitlistEmailBody = validate({ body: Body });
+
 type Vars = { validated: { body: z.infer<typeof Body> } };
 
 export const waitlistEmailRoute = new Hono<{ Variables: Vars }>();
 
-waitlistEmailRoute.post('/waitlist/email', validate({ body: Body }), async (c) => {
+waitlistEmailRoute.post('/waitlist/email', validateWaitlistEmailBody, async (c) => {
   const { email } = c.get('validated').body;
 
   const apiKey = process.env.BEEHIIV_API_KEY;

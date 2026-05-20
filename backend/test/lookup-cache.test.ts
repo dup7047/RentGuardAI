@@ -28,7 +28,9 @@ vi.mock('../src/db/client.js', () => ({
         mocks.insertedRows.push(v);
         return {
           onConflictDoNothing: async () => undefined,
-          onConflictDoUpdate: async () => undefined,
+          // Rate-limit middleware: chain .onConflictDoUpdate().returning()
+          // → count=1 keeps every test under the per-route hourly limit.
+          onConflictDoUpdate: () => ({ returning: async () => [{ count: 1 }] }),
           returning: async () => [{ id: 'fake-lookup-id' }],
         };
       },
@@ -45,6 +47,7 @@ vi.mock('../src/db/client.js', () => ({
         }),
       }),
     }),
+    delete: () => ({ where: async () => undefined }),
   }),
   // getCachedBatch hits the raw pool. Dataset wrappers are mocked separately,
   // so this just needs to satisfy lookup.ts's call. rows=[] = cache miss.

@@ -24,14 +24,26 @@ vi.mock('../src/db/client.js', () => ({
   getDb: () => ({
     insert: () => ({
       values: (v: Record<string, unknown>) => {
-        mocks.insertedRows.push(v);
+        // Skip rate-limit middleware's counter UPSERT — the per-test
+        // assertions on `insertedRows` care about handler-driven writes
+        // (buildings, building_lookups), not the bookkeeping insert that
+        // happens on every request.
+        const isRateLimitCounter =
+          'key' in v && 'windowStart' in v && Object.keys(v).length === 3;
+        if (!isRateLimitCounter) {
+          mocks.insertedRows.push(v);
+        }
         return {
           onConflictDoNothing: async () => undefined,
-          onConflictDoUpdate: async () => undefined,
+          // The rate-limit middleware uses .onConflictDoUpdate().returning() —
+          // need the chain to return a count under any per-route limit.
+          onConflictDoUpdate: () => ({ returning: async () => [{ count: 1 }] }),
           returning: async () => [{ id: 'fake-id' }],
         };
       },
     }),
+    // rate-limit middleware probabilistically prunes expired buckets.
+    delete: () => ({ where: async () => undefined }),
     select: (cols?: Record<string, unknown>) => {
       // Two SELECT shapes hit this route:
       //   1. buildings (no `cols` arg in the production code path) — must

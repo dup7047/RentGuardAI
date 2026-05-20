@@ -1,0 +1,42 @@
+name: render-keepalive
+
+# Render's free tier idles after 15 min of inactivity. Pinging /health every
+# 14 min during waking hours keeps the backend warm so the first user of the
+# day doesn't hit a 30-second cold start. Off-hours pings (1am-6am ET) are
+# skipped to leave the dyno asleep when nobody's browsing.
+#
+# Cron is in UTC. May/EDT (UTC-4): ET 6am-11pm = UTC 10:00-03:00 next day.
+# When standard time (Nov-Mar / EST, UTC-5), shift -1 hour: change to
+# */14 11-23,0-4 * * *. The free tier shrugs at a 1-hour drift either way.
+
+on:
+  schedule:
+    # */14 between 10:00 and 23:59 UTC = ET 06:00 to 19:59 (EDT)
+    - cron: '*/14 10-23 * * *'
+    # */14 between 00:00 and 03:59 UTC = ET 20:00 to 23:59 (EDT)
+    - cron: '*/14 0-3 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: render-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: ping rentguardai.onrender.com/health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: curl /health
+        id: ping
+        run: |
+          set +e
+          CODE=$(curl -s -o /tmp/body -w "%{http_code}" --max-time 60 https://rentguardai.onrender.com/health)
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          if [ "$CODE" = "200" ]; then
+            echo "::notice::backend warm (HTTP $CODE)"
+            exit 0
+          fi
+          echo "::error::backend returned HTTP $CODE"
+          cat /tmp/body
+          exit 1

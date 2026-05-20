@@ -1,10 +1,12 @@
 import { Suspense } from 'react';
+import type { Metadata } from 'next';
 import { LookupForm } from './lookup/LookupForm';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'RentGuard NYC — Look up any building before you sign',
   description:
     'Enter an NYC address or listing URL to get an AI-powered risk summary from HPD violations, DOB complaints, and landlord records.',
+  alternates: { canonical: '/' },
 };
 
 const SOURCES = [

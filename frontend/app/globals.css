@@ -834,7 +834,7 @@ h1.hero em {
 .panels { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; }
 .panels.single { grid-template-columns: 1fr; }
 .panel { padding: 22px; }
-.panel h3 { margin: 0 0 14px; font-size: 16px; font-weight: 600; letter-spacing: 0; }
+.panel h2, .panel h3 { margin: 0 0 14px; font-size: 16px; font-weight: 600; letter-spacing: 0; }
 .finding {
   display: flex;
   gap: 12px;

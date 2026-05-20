@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { AddressSuggestions } from '@/components/AddressSuggestions';
 import { Ambiguous } from '@/components/Ambiguous';
@@ -30,7 +30,11 @@ const AUTOCOMPLETE_MIN_LEN = 3;
 
 export function LookupForm() {
   const router = useRouter();
-  const [input, setInput] = useState('');
+  // Seed the input from ?q= so the schema.org SearchAction deep-link
+  // (target=https://www.rentguard.cc/?q={search_term_string}) actually
+  // pre-fills the search box. User still presses Enter to run the lookup.
+  const searchParams = useSearchParams();
+  const [input, setInput] = useState(() => searchParams?.get('q') ?? '');
   const [resp, setResp] = useState<LookupResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [phase, setPhase] = useState<LookupPhase | null>(null);

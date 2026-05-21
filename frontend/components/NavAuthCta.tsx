@@ -77,7 +77,7 @@ export function NavAuthCta() {
   if (state.status === 'authed') {
     return (
       <>
-        <Link href="/dashboard" className="btn ghost sm">
+        <Link href="/dashboard" className="btn ghost sm" prefetch={false}>
           Dashboard
         </Link>
         <form action={signOut} style={{ display: 'inline-flex' }}>
@@ -99,7 +99,7 @@ export function NavAuthCta() {
       <Link href="/login" className="btn link sm" prefetch={false}>
         Sign in
       </Link>
-      <Link href="/" className="btn primary sm">
+      <Link href="/" className="btn primary sm" prefetch={false}>
         Get started
       </Link>
     </>

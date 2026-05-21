@@ -87,4 +87,14 @@ test.describe('lookup flow with mocked backend fixtures', () => {
     await page.getByRole('button', { name: /^Continue$/i }).click();
     await page.waitForURL(/\/building\/1008420015\?fresh=1/);
   });
+
+  test('partial data responses surface a visible report notice', async ({ page }) => {
+    await page.goto('/');
+    await page.getByLabel('NYC listing URL or address').fill('partial data address');
+    await page.getByRole('button', { name: /look up/i }).click();
+    await page.waitForURL(/\/building\/1008420015\?fresh=1/);
+    await expect(page.getByText(/PARTIAL DATA NOTICE/i)).toBeVisible();
+    await expect(page.getByText(/HPD violations and DOB complaints/i)).toBeVisible();
+    await checkProductionPageShell(page);
+  });
 });

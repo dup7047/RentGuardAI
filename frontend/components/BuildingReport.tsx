@@ -40,6 +40,18 @@ import { createClient } from '@/lib/supabase/browser';
 type SuccessData = Extract<LookupResponse, { kind: 'success' }>;
 type Tab = 'overview' | 'violations' | 'complaints' | 'owner' | 'sources';
 
+function mergeFreshLookupData(serverData: SuccessData, freshData: SuccessData): SuccessData {
+  return {
+    ...serverData,
+    ...freshData,
+    violations_rows: freshData.violations_rows ?? serverData.violations_rows,
+    complaints_rows: freshData.complaints_rows ?? serverData.complaints_rows,
+    evictions_rows: freshData.evictions_rows ?? serverData.evictions_rows,
+    total_counts: freshData.total_counts ?? serverData.total_counts,
+    has_more: freshData.has_more ?? serverData.has_more,
+  };
+}
+
 function fmtUnit(scrapedUnit: string | null | undefined): string | null {
   if (!scrapedUnit) return null;
   return scrapedUnit;
@@ -56,7 +68,8 @@ function moneyFromCents(cents: number | null | undefined): string | null {
   return `$${Math.round(cents / 100).toLocaleString()}/mo`;
 }
 
-export function BuildingReport({ data }: { data: SuccessData }) {
+export function BuildingReport({ data: serverData }: { data: SuccessData }) {
+  const [data, setData] = useState<SuccessData>(serverData);
   const {
     bbl,
     address,
@@ -80,6 +93,22 @@ export function BuildingReport({ data }: { data: SuccessData }) {
   const [isAuthed, setIsAuthed] = useState<boolean>(false);
   const [isSaved, setIsSaved] = useState<boolean | null>(null);
   const [saveInFlight, setSaveInFlight] = useState<boolean>(false);
+
+  useEffect(() => {
+    setData(serverData);
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('fresh') !== '1') return;
+      const raw = window.sessionStorage.getItem(`rentguard:fresh-report:${serverData.bbl}`);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as LookupResponse;
+      if (parsed.kind === 'success' && parsed.bbl === serverData.bbl) {
+        setData(mergeFreshLookupData(serverData, parsed));
+      }
+    } catch {
+      // Fresh lookup metadata is only a client-side enhancement.
+    }
+  }, [serverData]);
 
   // On mount + when bbl changes, ask the server whether this BBL is already
   // saved. The server action reads the session via @/lib/supabase/server

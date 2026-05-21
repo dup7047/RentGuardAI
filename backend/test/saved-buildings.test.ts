@@ -106,8 +106,8 @@ describe('GET /v1/saved-buildings/:bbl', () => {
     const app = createApp();
     const res = await app.request('/v1/saved-buildings/3032227501');
     expect(res.status).toBe(401);
-    const body = (await res.json()) as { kind: string };
-    expect(body.kind).toBe('unauthorized');
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe('unauthorized');
   });
 
   it('returns 401 when the token is invalid', async () => {
@@ -125,8 +125,8 @@ describe('GET /v1/saved-buildings/:bbl', () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { kind: string };
-    expect(body.kind).toBe('invalid_input');
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe('validation_failed');
   });
 
   it('returns { saved: false } when no row exists for this user + BBL', async () => {

@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: 'For owners and managers — RentGuard NYC',
   description:
     'How RentGuard reports on NYC buildings, and how to correct outdated information sourced from NYC.gov.',
+  alternates: { canonical: '/for-landlords' },
 };
 
 const PUBLISHED = [
@@ -83,7 +84,7 @@ export default function ForLandlordsPage() {
 
       <div className="container" style={{ paddingBottom: 40 }}>
         <div className="card panel">
-          <h3>What we publish</h3>
+          <h2>What we publish</h2>
           {PUBLISHED.map((p) => (
             <div key={p.t} className="finding">
               <div className="icn good" aria-hidden="true">
@@ -98,7 +99,7 @@ export default function ForLandlordsPage() {
         </div>
 
         <div className="card panel" style={{ marginTop: 24 }}>
-          <h3>How to correct outdated information</h3>
+          <h2>How to correct outdated information</h2>
           {CORRECT_STEPS.map((s) => (
             <div key={s.n} className="finding" style={{ alignItems: 'flex-start' }}>
               <div className="icn num" aria-hidden="true">
@@ -121,7 +122,7 @@ export default function ForLandlordsPage() {
         </div>
 
         <div className="card panel" style={{ marginTop: 24 }}>
-          <h3>What this isn’t</h3>
+          <h2>What this isn’t</h2>
           {NEVER.map((line) => (
             <div key={line} className="finding">
               <div className="icn warn" aria-hidden="true">
@@ -137,11 +138,11 @@ export default function ForLandlordsPage() {
           </p>
         </div>
 
-        <div className="lease-cta" style={{ marginTop: 32 }}>
+        <div className="report-cta" style={{ marginTop: 32 }}>
           <div className="body">
-            <div>Manage a portfolio?</div>
+            <div>Questions about a report?</div>
             <div>
-              We’re building violation alerts for managers and would like to talk. Email{' '}
+              Send the BBL and source link so we can compare RentGuard against the cited public record. Email{' '}
               <a href="mailto:owners@rentguard.cc">owners@rentguard.cc</a>.
             </div>
           </div>

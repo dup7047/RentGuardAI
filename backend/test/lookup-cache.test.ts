@@ -94,6 +94,12 @@ vi.mock('../src/data/datasets/hpd-registrations.js', () => ({
   getHpdRegistrations: vi.fn().mockResolvedValue([]),
   decomposeBbl: () => ({ boroid: '1', block: '1', lot: '1' }),
 }));
+vi.mock('../src/data/datasets/hpd-complaints.js', () => ({
+  getHpdComplaints: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('../src/data/datasets/three11-housing.js', () => ({
+  get311HousingRequests: vi.fn().mockResolvedValue([]),
+}));
 
 vi.mock('../src/ai/summary.js', () => ({
   generateSummary: mocks.generateSummaryFn,
@@ -270,6 +276,7 @@ describe('POST /v1/lookup/stream — URL input bypasses the cache', () => {
     mocks.cachedRow = makeCachedRow();
     vi.mocked(scrapeListing).mockResolvedValue({
       kind: 'ok',
+      fetchMethod: 'direct',
       data: {
         url: 'https://streeteasy.com/building/example',
         source: 'streeteasy',
@@ -296,7 +303,6 @@ describe('POST /v1/lookup/stream — URL input bypasses the cache', () => {
         brokerage: null,
         confidence: 'high',
       },
-      fetchMethod: 'direct',
     } as Awaited<ReturnType<typeof scrapeListing>>);
 
     const app = createApp();

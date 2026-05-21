@@ -6,7 +6,49 @@ import { LegalFooter } from '@/components/LegalFooter';
 export const metadata: Metadata = {
   title: 'How it works — RentGuard NYC',
   description:
-    'Paste any NYC address or listing URL, and RentGuard pulls live HPD violations, DOB complaints, eviction filings, and landlord records into a plain-English risk report.',
+    'Paste any NYC address or listing URL. RentGuard pulls live HPD violations, DOB complaints, evictions, and landlord records into a plain-English risk report.',
+  alternates: { canonical: '/how-it-works' },
+};
+
+const HOW_TO_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'How to check an NYC building before signing a lease',
+  description:
+    'Use RentGuard to pull live NYC public-records data on any building and generate a plain-English risk report in five steps.',
+  totalTime: 'PT2M',
+  step: [
+    {
+      '@type': 'HowToStep',
+      position: 1,
+      name: 'Paste a NYC address or listing URL',
+      text: 'Drop in a StreetEasy or Zillow URL and we extract the address; or paste the address directly. We resolve it to a Borough-Block-Lot ID via the NYC GeoSearch API.',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 2,
+      name: 'Pull current records from NYC.gov',
+      text: 'We query nine NYC Open Data sources for that BBL: HPD violations, HPD complaints, HPD multiple-dwelling registrations, DOB complaints, 311 housing complaints, marshal evictions, the bedbug registry, lead-paint history, and the Public Advocate Worst Landlord Watchlist.',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 3,
+      name: 'Run a structured AI summary',
+      text: 'A small, audited model writes a renter-facing risk briefing in plain English, citing raw counts from the data and never characterizing the building, owner, or manager beyond what the records literally say.',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 4,
+      name: 'See your report',
+      text: 'A 0-100 risk score with a color-coded band, Notable findings, Recommended next steps, and a per-source link for every indicator so you can verify every count on the original NYC.gov page.',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 5,
+      name: 'Save buildings you want to revisit',
+      text: 'Create a free account with a password or magic link to keep reports on your dashboard. Saved buildings make it easier to compare apartments and re-check cited records before you sign.',
+    },
+  ],
 };
 
 const STEPS = [
@@ -17,7 +59,7 @@ const STEPS = [
   },
   {
     n: '2',
-    t: 'Pull live records from NYC.gov',
+    t: 'Pull current records from NYC.gov',
     d: 'We query nine NYC Open Data sources for that BBL: HPD violations, HPD complaints, HPD multiple-dwelling registrations, DOB complaints, 311 housing complaints, marshal evictions, the bedbug registry, lead-paint history, and the Public Advocate Worst Landlord Watchlist.',
   },
   {
@@ -32,8 +74,8 @@ const STEPS = [
   },
   {
     n: '5',
-    t: 'Optional: review your lease',
-    d: 'Coming soon: upload your lease PDF for a $29 clause-by-clause review against NYC tenant law (HSTPA security deposit caps, FARE Act broker-fee rules, illegal late fees, and more). Preview is free; full report unlocks after payment.',
+    t: 'Save buildings you want to revisit',
+    d: 'Create an account with a password or magic link to keep reports on your dashboard. Saved buildings make it easier to compare apartments and re-check cited records before you sign.',
   },
 ] as const;
 
@@ -55,6 +97,10 @@ const NOT_PANEL = [
 export default function HowItWorksPage() {
   return (
     <div className="screen-fade">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(HOW_TO_JSON_LD) }}
+      />
       <div className="landing" style={{ paddingBottom: 30 }}>
         <div className="landing-bg" />
         <div className="container">
@@ -96,7 +142,7 @@ export default function HowItWorksPage() {
         </div>
 
         <div className="card panel" style={{ marginTop: 32 }}>
-          <h3>What RentGuard does not do</h3>
+          <h2>What RentGuard does not do</h2>
           {NOT_PANEL.map((p) => (
             <div key={p.t} className="finding">
               <div className="icn good" aria-hidden="true">
@@ -110,7 +156,7 @@ export default function HowItWorksPage() {
           ))}
         </div>
 
-        <div className="lease-cta" style={{ marginTop: 32 }}>
+        <div className="report-cta" style={{ marginTop: 32 }}>
           <div className="body">
             <div>Ready to look up a building?</div>
             <div>Free, no signup for the first lookup.</div>

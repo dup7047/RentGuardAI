@@ -19,7 +19,8 @@ import { SourcesTab } from './SourcesTab';
 import { ShareModal } from './ShareModal';
 import { SignInModal, type SignInReason } from './SignInModal';
 import { MetricInfoModal } from './MetricInfoModal';
-import { buildingJsonLd } from '@/lib/seo/structured-data';
+import { buildingJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
+import { computeBuildingGrade } from '@/lib/building-grade';
 import {
   getBandLabel,
   getReportTone,
@@ -71,7 +72,7 @@ export function BuildingReport({ data }: { data: SuccessData }) {
   } = data;
 
   const [tab, setTab] = useState<Tab>('overview');
-  const [modal, setModal] = useState<null | { kind: 'save' | 'lease' | 'gate'; reason: SignInReason } | { kind: 'share' } | { kind: 'maintenance-info' } | { kind: 'value-info' }>(null);
+  const [modal, setModal] = useState<null | { kind: 'save' | 'gate'; reason: SignInReason } | { kind: 'share' } | { kind: 'maintenance-info' } | { kind: 'value-info' }>(null);
   const [toast, setToast] = useState<string | null>(null);
   // Saved-building state. `null` means "haven't checked yet" — render the
   // default unsaved label until we know. After checking, true/false drive
@@ -209,28 +210,46 @@ export function BuildingReport({ data }: { data: SuccessData }) {
     }
   }
 
-  function handleLease() {
-    setModal({ kind: 'lease', reason: 'lease' });
-  }
-
   function handleDownloadPdf() {
     if (typeof window !== 'undefined') {
       window.print();
     }
   }
 
+  async function handleShare() {
+    const openViolations = stats?.hpd_violations_open ?? 0;
+    const grade = computeBuildingGrade(openViolations);
+    const shareUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/building/${bbl}`
+        : `https://www.rentguard.cc/building/${bbl}`;
+    const shareTitle = `${address ?? `BBL ${bbl}`} — RentGuard NYC`;
+    const shareText = `${openViolations} open HPD violations · grade ${grade} · check your building free`;
+
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ url: shareUrl, title: shareTitle, text: shareText });
+        return;
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        // Any other failure: fall through to the modal so the user still has a path.
+      }
+    }
+    setModal({ kind: 'share' });
+  }
+
   return (
     <div className="building-report report screen-fade">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       <LegalFraming />
 
       <div className="container">
         <div className="breadcrumb">
-          <a href="/lookup">Search</a>
+          <a href="/">Search</a>
           <span>›</span>
           <span>{borough}</span>
           <span>›</span>
@@ -244,10 +263,10 @@ export function BuildingReport({ data }: { data: SuccessData }) {
               <span className="dot" />
               {label}
             </span>
-            <h2 style={{ marginTop: 12 }}>
+            <h1 style={{ marginTop: 12, fontSize: 28, fontWeight: 700, lineHeight: 1.2 }}>
               {address}
               {unit ? `, ${unit}` : ''}
-            </h2>
+            </h1>
             <div style={{ color: 'var(--ink-2)', fontSize: 14 }}>
               {borough} · NYC
             </div>
@@ -287,7 +306,7 @@ export function BuildingReport({ data }: { data: SuccessData }) {
               <button
                 type="button"
                 className="btn ghost"
-                onClick={() => setModal({ kind: 'share' })}
+                onClick={handleShare}
               >
                 ↗ Share report
               </button>
@@ -409,17 +428,16 @@ export function BuildingReport({ data }: { data: SuccessData }) {
         {tab === 'owner' && <OwnerTab data={data} />}
         {tab === 'sources' && <SourcesTab data={data} />}
 
-        {/* Have-a-lease CTA strip */}
-        <div className="lease-cta">
+        {/* Source-first CTA strip */}
+        <div className="report-cta">
           <div className="body">
-            <div>Have a lease in hand?</div>
+            <div>Need to double-check the source?</div>
             <div>
-              Upload the PDF and we&apos;ll flag clauses that disagree with
-              NYC tenant law.
+              Open the Sources tab to verify every public record used in this report.
             </div>
           </div>
-          <button type="button" className="btn primary" onClick={handleLease}>
-            Review my lease →
+          <button type="button" className="btn primary" onClick={() => setTab('sources')}>
+            View sources →
           </button>
         </div>
       </div>
@@ -430,9 +448,6 @@ export function BuildingReport({ data }: { data: SuccessData }) {
         <>
           {modal.kind === 'save' && (
             <SignInModal reason="save" onClose={() => setModal(null)} />
-          )}
-          {modal.kind === 'lease' && (
-            <SignInModal reason="lease" onClose={() => setModal(null)} />
           )}
           {modal.kind === 'gate' && (
             <SignInModal reason="gate" onClose={() => setModal(null)} />

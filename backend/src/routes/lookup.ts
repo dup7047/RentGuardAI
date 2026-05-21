@@ -41,15 +41,43 @@ import { getCachedBatch } from '../data/cache.js';
 import { getDb } from '../db/client.js';
 import { buildingLookups, buildings, nonNycWaitlist } from '../db/schema.js';
 import { and, desc, eq, gt, isNotNull, isNull, like, or, sql as drizzleSql } from 'drizzle-orm';
-import { LIMITS, countAnonLookups, countEmailLookups, incrementEmailCounter } from '../lib/counters.js';
+import { LIMITS, countAnonLookups, incrementEmailCounter } from '../lib/counters.js';
+import { fromZodIssues } from '../lib/errors.js';
 import { logger } from '../logger.js';
 import type { Borough } from '../data/types.js';
 
+// NYC street addresses use letters, digits, spaces, and a small set of
+// punctuation (#, /, ', &, parens, period, comma, hyphen). Rejecting `<`,
+// `>`, quotes, and control characters at the API edge prevents anything
+// shaped like `</script>…` from ever reaching the buildings.address column
+// (which is later rendered inside a JSON-LD <script> block on the SEO archive).
+const ADDRESS_REGEX = /^[A-Za-z0-9\s.,'\-#/&()]+$/;
+
+const SUPPORTED_LISTING_HOSTS = ['streeteasy.com', 'zillow.com'] as const;
+
 const Body = z
   .object({
-    address: z.string().optional(),
-    listingUrl: z.string().optional(),
-    listingDescription: z.string().optional(),
+    address: z.string().trim().min(2).max(200).regex(ADDRESS_REGEX).optional(),
+    listingUrl: z
+      .string()
+      .trim()
+      .max(2048)
+      .url()
+      .refine(
+        (u) => {
+          try {
+            const p = new URL(u);
+            if (p.protocol !== 'http:' && p.protocol !== 'https:') return false;
+            const host = p.hostname.toLowerCase().replace(/^www\./, '');
+            return SUPPORTED_LISTING_HOSTS.some((h) => host === h || host.endsWith('.' + h));
+          } catch {
+            return false;
+          }
+        },
+        { message: 'listingUrl must be a StreetEasy or Zillow URL' },
+      )
+      .optional(),
+    listingDescription: z.string().trim().max(8000).optional(),
     email: z.string().email().optional(),
     // Optional pre-resolved BBL from the frontend's autocomplete pick. Lets
     // us skip the GeoSearch round-trip entirely when the user picked a
@@ -333,21 +361,33 @@ export async function runLookup(
 
   // ── 3. Geocode ───────────────────────────────────────────────────────────────
   // Fast path: when the frontend forwards a BBL captured from the autocomplete
-  // suggestion, skip the GeoSearch round-trip. We still need a canonical
-  // address + borough for the response and downstream prompt; pull them from
-  // the cached buildings row when present, fall back to user input otherwise.
+  // suggestion AND we already have a canonical address+borough in the buildings
+  // table from a prior lookup, skip the GeoSearch round-trip. On first sighting
+  // (no cached row, or row exists with empty address/borough) we must geocode —
+  // trusting the user-supplied `address` here would let it land in
+  // buildings.address verbatim, which is later rendered into a JSON-LD <script>
+  // block on the SEO archive page.
   let bbl: string;
   let canonicalAddress: string;
   let borough: Borough;
-  if (providedBbl) {
+  const cachedBuilding = providedBbl
+    ? await getDb()
+        .select({ address: buildings.address, borough: buildings.borough })
+        .from(buildings)
+        .where(eq(buildings.bbl, providedBbl))
+        .limit(1)
+        .then((rows) => rows[0])
+    : undefined;
+  if (
+    providedBbl &&
+    cachedBuilding?.address &&
+    cachedBuilding.address.length > 0 &&
+    cachedBuilding.borough &&
+    cachedBuilding.borough.length > 0
+  ) {
     bbl = providedBbl;
-    const [b] = await getDb()
-      .select({ address: buildings.address, borough: buildings.borough })
-      .from(buildings)
-      .where(eq(buildings.bbl, providedBbl))
-      .limit(1);
-    canonicalAddress = b?.address && b.address.length > 0 ? b.address : resolvedAddress;
-    borough = ((b?.borough && b.borough.length > 0 ? b.borough : 'MANHATTAN') as Borough);
+    canonicalAddress = cachedBuilding.address;
+    borough = cachedBuilding.borough as Borough;
     logger.info({ phase: 'geo', durationMs: 0, source: 'bbl_bypass' }, 'lookup phase completed');
   } else {
     const g = await timePhase('geo', () => geosearch(resolvedAddress!));
@@ -402,26 +442,18 @@ export async function runLookup(
     });
 
   // ── 4. Counter check ─────────────────────────────────────────────────────────
+  // Anonymous users get FREE_ANON_LIMIT lookups before we ask them to sign up.
+  // Signed-in users are unlimited on the free tier.
   if (!userId) {
-    if (!userEmail) {
-      const n = await timePhase('counter_check', () => countAnonLookups(anonToken));
-      if (n >= LIMITS.FREE_ANON_LIMIT) {
-        return {
-          status: 200,
-          body: { kind: 'email_gate', message: 'Drop your email to keep looking.' },
-        };
-      }
-    } else {
-      const n = await timePhase('counter_check', () => countEmailLookups(userEmail));
-      if (n >= LIMITS.FREE_EMAIL_LIMIT_30D) {
-        return {
-          status: 200,
-          body: {
-            kind: 'email_gate',
-            message: 'You have used your 3 free lookups this month.',
-          },
-        };
-      }
+    const n = await timePhase('counter_check', () => countAnonLookups(anonToken));
+    if (n >= LIMITS.FREE_ANON_LIMIT) {
+      return {
+        status: 200,
+        body: {
+          kind: 'signup_gate',
+          message: "You've used your 3 free lookups — create a free account to keep going.",
+        },
+      };
     }
   }
 
@@ -823,9 +855,36 @@ export const lookupRoute = new Hono<{
   Variables: { anonToken: string; userId?: string; userEmail?: string };
 }>();
 
+// Pre-handler body validation. Lets a malformed-JSON request fail fast with
+// the standardized error envelope (handled by app.ts onError) instead of
+// reaching runLookup's internal kind:'invalid_input' fallback. runLookup
+// still does its own safeParse as defense-in-depth.
+function validateLookupBody(input: unknown): void {
+  const r = Body.safeParse(input);
+  if (!r.success) throw fromZodIssues(r.error.issues);
+}
+
+/**
+ * Hono middleware variant: validate the body BEFORE the rate-limit
+ * middleware runs. Without this, a script POSTing malformed JSON would
+ * burn the per-anon /v1/lookup quota on every rejection, since
+ * rateLimitMiddleware is wired ahead of the route handler in app.ts. The
+ * handler still calls validateLookupBody() directly as defense-in-depth
+ * (no-op on a second pass thanks to Hono's body cache).
+ */
+export async function validateLookupBodyMiddleware(
+  c: import('hono').Context,
+  next: () => Promise<void>,
+): Promise<void> {
+  const input = await c.req.json().catch(() => ({}));
+  validateLookupBody(input);
+  await next();
+}
+
 // JSON variant — original behavior, single response. Backed by runLookup.
 lookupRoute.post('/lookup', async (c) => {
   const input = await c.req.json().catch(() => ({}));
+  validateLookupBody(input);
   const ctx: LookupCtx = {
     anonToken: c.get('anonToken'),
     userId: c.get('userId'),
@@ -846,6 +905,7 @@ lookupRoute.post('/lookup', async (c) => {
 // Each phase boundary emits a line; the final line carries the full response.
 lookupRoute.post('/lookup/stream', async (c) => {
   const input = await c.req.json().catch(() => ({}));
+  validateLookupBody(input);
   const ctx: LookupCtx = {
     anonToken: c.get('anonToken'),
     userId: c.get('userId'),

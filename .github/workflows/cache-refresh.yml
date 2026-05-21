@@ -1,0 +1,72 @@
+name: cache-refresh
+
+# Refreshes the building cache weekly. Any building whose last_fetched_at is
+# older than 30 days gets re-fetched via /v1/building/<bbl>, which forces the
+# backend to re-pull from NYC Open Data and refresh raw_data / score_band.
+# Without this, stale violations linger in the cache and shareable score cards
+# show outdated grades.
+#
+# Sundays 3am ET = 07:00 UTC (EDT) / 08:00 UTC (EST). Using EDT for May 2026.
+
+on:
+  schedule:
+    - cron: '0 7 * * 0'
+  workflow_dispatch: {}
+
+concurrency:
+  group: cache-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: refresh stale BBLs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve stale BBLs
+        id: stale
+        env:
+          # Read-only Supabase REST endpoint (anon key). The buildings table is
+          # publicly readable, so no service key needed for a SELECT. Configure
+          # SUPABASE_URL + SUPABASE_ANON_KEY in the repo Settings → Secrets.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          CUTOFF=$(date -u -d "30 days ago" +"%Y-%m-%dT%H:%M:%S")
+          curl -sf \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/buildings?select=bbl&last_fetched_at=lt.$CUTOFF&order=last_fetched_at.asc" \
+            > /tmp/stale.json
+          # Extract BBLs into a newline-separated file.
+          python3 -c "import json,sys; [print(r['bbl']) for r in json.load(open('/tmp/stale.json'))]" > /tmp/bbls.txt
+          COUNT=$(wc -l < /tmp/bbls.txt | tr -d ' ')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "::notice::found $COUNT BBLs older than 30 days"
+
+      - name: Refresh each BBL
+        if: steps.stale.outputs.count != '0'
+        run: |
+          set +e
+          OK=0
+          FAIL=0
+          while IFS= read -r bbl; do
+            [ -z "$bbl" ] && continue
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "https://rentguardai.onrender.com/v1/building/$bbl")
+            if [ "$code" = "200" ]; then
+              OK=$((OK+1))
+            else
+              FAIL=$((FAIL+1))
+              echo "::warning::$bbl returned HTTP $code"
+            fi
+            sleep 1
+          done < /tmp/bbls.txt
+          echo "::notice::refreshed $OK BBLs ($FAIL failed)"
+          # Fail the job if more than 5% failed.
+          TOTAL=$((OK+FAIL))
+          if [ "$TOTAL" -gt 0 ] && [ "$FAIL" -gt $((TOTAL/20)) ]; then
+            exit 1
+          fi

@@ -6,8 +6,11 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getBuildingByBbl } from '@/lib/api/backend';
 import { BuildingReport } from '@/components/BuildingReport';
+import { serializeJsonLd, titleCaseBorough } from '@/lib/seo/structured-data';
 
 export const revalidate = 86400; // 24h ISR (upper bound on staleness)
+
+const SITE_URL = 'https://www.rentguard.cc';
 
 type Props = {
   params: Promise<{ bbl: string }>;
@@ -16,9 +19,28 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { bbl } = await params;
+  // getBuildingByBbl is ISR-cached with revalidate=3600; calling it here
+  // and again in the default export is deduped by Next.js within a render.
+  const r = await getBuildingByBbl(bbl);
+
+  const hasData = r.kind === 'success' && r.address;
+  const address = hasData ? r.address : `BBL ${bbl}`;
+  const borough = hasData && r.borough ? titleCaseBorough(r.borough) : null;
+  const titleCore = hasData ? `${address} risk report` : `Building ${bbl}`;
+  const description = hasData
+    ? `${address}${borough ? ` (${borough}, NY)` : ''}: public-records risk score, HPD violations, evictions, and landlord watchlist. Free RentGuard report.`
+    : `Public-records risk summary for NYC building BBL ${bbl}. HPD violations, evictions, landlord watchlist.`;
+
   return {
-    title: `Building ${bbl} — RentGuard NYC`,
-    description: `Public-records risk summary for NYC building BBL ${bbl}. HPD violations, evictions, landlord watchlist.`,
+    title: `${titleCore} — RentGuard NYC`,
+    description,
+    alternates: { canonical: `/building/${bbl}` },
+    openGraph: {
+      title: titleCore,
+      description,
+      url: `${SITE_URL}/building/${bbl}`,
+      type: 'website',
+    },
   };
 }
 
@@ -37,5 +59,56 @@ export default async function BuildingPage({ params, searchParams }: Props) {
       `Building report unavailable for BBL ${bbl}${message ? `: ${message}` : ''}`,
     );
   }
-  return <BuildingReport data={r} />;
+
+  const borough = titleCaseBorough(r.borough);
+  const residenceJsonLd: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Residence',
+    name: r.address ?? `BBL ${bbl}`,
+    address: {
+      '@type': 'PostalAddress',
+      ...(r.address ? { streetAddress: r.address } : {}),
+      addressLocality: borough,
+      addressRegion: 'NY',
+      addressCountry: 'US',
+    },
+  };
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
+      { '@type': 'ListItem', position: 2, name: 'Coverage', item: `${SITE_URL}/coverage` },
+      ...(r.borough
+        ? [
+            {
+              '@type': 'ListItem',
+              position: 3,
+              name: borough,
+              item: `${SITE_URL}/coverage`,
+            },
+          ]
+        : []),
+      {
+        '@type': 'ListItem',
+        position: r.borough ? 4 : 3,
+        name: r.address ?? `BBL ${bbl}`,
+      },
+    ],
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(residenceJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
+      />
+      <BuildingReport data={r} />
+    </>
+  );
 }

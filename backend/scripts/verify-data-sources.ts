@@ -55,7 +55,7 @@ export async function checkEndpoint(
   const started = Date.now();
   const headers: Record<string, string> = {
     Accept: "application/json",
-    "User-Agent": "rentguard-verify-data-sources/0.1 (+ops@rentguard.nyc)",
+    "User-Agent": "rentguard-verify-data-sources/0.1 (+ops@rentguard.cc)",
   };
   if (appToken) headers["X-App-Token"] = appToken;
 

@@ -1,5 +1,6 @@
 import {
   checkProductionPageShell,
+  disableNativeShare,
   expect,
   expectNoCriticalA11yViolations,
   test,
@@ -61,6 +62,7 @@ test.describe('responsive visual regression guards', () => {
   test('keyboard navigation reaches lookup, tabs, and modals without a mouse', async ({ page }, testInfo) => {
     test.skip(!keyboardProjects.has(testInfo.project.name), 'Hardware keyboard path runs on desktop browser profiles.');
 
+    await disableNativeShare(page);
     await page.goto('/');
     const input = page.getByLabel('NYC listing URL or address');
     await tabUntilFocused(page, input);

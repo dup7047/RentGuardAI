@@ -34,7 +34,32 @@ describe('disclaimers.json matches markdown source', () => {
     expect(DISCLAIMERS.affiliateClickThrough).toBe(extractSection('affiliateClickThrough'));
   });
 
+  it('affiliateLongForm', () => {
+    expect(DISCLAIMERS.affiliateLongForm).toBe(extractSection('affiliateLongForm'));
+  });
+
   it('weAreNotFooter', () => {
     expect(DISCLAIMERS.weAreNotFooter).toBe(extractSection('weAreNotFooter'));
+  });
+});
+
+// Phase 11.6 acceptance: the /how-we-make-money page must render
+// disclaimer.md §4.2 (long-form transparency language) byte-for-byte.
+// disclaimer.md is the attorney-approved source; disclaimers.md mirrors
+// the §4.2 block under the affiliateLongForm anchor.
+describe('disclaimer.md §4.2 matches the affiliateLongForm anchor', () => {
+  it('long-form transparency text round-trips between disclaimer.md and disclaimers.md', () => {
+    const disclaimerMd = readFileSync(join(ROOT, 'docs/legal/disclaimer.md'), 'utf8');
+    // Pull the §4.2 block: everything from "### 4.2" heading down to the
+    // next heading. Strip "> " quote prefixes and trim, matching the
+    // shape inside disclaimers.md.
+    const match = disclaimerMd.match(/### 4\.2[^\n]*\n([\s\S]*?)(?=\n### |\n## |\n---)/);
+    if (!match) throw new Error('§4.2 not found in disclaimer.md');
+    const fromDisclaimer = match[1]
+      .split('\n')
+      .map((l) => l.replace(/^> ?/, ''))
+      .join('\n')
+      .trim();
+    expect(DISCLAIMERS.affiliateLongForm).toBe(fromDisclaimer);
   });
 });

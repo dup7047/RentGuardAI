@@ -429,10 +429,13 @@ h1.hero em {
 }
 
 .trust {
-  display: inline-flex;
+  display: flex;
   align-items: stretch;
+  justify-content: center;
   gap: 0;
-  margin-top: 36px;
+  margin: 36px auto 0;
+  width: fit-content;
+  max-width: 100%;
   flex-wrap: wrap;
   padding: 0;
   border: 1px solid var(--line);
@@ -443,7 +446,7 @@ h1.hero em {
   animation: rise 0.55s cubic-bezier(0.2, 0.75, 0.2, 1) both;
   animation-delay: 0.4s;
 }
-.hero-center .trust { justify-content: center; margin-top: 42px; display: inline-flex; }
+.hero-center .trust { margin-top: 42px; }
 .trust .item {
   display: flex;
   flex-direction: column;
@@ -578,8 +581,8 @@ h1.hero em {
 .lookup-fallback textarea { resize: vertical; min-height: 100px; font-family: inherit; }
 .lookup-fallback .actions { margin-top: 4px; display: flex; gap: 8px; }
 
-/* Email-gate inline form */
-.lookup-email-gate {
+/* Signup-gate inline prompt shown after the free anonymous lookups are used up */
+.lookup-signup-gate {
   margin: 16px auto 0;
   max-width: 620px;
   padding: 16px 20px;
@@ -589,12 +592,6 @@ h1.hero em {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-.lookup-email-gate input {
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font-size: 14px;
 }
 
 /* Full-viewport overlay for loading / outside-nyc / ambiguous states.
@@ -864,7 +861,7 @@ h1.hero em {
 .panels { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; }
 .panels.single { grid-template-columns: 1fr; }
 .panel { padding: 22px; }
-.panel h3 { margin: 0 0 14px; font-size: 16px; font-weight: 600; letter-spacing: 0; }
+.panel h2, .panel h3 { margin: 0 0 14px; font-size: 16px; font-weight: 600; letter-spacing: 0; }
 .finding {
   display: flex;
   gap: 12px;
@@ -939,8 +936,8 @@ h1.hero em {
   font-style: italic;
 }
 
-/* "Have a lease?" CTA strip + helper for inline toast */
-.lease-cta {
+/* Report CTA strip + helper for inline toast */
+.report-cta {
   margin-top: 24px;
   padding: 18px 22px;
   border: 1px solid var(--line);
@@ -951,8 +948,8 @@ h1.hero em {
   gap: 24px;
   background: linear-gradient(90deg, var(--accent-soft), transparent);
 }
-.lease-cta .body div:first-child { font-size: 15px; font-weight: 600; }
-.lease-cta .body div + div { font-size: 13.5px; color: var(--ink-2); margin-top: 3px; }
+.report-cta .body div:first-child { font-size: 15px; font-weight: 600; }
+.report-cta .body div + div { font-size: 13.5px; color: var(--ink-2); margin-top: 3px; }
 .toast {
   position: fixed;
   bottom: 32px;
@@ -1242,6 +1239,12 @@ h1.hero em {
   font-weight: 500;
   font-size: 14px;
   padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
 }
 .primary-button {
   background: var(--accent);
@@ -1313,12 +1316,22 @@ h1.hero em {
 .legal-footer strong { color: var(--ink-2); }
 
 /* ── Long-form legal documents (terms / privacy / disclaimer) ─ */
+.legal-page {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.legal-page > .eyebrow {
+  margin-left: 4px;
+}
 .legal-prose {
   max-width: 720px;
   margin: 0 auto;
   color: var(--ink);
   font-size: 15px;
   line-height: 1.7;
+}
+.legal-page .card.panel .legal-prose {
+  max-width: none;
 }
 .legal-prose h1 {
   font-size: 32px;
@@ -1466,7 +1479,7 @@ h1.hero em {
   .nav-inner { padding: 14px 20px; }
   .container { padding: 0 20px; }
   body[data-density='comfy'] .landing { padding: 60px 0 40px; }
-  .lease-cta { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .report-cta { flex-direction: column; align-items: flex-start; gap: 12px; }
   .site-footer-inner { grid-template-columns: 1fr; gap: 24px; }
   .site-footer-base { flex-direction: column; gap: 6px; align-items: flex-start; }
   .site-footer { padding: 32px 20px 20px; }
@@ -1507,6 +1520,8 @@ h1.hero em {
     flex-direction: column;
     width: 100%;
     max-width: 300px;
+    margin-left: auto;
+    margin-right: auto;
     border-radius: 28px;
   }
   .trust .item {

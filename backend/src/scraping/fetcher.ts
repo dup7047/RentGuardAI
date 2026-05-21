@@ -14,7 +14,6 @@ import { getCached, setCached } from './cache.js';
 import { firecrawlFetch, FirecrawlError, isFirecrawlAvailable } from './firecrawl-client.js';
 import { extractStreetEasy } from './extractors/streeteasy.js';
 import { extractZillow } from './extractors/zillow.js';
-import { extractGeneric } from './extractors/generic.js';
 import type { ScrapeResult, ListingSource } from './types.js';
 
 const DIRECT_TIMEOUT_MS = 10_000;
@@ -56,8 +55,7 @@ function looksBlocked(html: string, status: number): boolean {
 
 function pickExtractor(source: ListingSource) {
   if (source === 'streeteasy') return extractStreetEasy;
-  if (source === 'zillow') return extractZillow;
-  return extractGeneric;
+  return extractZillow;
 }
 
 /**

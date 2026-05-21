@@ -137,10 +137,3 @@ describe('parseAddressFromUrl — StreetEasy', () => {
   });
 });
 
-describe('parseAddressFromUrl — generic / unsupported', () => {
-  it('returns null for generic source', () => {
-    expect(
-      parseAddressFromUrl('https://example.com/listings/123', 'generic'),
-    ).toBeNull();
-  });
-});

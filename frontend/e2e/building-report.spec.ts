@@ -1,5 +1,6 @@
 import {
   checkProductionPageShell,
+  disableNativeShare,
   expect,
   expectNoCriticalA11yViolations,
   test,
@@ -9,6 +10,7 @@ test.describe('building report UI states', () => {
   test.skip(Boolean(process.env.E2E_BASE_URL), 'Mock report states run only against the local E2E backend.');
 
   test('@smoke report tabs, source links, share modal, and anonymous save gate work', async ({ page }) => {
+    await disableNativeShare(page);
     await page.goto('/building/1008420015');
     await expect(page.getByRole('heading', { name: /350 5th Ave/i })).toBeVisible();
     await expect(page.getByText(/Notable findings/i)).toBeVisible();

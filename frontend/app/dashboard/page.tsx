@@ -55,6 +55,9 @@ export default async function DashboardPage() {
           <Link href="/" className="btn primary">
             + New lookup
           </Link>
+          <Link href="/dashboard/settings" className="btn ghost sm">
+            Settings
+          </Link>
           <form action={signOut}>
             <button className="btn ghost sm" type="submit">
               Log out

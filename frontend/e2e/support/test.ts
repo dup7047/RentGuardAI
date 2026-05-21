@@ -42,6 +42,19 @@ export async function mockGeosearch(page: Page) {
   });
 }
 
+export async function disableNativeShare(page: Page) {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(navigator, 'canShare', {
+      configurable: true,
+      value: undefined,
+    });
+  });
+}
+
 export async function expectPageReady(page: Page) {
   await expect(page.locator('body')).toBeVisible();
   await expect(page.locator('body')).not.toHaveText(/Application error|Unhandled Runtime Error/i);

@@ -25,9 +25,9 @@ export function SiteFooter() {
         <div className="site-footer-col">
           <h4>Contact</h4>
           <ul>
-            <li><a href="mailto:support@rentguard.nyc">support@rentguard.nyc</a></li>
-            <li><a href="mailto:privacy@rentguard.nyc">privacy@rentguard.nyc</a></li>
-            <li><a href="mailto:legal@rentguard.nyc">legal@rentguard.nyc</a></li>
+            <li><a href="mailto:support@rentguard.cc">support@rentguard.cc</a></li>
+            <li><a href="mailto:privacy@rentguard.cc">privacy@rentguard.cc</a></li>
+            <li><a href="mailto:legal@rentguard.cc">legal@rentguard.cc</a></li>
           </ul>
         </div>
       </div>

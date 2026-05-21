@@ -8,7 +8,8 @@
 // full-viewport overlay so the server-rendered hero behind them is hidden.
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { AddressSuggestions } from '@/components/AddressSuggestions';
 import { Ambiguous } from '@/components/Ambiguous';
@@ -29,11 +30,14 @@ const AUTOCOMPLETE_MIN_LEN = 3;
 
 export function LookupForm() {
   const router = useRouter();
-  const [input, setInput] = useState('');
+  // Seed the input from ?q= so the schema.org SearchAction deep-link
+  // (target=https://www.rentguard.cc/?q={search_term_string}) actually
+  // pre-fills the search box. User still presses Enter to run the lookup.
+  const searchParams = useSearchParams();
+  const [input, setInput] = useState(() => searchParams?.get('q') ?? '');
   const [resp, setResp] = useState<LookupResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [phase, setPhase] = useState<LookupPhase | null>(null);
-  const [email, setEmail] = useState('');
   const [pickedBbl, setPickedBbl] = useState<string | null>(null);
   const [showFallbackPaste, setShowFallbackPaste] = useState(false);
   const [fallbackAddress, setFallbackAddress] = useState('');
@@ -85,7 +89,6 @@ export function LookupForm() {
 
   async function submit(
     extras: {
-      email?: string;
       address?: string;
       listingDescription?: string;
       addressOverride?: string;
@@ -105,7 +108,6 @@ export function LookupForm() {
       r = await postLookupStream(
         {
           ...(isUrl ? { listingUrl: value } : { address: value }),
-          ...(extras.email ? { email: extras.email } : {}),
           ...(extras.listingDescription
             ? { listingDescription: extras.listingDescription }
             : {}),
@@ -366,27 +368,18 @@ export function LookupForm() {
         </div>
       )}
 
-      {resp?.kind === 'email_gate' && (
-        <form
-          className="lookup-email-gate"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit({ email });
-          }}
-        >
+      {resp?.kind === 'signup_gate' && (
+        <div className="lookup-signup-gate">
           <p style={{ margin: 0, fontSize: 13.5 }}>{resp.message}</p>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-            aria-label="Email address"
-          />
-          <button type="submit" className="btn primary">
-            Continue
-          </button>
-        </form>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Link className="btn primary" href="/login?mode=signup">
+              Create free account
+            </Link>
+            <Link className="btn ghost" href="/login">
+              Sign in
+            </Link>
+          </div>
+        </div>
       )}
     </div>
   );

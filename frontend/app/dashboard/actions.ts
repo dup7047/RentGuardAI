@@ -27,19 +27,23 @@ export async function signOut() {
 // token" (token was sent but backend's JWT verifier said no). Pair this with
 // the backend's `reason` log line from auth middleware to identify root cause.
 async function getAccessToken(): Promise<string | null> {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    console.warn('[dashboard] getAccessToken returned null', {
-      hasSession: Boolean(session),
-      error: error?.message,
-    });
+  try {
+    const supabase = await createClient();
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      console.warn('[dashboard] getAccessToken returned null', {
+        hasSession: Boolean(session),
+        error: error?.message,
+      });
+      return null;
+    }
+    return session.access_token;
+  } catch {
     return null;
   }
-  return session.access_token;
 }
 
 export type SavedBuildingsLoad =

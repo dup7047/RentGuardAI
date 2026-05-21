@@ -117,11 +117,15 @@ cd frontend
 cp .env.example .env.local
 npm install
 npm run dev            # http://localhost:3000
+npm test               # Vitest component/unit tests
+npm run e2e:smoke      # Playwright smoke matrix with mocked backend fixtures
 ```
 
 The dev server expects Supabase to be running locally on `http://127.0.0.1:54321` (started with `supabase start` from the repo root). Magic-link emails route to Inbucket at <http://127.0.0.1:54324> for inspection.
 
 Production deploys to Vercel from the `main` branch; project Root Directory must be set to `frontend/`. Supabase env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) are configured under Project Settings → Environment Variables.
+
+UI launch readiness is gated by the browser matrix in `docs/ui-testing-checklist.md`.
 
 ## Operational scripts
 

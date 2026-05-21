@@ -184,28 +184,31 @@ export function OverviewTab({
           <div
             key={i.k}
             className="ind"
-            style={onSelectTab ? { cursor: 'pointer' } : undefined}
-            onClick={onSelectTab ? () => onSelectTab(i.tabId) : undefined}
-            role={onSelectTab ? 'button' : undefined}
-            tabIndex={onSelectTab ? 0 : undefined}
-            onKeyDown={
-              onSelectTab
-                ? (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') onSelectTab(i.tabId);
-                  }
-                : undefined
-            }
           >
-            <div className="k">{i.k}</div>
-            <div className="v">
-              <AnimatedNum value={i.v} />
-            </div>
+            {onSelectTab ? (
+              <button
+                type="button"
+                className="ind-nav"
+                onClick={() => onSelectTab(i.tabId)}
+              >
+                <span className="k">{i.k}</span>
+                <span className="v">
+                  <AnimatedNum value={i.v} />
+                </span>
+              </button>
+            ) : (
+              <div className="ind-static">
+                <div className="k">{i.k}</div>
+                <div className="v">
+                  <AnimatedNum value={i.v} />
+                </div>
+              </div>
+            )}
             <div className="src">
               <a
                 href={i.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
               >
                 ↗ {i.src}
               </a>

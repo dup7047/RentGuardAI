@@ -2,6 +2,9 @@
   "name": "@rentguard/frontend",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "tsx scripts/build-disclaimers.ts && next dev",
     "build": "tsx scripts/build-disclaimers.ts && next build",
@@ -9,7 +12,11 @@
     "lint": "next lint",
     "test": "tsx scripts/build-disclaimers.ts && vitest run",
     "test:watch": "tsx scripts/build-disclaimers.ts && vitest",
-    "build:disclaimers": "tsx scripts/build-disclaimers.ts"
+    "build:disclaimers": "tsx scripts/build-disclaimers.ts",
+    "e2e": "playwright test",
+    "e2e:smoke": "playwright test --grep @smoke --project=chromium-desktop --project=webkit-desktop",
+    "e2e:full": "playwright test",
+    "e2e:staging": "playwright test --grep @staging"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",
@@ -21,6 +28,7 @@
     "remark-gfm": "^4.0.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.59.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",

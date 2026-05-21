@@ -12,6 +12,8 @@ build/
 coverage/
 !frontend/app/coverage/
 .vitest-cache/
+playwright-report/
+test-results/
 
 # Env files (never commit secrets)
 .env

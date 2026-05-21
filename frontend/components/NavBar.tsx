@@ -55,7 +55,7 @@ async function NavAuthCta() {
 
   return (
     <>
-      <Link href="/login" className="btn link sm">
+      <Link href="/login" className="btn link sm" prefetch={false}>
         Sign in
       </Link>
       <Link href="/" className="btn primary sm">

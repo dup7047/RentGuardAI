@@ -110,21 +110,6 @@ export function BuildingReport({ data }: { data: SuccessData }) {
       try {
         const result = await getSavedBuildingStateAction(bbl);
         if (cancelled) return;
-        // Diagnostic: surface mount-time auth state. With the server-action
-        // flow, `unauthorized` here means the server saw no valid session in
-        // cookies (genuinely anon, or signed out), not a client-side cookie
-        // parsing failure.
-        if (typeof document !== 'undefined') {
-          const cookieNames = document.cookie
-            ? document.cookie.split('; ').map((c) => c.split('=')[0])
-            : [];
-          console.warn('[BuildingReport] mount auth check', {
-            kind: result.kind,
-            hostname: window.location.hostname,
-            cookieNames,
-            bbl,
-          });
-        }
         if (result.kind === 'ok') {
           setIsAuthed(true);
           setIsSaved(result.saved);
@@ -207,7 +192,6 @@ export function BuildingReport({ data }: { data: SuccessData }) {
       const result = wasSaved
         ? await unsaveBuildingAction(bbl)
         : await saveBuildingAction(bbl);
-      console.warn('[BuildingReport] save result', { kind: result.kind, bbl, wasSaved });
       if (result.kind === 'ok') {
         showToast(wasSaved ? 'Removed from saved buildings' : 'Saved to your dashboard');
         return;

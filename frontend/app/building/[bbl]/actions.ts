@@ -18,11 +18,15 @@ const BASE =
 // That browser bug is what was making the save-building modal pop up for
 // already-signed-in users on /building/[bbl] (see BuildingReport.tsx).
 async function getAccessToken(): Promise<string | null> {
-  const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export type SavedStateResult =

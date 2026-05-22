@@ -194,10 +194,12 @@ export type LookupResponse =
         evictions: number;
       };
       has_more?: { violations: boolean; dob: boolean; threeoneone: boolean; evictions: boolean };
+      partial?: string[];
     }
   | { kind: 'requires_address'; reason: string }
   | { kind: 'outside_nyc'; detected_city: string | null; detected_state: string | null }
   | { kind: 'ambiguous'; matches: Array<{ bbl: string; address: string; borough: string }> }
+  | { kind: 'email_gate'; message: string }
   | { kind: 'signup_gate'; message: string }
   | { kind: 'cost_cap'; message: string }
   | { kind: 'rate_limited'; message: string }

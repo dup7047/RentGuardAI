@@ -41,7 +41,12 @@ export function NavMenu() {
       {open && (
         <div id="nav-menu-panel" className="nav-menu-panel">
           {LINKS.map((link) => (
-            <Link key={link.href} href={link.href} onClick={() => setOpen(false)}>
+            <Link
+              key={link.href}
+              href={link.href}
+              prefetch={false}
+              onClick={() => setOpen(false)}
+            >
               {link.label}
             </Link>
           ))}

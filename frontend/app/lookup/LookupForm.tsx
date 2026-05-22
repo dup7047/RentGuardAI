@@ -4,7 +4,7 @@
 // Static hero content (eyebrow, h1, hero-sub, trust pill, sources strip) lives
 // in the server-rendered page.tsx so it ships as plain HTML with no JS cost.
 //
-// "Takeover" states (loading, outside_nyc, ambiguous) render via a fixed
+// "Takeover" states (loading, outside_nyc, ambiguous, email_gate) render via a fixed
 // full-viewport overlay so the server-rendered hero behind them is hidden.
 
 import { useEffect, useRef, useState } from 'react';
@@ -13,6 +13,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { AddressSuggestions } from '@/components/AddressSuggestions';
 import { Ambiguous } from '@/components/Ambiguous';
+import { EmailGate } from '@/components/EmailGate';
 import { Loading } from '@/components/Loading';
 import { OutsideNyc } from '@/components/OutsideNyc';
 import {
@@ -27,6 +28,19 @@ import {
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 180;
 const AUTOCOMPLETE_MIN_LEN = 3;
+
+type LookupSuccess = Extract<LookupResponse, { kind: 'success' }>;
+
+function rememberFreshReport(report: LookupSuccess) {
+  try {
+    window.sessionStorage.setItem(
+      `rentguard:fresh-report:${report.bbl}`,
+      JSON.stringify(report),
+    );
+  } catch {
+    // Session storage is best-effort; the report route still fetches by BBL.
+  }
+}
 
 export function LookupForm() {
   const router = useRouter();
@@ -93,6 +107,7 @@ export function LookupForm() {
       listingDescription?: string;
       addressOverride?: string;
       bblOverride?: string;
+      email?: string;
     } = {},
   ) {
     const value = extras.addressOverride ?? input;
@@ -111,6 +126,7 @@ export function LookupForm() {
           ...(extras.listingDescription
             ? { listingDescription: extras.listingDescription }
             : {}),
+          ...(extras.email ? { email: extras.email } : {}),
           ...(bblToForward ? { bbl: bblToForward } : {}),
         },
         (p) => setPhase(p),
@@ -119,6 +135,7 @@ export function LookupForm() {
       r = { kind: 'invalid_input', errors: { _: 'network' } };
     }
     if (r.kind === 'success') {
+      rememberFreshReport(r);
       router.push(`/building/${r.bbl}?fresh=1`);
       return;
     }
@@ -149,6 +166,7 @@ export function LookupForm() {
       r = { kind: 'invalid_input', errors: { _: 'network' } };
     }
     if (r.kind === 'success') {
+      rememberFreshReport(r);
       router.push(`/building/${r.bbl}?fresh=1`);
       return;
     }
@@ -227,6 +245,19 @@ export function LookupForm() {
           matches={resp.matches}
           onPick={(match) => {
             void submit({ addressOverride: match.address });
+          }}
+          onBack={reset}
+        />
+      </div>
+    );
+  }
+  if (resp?.kind === 'email_gate') {
+    return (
+      <div className="lookup-overlay">
+        <EmailGate
+          message={resp.message}
+          onContinue={(email) => {
+            void submit({ email });
           }}
           onBack={reset}
         />

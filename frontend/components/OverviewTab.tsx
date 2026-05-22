@@ -47,6 +47,25 @@ const FALLBACK_NEXT_STEPS = [
   },
 ];
 
+const PARTIAL_DATASET_LABELS: Record<string, string> = {
+  hpd: 'HPD violations',
+  dob: 'DOB complaints',
+  evictions: 'eviction records',
+  bedbug: 'bedbug reports',
+  lead_paint: 'lead paint records',
+  landlord: 'landlord records',
+  hpd_registrations: 'HPD registrations',
+  hpd_complaints: 'HPD complaints',
+  three11_housing: '311 housing complaints',
+};
+
+function formatPartialDatasets(partial: string[]): string {
+  const labels = partial.map((key) => PARTIAL_DATASET_LABELS[key] ?? key.replaceAll('_', ' '));
+  if (labels.length <= 1) return labels[0] ?? 'some datasets';
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+}
+
 export function OverviewTab({
   data,
   onSelectTab,
@@ -67,6 +86,7 @@ export function OverviewTab({
     value_band,
     value_confidence,
   } = data;
+  const partialDatasets = data.partial ?? [];
 
   const factorsForFindings: ScoreFactor[] = (score_factors ?? []).slice(0, 5);
 
@@ -140,6 +160,19 @@ export function OverviewTab({
             We couldn&apos;t read the listing page (the site blocked our scraper),
             so this review covers the building&apos;s public records only — not
             listing-specific details like rent, bedrooms, or broker fees.
+          </p>
+        </div>
+      )}
+
+      {partialDatasets.length > 0 && (
+        <div className="ai-block partial-data-notice">
+          <div className="ai-tag">✦ PARTIAL DATA NOTICE</div>
+          <p>
+            Some public-record sources timed out while we built this report:
+            {' '}
+            {formatPartialDatasets(partialDatasets)}. The available sections are
+            shown below, but you should re-run the lookup before relying on this
+            report for final decisions.
           </p>
         </div>
       )}

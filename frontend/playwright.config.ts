@@ -57,6 +57,7 @@ export default defineConfig({
             NEXT_PUBLIC_SUPABASE_URL: mockBackendUrl,
             NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: localSupabaseAnonKey,
             NEXT_PUBLIC_SUPABASE_ANON_KEY: localSupabaseAnonKey,
+            NEXT_PUBLIC_AFFILIATE_ENABLED: 'true',
           },
         },
       ],

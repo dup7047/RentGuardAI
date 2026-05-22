@@ -14,7 +14,7 @@ export function NavBar() {
   return (
     <div className="nav">
       <div className="nav-inner">
-        <Link href="/" className="brand" aria-label="RentGuard home">
+        <Link href="/" className="brand" aria-label="RentGuard home" prefetch={false}>
           <Image
             src="/logo-lockup.png"
             alt="RentGuard"
@@ -26,10 +26,18 @@ export function NavBar() {
         </Link>
 
         <div className="nav-links">
-          <Link href="/how-it-works">How it works</Link>
-          <Link href="/coverage">Coverage</Link>
-          <Link href="/for-landlords">For landlords</Link>
-          <Link href="/pricing">Pricing</Link>
+          <Link href="/how-it-works" prefetch={false}>
+            How it works
+          </Link>
+          <Link href="/coverage" prefetch={false}>
+            Coverage
+          </Link>
+          <Link href="/for-landlords" prefetch={false}>
+            For landlords
+          </Link>
+          <Link href="/pricing" prefetch={false}>
+            Pricing
+          </Link>
         </div>
 
         <NavMenu />

@@ -250,6 +250,67 @@ describe('POST /v1/lookup/stream', () => {
     expect(complete.response.detected_city).toBe('Boston');
   });
 
+  it('returns ambiguous (no geo) when geosearch is a tie and no bbl is forwarded', async () => {
+    vi.mocked(geosearch).mockResolvedValue({
+      kind: 'ambiguous',
+      matches: [
+        { bbl: '4097110030', address: '140-02 84 Drive, Briarwood', borough: 'QUEENS' },
+        { bbl: '4097110032', address: '140-10 84 Drive, Briarwood', borough: 'QUEENS' },
+      ],
+    } as Awaited<ReturnType<typeof geosearch>>);
+
+    const app = createApp();
+    const res = await app.request('/v1/lookup/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: '84 Drive, Briarwood' }),
+    });
+    const lines = await readNdjson(res);
+
+    // geo does NOT fire on an unresolved ambiguous result
+    const phases = lines.filter((l) => l.event === 'phase').map((l) => l.name);
+    expect(phases).toEqual(['parse']);
+
+    const completes = lines.filter((l) => l.event === 'complete');
+    expect(completes).toHaveLength(1);
+    const complete = completes[0] as { response: { kind: string; matches: unknown[] } };
+    expect(complete.response.kind).toBe('ambiguous');
+    expect(complete.response.matches).toHaveLength(2);
+  });
+
+  it('resolves to success (no loop) when a forwarded bbl matches an ambiguous candidate', async () => {
+    // Regression: the disambiguation picker forwards { address, bbl }. The
+    // backend must select that candidate instead of re-returning the same
+    // ambiguous list — otherwise the UI bounces back to "Pick the right
+    // address" forever (hyphenated Queens addresses never disambiguate by
+    // label alone).
+    vi.mocked(geosearch).mockResolvedValue({
+      kind: 'ambiguous',
+      matches: [
+        { bbl: '4097110030', address: '140-02 84 Drive, Briarwood', borough: 'QUEENS' },
+        { bbl: '4097110032', address: '140-10 84 Drive, Briarwood', borough: 'QUEENS' },
+      ],
+    } as Awaited<ReturnType<typeof geosearch>>);
+
+    const app = createApp();
+    const res = await app.request('/v1/lookup/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: '140-10 84 Drive, Briarwood', bbl: '4097110032' }),
+    });
+    const lines = await readNdjson(res);
+
+    // geo fires now that the bbl resolved the tie, and the full pipeline runs.
+    const phases = lines.filter((l) => l.event === 'phase').map((l) => l.name);
+    expect(phases).toContain('geo');
+
+    const completes = lines.filter((l) => l.event === 'complete');
+    expect(completes).toHaveLength(1);
+    const complete = completes[0] as { response: { kind: string; bbl: string } };
+    expect(complete.response.kind).toBe('success');
+    expect(complete.response.bbl).toBe('4097110032');
+  });
+
   it('emits only complete (no phases) when scrape returns listing_blocked', async () => {
     vi.mocked(scrapeListing).mockResolvedValue({
       kind: 'error',

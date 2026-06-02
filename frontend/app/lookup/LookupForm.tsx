@@ -244,7 +244,7 @@ export function LookupForm() {
         <Ambiguous
           matches={resp.matches}
           onPick={(match) => {
-            void submit({ addressOverride: match.address });
+            void submit({ addressOverride: match.address, bblOverride: match.bbl });
           }}
           onBack={reset}
         />

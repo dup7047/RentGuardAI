@@ -413,11 +413,29 @@ export async function runLookup(
       };
     }
     if (g.kind === 'ambiguous') {
-      return { status: 200, body: { kind: 'ambiguous', matches: g.matches } };
+      // If the frontend forwarded a BBL from the disambiguation picker, resolve
+      // to that candidate directly instead of bouncing the user back to the
+      // same "Pick the right address" screen. (Re-geocoding the chosen label
+      // alone doesn't disambiguate: for hyphenated Queens addresses like
+      // 140-02 / 140-10 / 140-17 the housenumber-digit filter collapses them
+      // all to "140", so GeoSearch returns the same tie every time — an
+      // infinite loop.) We take address+borough from OUR geosearch match, not
+      // the user-supplied override, so nothing untrusted lands in
+      // buildings.address / the JSON-LD archive page.
+      const picked = providedBbl
+        ? g.matches.find((m) => m.bbl === providedBbl)
+        : undefined;
+      if (!picked) {
+        return { status: 200, body: { kind: 'ambiguous', matches: g.matches } };
+      }
+      bbl = picked.bbl;
+      canonicalAddress = picked.address;
+      borough = picked.borough;
+    } else {
+      bbl = g.bbl;
+      canonicalAddress = g.address;
+      borough = g.borough;
     }
-    bbl = g.bbl;
-    canonicalAddress = g.address;
-    borough = g.borough;
   }
 
   // Geo succeeded — emit only on the success path. Outside-NYC and ambiguous

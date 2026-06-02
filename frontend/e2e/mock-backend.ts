@@ -390,13 +390,19 @@ function lookupResponse(input: Record<string, unknown>) {
   if (listingUrl.includes('missing')) return { kind: 'listing_not_found', message: 'Listing not found.' };
   if (listingUrl.includes('unsupported')) return { kind: 'unsupported_url', message: 'Unsupported listing URL.' };
   if (address.includes('ambiguous')) {
-    return {
-      kind: 'ambiguous',
-      matches: [
-        { bbl: '1008420015', address: '350 5th Ave, Manhattan', borough: 'MANHATTAN' },
-        { bbl: '3001110001', address: '350 5th Ave, Brooklyn', borough: 'BROOKLYN' },
-      ],
-    };
+    // Candidate labels themselves contain "ambiguous" so a re-submit with the
+    // chosen label re-enters this branch — mirroring the real backend, where
+    // re-geocoding the picked label alone returns the same tie (e.g. the
+    // hyphenated Queens addresses 140-02 / 140-10 / 140-17 all collapse to
+    // housenumber "140"). The disambiguation picker must forward the chosen
+    // BBL to break out; without it the user loops back to the picker forever.
+    const matches = [
+      { bbl: '1008420015', address: '350 Ambiguous Plaza, Manhattan', borough: 'MANHATTAN' },
+      { bbl: '3001110001', address: '350 Ambiguous Plaza, Brooklyn', borough: 'BROOKLYN' },
+    ];
+    const picked = matches.find((m) => m.bbl === input.bbl);
+    if (picked) return reportForBbl(picked.bbl) ?? baseReport({ bbl: picked.bbl, address: picked.address });
+    return { kind: 'ambiguous', matches };
   }
   if (address.includes('philadelphia') || address.includes('outside')) {
     return { kind: 'outside_nyc', detected_city: 'Philadelphia', detected_state: 'PA' };

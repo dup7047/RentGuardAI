@@ -1,6 +1,6 @@
 # Email Forwarding Setup
 
-Project email addresses on `rentguard.cc` forward to **dantino12@gmail.com** via Cloudflare Email Routing.
+Project email addresses on `rentguard.cc` forward to the destination inbox (configured via `FORWARD_TO_EMAIL`) through Cloudflare Email Routing.
 
 ## Addresses
 
@@ -24,7 +24,7 @@ Project email addresses on `rentguard.cc` forward to **dantino12@gmail.com** via
 
 1. Add `rentguard.cc` to Cloudflare and confirm it uses Cloudflare nameservers.
 2. Open **Email → Email Routing** for the zone and enable routing.
-3. Add and verify the destination address `dantino12@gmail.com`.
+3. Add and verify the destination address (the inbox you set in `FORWARD_TO_EMAIL`).
 4. Create an API token with **Zone → Email Routing Rules → Edit** scoped to `rentguard.cc`.
 
 ## Alias configuration
@@ -45,7 +45,7 @@ The script is idempotent. Existing aliases are treated as success.
 
 ## Verifying forwarding works
 
-Send a test email to any address above from an external mail client. It should arrive at dantino12@gmail.com within a few seconds. Cloudflare's Email Routing dashboard also shows routing events for the domain.
+Send a test email to any address above from an external mail client. It should arrive at the destination inbox within a few seconds. Cloudflare's Email Routing dashboard also shows routing events for the domain.
 
 ## Changing the forwarding destination
 

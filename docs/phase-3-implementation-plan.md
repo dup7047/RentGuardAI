@@ -65,7 +65,7 @@ Each item below is **executable** — run it, get green, move on. No design ques
 
 ```sh
 # 1. Pull latest
-cd /Users/dantino/Desktop/RentGuardAI
+cd <repo-root>
 git pull origin main
 git status  # clean
 
@@ -2475,7 +2475,7 @@ feat: Phase 3.10 — public /building/[bbl] archive + sitemap + OG + JSON-LD
 ## End-to-end verification (run after 3.10 ships)
 
 ```sh
-cd /Users/dantino/Desktop/RentGuardAI
+cd <repo-root>
 
 # 1. Backend: full suite + verify scripts
 cd backend
@@ -2612,4 +2612,4 @@ RentGuard NYC is not a law firm, broker, real-estate agent, advocacy organizatio
 - 4 docs: `docs/legal/disclaimers.md`, `docs/runbook/seo-cost-optimization.md`, updates to `docs/data-sources.md`, RUNBOOK §9.
 - README acceptance updates for 3.1–3.10.
 
-**Roadmap source:** `/Users/dantino/Desktop/RENTGUARD_ROADMAP_v6.md` (Phase 3 section).
+**Roadmap source:** `RENTGUARD_ROADMAP_v6.md` (private; kept outside the repo) — Phase 3 section.

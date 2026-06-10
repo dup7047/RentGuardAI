@@ -2,6 +2,11 @@
 
 **Last updated:** 2026-05-11
 
+> **Role:** attorney-approved master copy. UI-facing strings are mirrored in
+> `disclaimers.md`, which is parsed at build time by
+> `frontend/scripts/build-disclaimers.ts`. The §4.2 ↔ `affiliateLongForm` sync
+> is enforced by `frontend/test/legal.snapshot.test.ts`.
+
 This document is the canonical legal framing for the current RentGuard public beta. The live product is a free NYC building lookup and public-record report with AI summaries, source links, saved buildings, and affiliate disclosures. Lease Review, Search Pass, paid alerts, FARE Act tools, complaint-letter generation, and law-firm products are not live product surfaces today.
 
 ---

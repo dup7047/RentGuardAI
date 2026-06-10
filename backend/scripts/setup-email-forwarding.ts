@@ -9,12 +9,12 @@
  * Prerequisites (one-time, in Cloudflare dashboard):
  *   - rentguard.cc added to Cloudflare and using Cloudflare nameservers
  *   - Email Routing enabled for the domain (Dashboard → Email → Email Routing → Enable)
- *   - Destination address dantino12@gmail.com verified
+ *   - Destination address (FORWARD_TO_EMAIL) verified
  *     (Dashboard → Email → Email Routing → Destination addresses → Add)
  *   - API token with Zone / Email Routing Rules / Edit permission for both domains
  *
  * Run:
- *   CLOUDFLARE_API_TOKEN=<token> npm run email:forwarding
+ *   CLOUDFLARE_API_TOKEN=<token> FORWARD_TO_EMAIL=<you@example.com> npm run email:forwarding
  *
  * Exits 0 on full pass, 1 on any failure.
  */
@@ -24,7 +24,7 @@ import { config as loadDotenv } from 'dotenv';
 loadDotenv();
 
 const TOKEN = process.env.CLOUDFLARE_API_TOKEN;
-const FORWARD_TO = process.env.FORWARD_TO_EMAIL ?? 'dantino12@gmail.com';
+const FORWARD_TO = process.env.FORWARD_TO_EMAIL ?? '';
 const BASE = 'https://api.cloudflare.com/client/v4';
 
 const ALIASES: Record<string, string[]> = {
@@ -48,6 +48,15 @@ if (!TOKEN) {
     'Error: CLOUDFLARE_API_TOKEN is not set.\n' +
     'Get a token at https://dash.cloudflare.com/profile/api-tokens\n' +
     'Permission needed: Zone → Email Routing Rules → Edit',
+  );
+  process.exit(1);
+}
+
+if (!FORWARD_TO) {
+  console.error(
+    'Error: FORWARD_TO_EMAIL is not set.\n' +
+    'Set it to the verified destination inbox for Cloudflare Email Routing\n' +
+    '(Dashboard → Email → Email Routing → Destination addresses).',
   );
   process.exit(1);
 }

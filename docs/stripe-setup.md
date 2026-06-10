@@ -28,9 +28,10 @@ money (Phase 4-ish).
 ### 1. Create the account
 
 1. Go to https://dashboard.stripe.com/register.
-2. Email: `dantino12@gmail.com`.
-3. Password: a randomly-generated strong password is at the bottom of this
-   doc — paste that. **Save it in your password manager before you leave the
+2. Email: your project email address.
+3. Password: use the randomly-generated password from your local
+   `docs/credentials-to-set.md` (gitignored, never committed) or your
+   password manager. **Save it in your password manager before you leave the
    page.** Stripe's password-reset flow works but locking yourself out is
    annoying.
 4. Country: United States.

@@ -44,21 +44,21 @@ Free-tier snapshots are available at:
 
 ## 2. Taking a manual backup (local dev)
 
-Requires: Supabase CLI at `~/.local/bin/supabase`, local stack running (`supabase start`).
+Requires: Supabase CLI at `~/.local/bin/supabase`, local stack running (`supabase start`). Run from the repo root.
 
 ```sh
 # Schema-only dump (recreates tables, RLS, policies, functions, types)
-~/.local/bin/supabase db dump --local --workdir /Users/dantino/Desktop/RentGuardAI \
+~/.local/bin/supabase db dump --local --workdir . \
   -f backup-schema-$(date +%Y%m%d).sql
 
 # Data-only dump (all table contents except the auth.* schema)
-~/.local/bin/supabase db dump --local --workdir /Users/dantino/Desktop/RentGuardAI \
+~/.local/bin/supabase db dump --local --workdir . \
   --data-only -f backup-data-$(date +%Y%m%d).sql
 ```
 
 The schema dump captures Supabase internals (auth functions, storage schema) **plus** your application schema. The data dump captures all table contents.
 
-Store dumps outside the repo (they may contain sensitive data). A suitable location is `~/Desktop/RentGuardAI-backups/` or a private S3 bucket.
+Store dumps outside the repo (they may contain sensitive data). A suitable location is `~/RentGuardAI-backups/` or a private S3 bucket.
 
 ---
 

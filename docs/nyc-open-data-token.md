@@ -8,8 +8,8 @@ this if you're just running 0.3's acceptance check.
 
 ## Step-by-step (5 minutes)
 
-1. **Sign up.** Go to https://data.cityofnewyork.us/signup. Email
-   `dantino12@gmail.com`. The portal will email you a confirmation link —
+1. **Sign up.** Go to https://data.cityofnewyork.us/signup. Use your project
+   email address. The portal will email you a confirmation link —
    click it.
 2. **Pick a strong password.** A randomly-generated suggestion is in
    `docs/credentials-to-set.md` (in the next section of this doc). NYC Open

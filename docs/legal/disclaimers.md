@@ -3,6 +3,8 @@
 Single source of truth for all user-facing legal framing.
 Parsed at build time by `frontend/scripts/build-disclaimers.ts`.
 Legal team edits this file; the build propagates changes to the UI.
+Master/attorney-approved copy lives in `disclaimer.md` (§ references);
+its §4.2 must match the `affiliateLongForm` anchor here (test-enforced).
 
 Do NOT rephrase or shorten any section without legal review.
 

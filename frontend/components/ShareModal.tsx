@@ -69,7 +69,7 @@ export function ShareModal({
         </button>
         <h3 id="share-modal-title">Share this report</h3>
         <p>
-          Anyone with the link can view the latest cached data — no sign-in
+          Anyone with the link can view the latest cached data. No sign-in
           required.
         </p>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>

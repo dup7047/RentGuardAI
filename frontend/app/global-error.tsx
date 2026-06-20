@@ -58,7 +58,7 @@ export default function GlobalError({
           </h1>
           <p style={{ margin: '0 0 16px', lineHeight: 1.5 }}>
             We hit an error loading the page. Try reloading. If it keeps
-            happening, this is on us — email{' '}
+            happening, this is on us. Email{' '}
             <a href="mailto:hello@rentguard.cc" style={{ color: '#0a66c2' }}>
               hello@rentguard.cc
             </a>{' '}

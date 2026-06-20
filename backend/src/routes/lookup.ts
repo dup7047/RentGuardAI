@@ -469,7 +469,7 @@ export async function runLookup(
         status: 200,
         body: {
           kind: 'signup_gate',
-          message: "You've used your 3 free lookups — create a free account to keep going.",
+          message: "You've used your 3 free lookups. Create a free account to keep going.",
         },
       };
     }
@@ -782,7 +782,7 @@ export async function runLookup(
     if (e instanceof CostCapExceededError) {
       return {
         status: 402,
-        body: { kind: 'cost_cap', message: "We've hit today's free cap — try again tomorrow." },
+        body: { kind: 'cost_cap', message: "We've hit today's free cap. Try again tomorrow." },
       };
     }
     throw e;

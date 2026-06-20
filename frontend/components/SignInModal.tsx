@@ -28,7 +28,7 @@ const COPY: Record<SignInReason, { title: string; body: string }> = {
   },
   gate: {
     title: 'Free quota reached',
-    body: "You've used your free lookups for this month. Sign in for more — no card needed.",
+    body: "You've used your free lookups for this month. Sign in for more. No card needed.",
   },
 };
 
@@ -43,7 +43,7 @@ const SIGNUP_COPY: Record<SignInReason, { title: string; body: string }> = {
   },
   gate: {
     title: 'Create an account to keep going',
-    body: "You've used your free lookups for this month. Sign up for more — no card needed.",
+    body: "You've used your free lookups for this month. Sign up for more. No card needed.",
   },
 };
 
@@ -140,7 +140,7 @@ export function SignInModal({
         return;
       }
       setSentMessage(
-        `We sent a confirmation link to ${email}. Click it to finish signing up — this tab will be ready when you come back.`,
+        `We sent a confirmation link to ${email}. Click it to finish signing up. This tab will be ready when you come back.`,
       );
       return;
     }
@@ -159,7 +159,7 @@ export function SignInModal({
       return;
     }
     setSentMessage(
-      `We sent a magic link to ${email}. Click it to sign in — this tab will be ready when you come back.`,
+      `We sent a magic link to ${email}. Click it to sign in. This tab will be ready when you come back.`,
     );
   }
 

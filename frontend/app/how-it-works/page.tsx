@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { LegalFooter } from '@/components/LegalFooter';
 
 export const metadata: Metadata = {
-  title: 'How it works — RentGuard NYC',
+  title: 'How it works | RentGuard NYC',
   description:
     'Paste any NYC address or listing URL. RentGuard pulls live HPD violations, DOB complaints, evictions, and landlord records into a plain-English risk report.',
   alternates: { canonical: '/how-it-works' },

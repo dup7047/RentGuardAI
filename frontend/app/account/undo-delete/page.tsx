@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { undoDeleteAction } from '@/app/dashboard/actions';
 
 export const metadata: Metadata = {
-  title: 'Undo account deletion — RentGuard NYC',
+  title: 'Undo account deletion | RentGuard NYC',
   robots: { index: false, follow: false },
 };
 
@@ -43,7 +43,7 @@ export default async function UndoDeletePage({
               <p className="auth-panel-kicker">Account restored</p>
               <h1>Your account is back.</h1>
               <p>
-                We cleared the deletion request. Nothing else changed — your
+                We cleared the deletion request. Nothing else changed. Your
                 saved buildings and profile are exactly as they were.
               </p>
               <div className="center-card-actions">

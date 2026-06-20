@@ -6,7 +6,7 @@ import { AffiliateLink } from '@/components/AffiliateLink';
 import { DISCLAIMERS } from '@/lib/legal/disclaimers';
 
 export const metadata: Metadata = {
-  title: 'How we make money — RentGuard NYC',
+  title: 'How we make money | RentGuard NYC',
   description:
     'How RentGuard pays the bills and why our reports stay editorially independent.',
   alternates: { canonical: '/how-we-make-money' },

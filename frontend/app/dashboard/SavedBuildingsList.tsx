@@ -48,7 +48,7 @@ export function SavedBuildingsList({ initial }: { initial: SavedBuildingsLoad })
       const result = await unsaveBuildingAction(bbl);
       if (!result.ok) {
         setItems(prev);
-        setError("Couldn't unsave — try again.");
+        setError("Couldn't unsave. Try again.");
       }
     });
   }
@@ -59,7 +59,7 @@ export function SavedBuildingsList({ initial }: { initial: SavedBuildingsLoad })
         <h2>Couldn&apos;t load your saved buildings</h2>
         <p>
           Something went wrong reaching the server. Refresh the page to try
-          again — if it keeps happening, sign out and back in.
+          again. If it keeps happening, sign out and back in.
         </p>
       </div>
     );
@@ -77,7 +77,7 @@ export function SavedBuildingsList({ initial }: { initial: SavedBuildingsLoad })
           <span style={{ color: 'var(--accent)', fontWeight: 600 }}>
             ★ Save building
           </span>{' '}
-          on any report — it&apos;ll show up here for quick reference.
+          on any report. It&apos;ll show up here for quick reference.
         </p>
         <Link href="/" className="btn primary" style={{ marginTop: 8 }}>
           Run your first lookup →

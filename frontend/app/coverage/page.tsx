@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { LegalFooter } from '@/components/LegalFooter';
 
 export const metadata: Metadata = {
-  title: 'Coverage — what data RentGuard checks',
+  title: 'Coverage: what data RentGuard checks',
   description:
     'Every NYC Open Data source RentGuard reads on every building lookup, with refresh cadence and a link to the raw catalog.',
   alternates: { canonical: '/coverage' },
@@ -85,7 +85,7 @@ const SOURCES: ReadonlyArray<{
 const DEFERRED = [
   'ACRIS deeds (true title chain across LLCs)',
   'NYCDB landlord-portfolio joins',
-  'Cities outside NYC — drop your email and we’ll let you know when we expand',
+  'Cities outside NYC: drop your email and we’ll let you know when we expand',
 ] as const;
 
 export default function CoveragePage() {

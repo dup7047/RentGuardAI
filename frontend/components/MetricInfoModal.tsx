@@ -72,7 +72,7 @@ export function MetricInfoModal({
               />
               <ScoreRow
                 label="Public Advocate watchlist"
-                detail="The NYC Public Advocate publishes an annual list of the city's worst landlords by complaint volume. Appearing on — or near — this list adds a significant penalty."
+                detail="The NYC Public Advocate publishes an annual list of the city's worst landlords by complaint volume. Appearing on, or near, this list adds a significant penalty."
                 source="Public Advocate"
               />
             </div>
@@ -152,7 +152,7 @@ export function MetricInfoModal({
             </div>
 
             <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 14, lineHeight: 1.5 }}>
-              Value scores are not shown when fewer than 3 comparable listings are found. Rental markets move fast — always verify current comps independently.
+              Value scores are not shown when fewer than 3 comparable listings are found. Rental markets move fast, so always verify current comps independently.
             </p>
           </>
         )}
@@ -211,7 +211,7 @@ function BandRow({
       <span style={{ fontWeight: 500 }}>{label}</span>
       <span
         style={{ color: 'var(--muted)', fontSize: 12 }}
-        dangerouslySetInnerHTML={{ __html: `— ${desc}` }}
+        dangerouslySetInnerHTML={{ __html: `(${desc})` }}
       />
     </div>
   );

@@ -190,7 +190,7 @@ export function computeScore(input: ScoreInput): ScoreResult {
       key: 'fare_act',
       label: 'FARE Act',
       impact,
-      reason: 'Listing has mixed signals about broker fees — verify in writing',
+      reason: 'Listing has mixed signals about broker fees. Verify in writing',
     });
   } else if (input.fareFlag === 'no_indicators') {
     factors.push({

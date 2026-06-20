@@ -42,7 +42,7 @@ export function OutsideNyc({
         <h2>Outside our coverage</h2>
         <p>
           RentGuard only covers <b>New York City</b> right now. We&apos;d love to
-          expand — drop your email and we&apos;ll let you know when we launch{' '}
+          expand. Drop your email and we&apos;ll let you know when we launch{' '}
           {cityLabel !== 'Unknown' ? `in ${cityLabel}` : 'where you are'}.
         </p>
         {!done ? (

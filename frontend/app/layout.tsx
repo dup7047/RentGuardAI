@@ -24,7 +24,7 @@ const jetbrainsMono = JetBrains_Mono({
 const SITE_URL = 'https://www.rentguard.cc';
 
 export const metadata: Metadata = {
-  title: 'RentGuard NYC — AI Rental Copilot',
+  title: 'RentGuard NYC: AI Rental Copilot',
   description:
     'Free building risk lookup for NYC renters. Check any address against HPD violations, DOB complaints, eviction records, and landlord data.',
   metadataBase: new URL(SITE_URL),

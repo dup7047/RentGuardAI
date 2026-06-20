@@ -232,7 +232,7 @@ export function BuildingReport({ data: serverData }: { data: SuccessData }) {
         setIsAuthed(false);
         setModal({ kind: 'save', reason: 'save' });
       } else {
-        showToast(wasSaved ? "Couldn't unsave — try again" : "Couldn't save — try again");
+        showToast(wasSaved ? "Couldn't unsave. Try again" : "Couldn't save. Try again");
       }
     } finally {
       setSaveInFlight(false);
@@ -252,7 +252,7 @@ export function BuildingReport({ data: serverData }: { data: SuccessData }) {
       typeof window !== 'undefined'
         ? `${window.location.origin}/building/${bbl}`
         : `https://www.rentguard.cc/building/${bbl}`;
-    const shareTitle = `${address ?? `BBL ${bbl}`} — RentGuard NYC`;
+    const shareTitle = `${address ?? `BBL ${bbl}`} | RentGuard NYC`;
     const shareText = `${openViolations} open HPD violations · grade ${grade} · check your building free`;
 
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {

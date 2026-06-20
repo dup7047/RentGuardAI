@@ -105,10 +105,10 @@ export function computeValueScore(input: ValueScoreInput): ValueScoreResult {
   const absPct = Math.abs(pctDiff);
   const rentReason =
     pctDiff <= -5
-      ? `Listed ${fmtRent(monthlyRentCents)} — ${absPct}% below the ${comp.borough} median of ${fmtRent(comp.medianRentCents)} for ${comp.bedrooms === 0 ? 'studios' : `${comp.bedrooms}BR`} (${sourceLabel(comp)})`
+      ? `Listed ${fmtRent(monthlyRentCents)}, ${absPct}% below the ${comp.borough} median of ${fmtRent(comp.medianRentCents)} for ${comp.bedrooms === 0 ? 'studios' : `${comp.bedrooms}BR`} (${sourceLabel(comp)})`
       : pctDiff >= 5
-        ? `Listed ${fmtRent(monthlyRentCents)} — ${absPct}% above the ${comp.borough} median of ${fmtRent(comp.medianRentCents)} for ${comp.bedrooms === 0 ? 'studios' : `${comp.bedrooms}BR`} (${sourceLabel(comp)})`
-        : `Listed ${fmtRent(monthlyRentCents)} — at the ${comp.borough} median of ${fmtRent(comp.medianRentCents)} for ${comp.bedrooms === 0 ? 'studios' : `${comp.bedrooms}BR`} (${sourceLabel(comp)})`;
+        ? `Listed ${fmtRent(monthlyRentCents)}, ${absPct}% above the ${comp.borough} median of ${fmtRent(comp.medianRentCents)} for ${comp.bedrooms === 0 ? 'studios' : `${comp.bedrooms}BR`} (${sourceLabel(comp)})`
+        : `Listed ${fmtRent(monthlyRentCents)}, at the ${comp.borough} median of ${fmtRent(comp.medianRentCents)} for ${comp.bedrooms === 0 ? 'studios' : `${comp.bedrooms}BR`} (${sourceLabel(comp)})`;
 
   // Impact is relative to "fair" baseline of 70 — positive means better than fair
   const rentImpact = rentScore - 70;
@@ -131,10 +131,10 @@ export function computeValueScore(input: ValueScoreInput): ValueScoreResult {
     const listingPerSqft = fmtPerSqft(pricePerSqft * 100);
     const sqftReason =
       sqftPct <= -5
-        ? `${listingPerSqft}/sqft — ${sqftAbsPct}% below the local median of ${medianPerSqft}/sqft`
+        ? `${listingPerSqft}/sqft, ${sqftAbsPct}% below the local median of ${medianPerSqft}/sqft`
         : sqftPct >= 5
-          ? `${listingPerSqft}/sqft — ${sqftAbsPct}% above the local median of ${medianPerSqft}/sqft`
-          : `${listingPerSqft}/sqft — at the local median of ${medianPerSqft}/sqft`;
+          ? `${listingPerSqft}/sqft, ${sqftAbsPct}% above the local median of ${medianPerSqft}/sqft`
+          : `${listingPerSqft}/sqft, at the local median of ${medianPerSqft}/sqft`;
     const sqftImpact = sqftScore - 70;
     factors.push({
       key: 'rent_per_sqft',

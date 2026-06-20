@@ -158,7 +158,7 @@ export function OverviewTab({
           <div className="ai-tag">✦ LISTING DATA UNAVAILABLE</div>
           <p>
             We couldn&apos;t read the listing page (the site blocked our scraper),
-            so this review covers the building&apos;s public records only — not
+            so this review covers the building&apos;s public records only, not
             listing-specific details like rent, bedrooms, or broker fees.
           </p>
         </div>

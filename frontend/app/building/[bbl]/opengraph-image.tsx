@@ -67,7 +67,7 @@ export default async function Image({ params }: { params: Promise<{ bbl: string 
           }}
         >
           <p style={{ fontSize: 28, opacity: 0.55, margin: 0, marginBottom: 16 }}>
-            RentGuard NYC — Public Records
+            RentGuard NYC: Public Records
           </p>
           <p
             style={{
@@ -96,7 +96,7 @@ export default async function Image({ params }: { params: Promise<{ bbl: string 
               color: '#9ca3af',
             }}
           >
-            rentguard.cc — check your building free
+            rentguard.cc, check your building free
           </p>
         </div>
       ),
@@ -154,7 +154,7 @@ export default async function Image({ params }: { params: Promise<{ bbl: string 
           }}
         >
           <p style={{ fontSize: 28, opacity: 0.55, margin: 0, marginBottom: 16 }}>
-            RentGuard NYC — Public Records
+            RentGuard NYC: Public Records
           </p>
           <p
             style={{
@@ -216,7 +216,7 @@ export default async function Image({ params }: { params: Promise<{ bbl: string 
             color: '#9ca3af',
           }}
         >
-          rentguard.cc — check your building free
+          rentguard.cc, check your building free
         </p>
       </div>
     ),

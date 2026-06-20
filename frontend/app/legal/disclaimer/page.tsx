@@ -6,7 +6,7 @@ import { LegalFooter } from '@/components/LegalFooter';
 export const dynamic = 'force-static';
 
 export const metadata: Metadata = {
-  title: 'Disclaimers — RentGuard NYC',
+  title: 'Disclaimers | RentGuard NYC',
   description:
     'Disclaimer language for RentGuard NYC building reports, AI summaries, public records, and affiliate disclosures.',
   alternates: { canonical: '/legal/disclaimer' },

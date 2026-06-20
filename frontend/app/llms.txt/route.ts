@@ -14,7 +14,7 @@ const BODY = `# RentGuard NYC
 ## Canonical pages
 
 - [How it works](https://www.rentguard.cc/how-it-works)
-- [Coverage — what data RentGuard checks](https://www.rentguard.cc/coverage)
+- [Coverage: what data RentGuard checks](https://www.rentguard.cc/coverage)
 - [For owners and managers](https://www.rentguard.cc/for-landlords)
 - [Pricing](https://www.rentguard.cc/pricing)
 - [How we make money](https://www.rentguard.cc/how-we-make-money)
@@ -24,11 +24,11 @@ const BODY = `# RentGuard NYC
 
 ## Data sources (NYC Open Data, refreshed automatically)
 
-- HPD Open Violations — daily
-- DOB Complaints — weekly
-- Marshal Evictions — weekly
-- HPD Registrations (owner / managing agent) — quarterly
-- NYC Public Advocate Worst Landlord Watchlist — annual
+- HPD Open Violations: daily
+- DOB Complaints: weekly
+- Marshal Evictions: weekly
+- HPD Registrations (owner / managing agent): quarterly
+- NYC Public Advocate Worst Landlord Watchlist: annual
 - FARE Act broker-fee compliance signals
 
 ## Coverage
@@ -51,9 +51,9 @@ https://www.rentguard.cc/how-we-make-money.
 
 ## Contact
 
-- support@rentguard.cc — general support
-- privacy@rentguard.cc — privacy / data-deletion requests
-- legal@rentguard.cc — legal / compliance
+- support@rentguard.cc: general support
+- privacy@rentguard.cc: privacy / data-deletion requests
+- legal@rentguard.cc: legal / compliance
 `;
 
 export function GET() {

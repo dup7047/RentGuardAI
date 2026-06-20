@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { LegalFooter } from '@/components/LegalFooter';
 
 export const metadata: Metadata = {
-  title: 'For owners and managers — RentGuard NYC',
+  title: 'For owners and managers | RentGuard NYC',
   description:
     'How RentGuard reports on NYC buildings, and how to correct outdated information sourced from NYC.gov.',
   alternates: { canonical: '/for-landlords' },
@@ -53,7 +53,7 @@ const CORRECT_STEPS = [
   {
     n: '3',
     t: 'Email us with the BBL and the source link.',
-    d: 'If you believe a specific count is wrong relative to the NYC.gov source we cite, send us the BBL, the indicator, and the link to the underlying record. We mirror the source — we don’t adjudicate it.',
+    d: 'If you believe a specific count is wrong relative to the NYC.gov source we cite, send us the BBL, the indicator, and the link to the underlying record. We mirror the source. We don’t adjudicate it.',
     href: 'mailto:corrections@rentguard.cc?subject=Building%20data%20correction',
     label: 'Email corrections@rentguard.cc',
   },
@@ -73,10 +73,10 @@ export default function ForLandlordsPage() {
               For owners and managers
             </div>
             <h1 className="hero">
-              We mirror NYC.gov. <em>Fix the source — fix the report.</em>
+              We mirror NYC.gov. <em>Fix the source. Fix the report.</em>
             </h1>
             <p className="hero-sub">
-              RentGuard surfaces public NYC records about your buildings. Every count cites a primary source. If an indicator looks wrong, the correction belongs at the source — and once it lands there, it lands here too.
+              RentGuard surfaces public NYC records about your buildings. Every count cites a primary source. If an indicator looks wrong, the correction belongs at the source, and once it lands there, it lands here too.
             </p>
           </div>
         </div>
@@ -134,7 +134,7 @@ export default function ForLandlordsPage() {
             </div>
           ))}
           <p style={{ fontSize: 13, color: 'var(--ink-2)', marginTop: 12, lineHeight: 1.6 }}>
-            RentGuard is not a law firm and does not provide legal advice. Building reports are generated from public NYC datasets. Records may be incomplete or out of date — that is exactly why we link back to every source.
+            RentGuard is not a law firm and does not provide legal advice. Building reports are generated from public NYC datasets. Records may be incomplete or out of date, which is exactly why we link back to every source.
           </p>
         </div>
 

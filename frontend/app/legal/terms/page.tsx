@@ -6,7 +6,7 @@ import { LegalFooter } from '@/components/LegalFooter';
 export const dynamic = 'force-static';
 
 export const metadata: Metadata = {
-  title: 'Terms of Service — RentGuard NYC',
+  title: 'Terms of Service | RentGuard NYC',
   description:
     'The Terms of Service governing your use of RentGuard NYC building reports, accounts, acceptable use, and dispute resolution.',
   alternates: { canonical: '/legal/terms' },

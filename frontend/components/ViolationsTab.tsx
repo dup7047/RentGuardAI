@@ -54,7 +54,7 @@ export function ViolationsTab({ data }: { data: SuccessData }) {
         <h3 style={{ margin: 0 }}>HPD violations</h3>
         <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>
           Showing {rows.length.toLocaleString()} of {totalCount.toLocaleString()}
-          {hasMore && ' — view all on HPD Online'}
+          {hasMore && ', view all on HPD Online'}
         </div>
       </div>
 

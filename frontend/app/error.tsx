@@ -24,7 +24,7 @@ export default function Error({
           <p className="auth-panel-kicker">Something went wrong</p>
           <h1>RentGuard hit a loading issue.</h1>
           <p>
-            Try again. If it keeps happening, this is on us — drop us a line at{' '}
+            Try again. If it keeps happening, this is on us. Drop us a line at{' '}
             <a href="mailto:hello@rentguard.cc">hello@rentguard.cc</a> and we
             will dig in.
           </p>

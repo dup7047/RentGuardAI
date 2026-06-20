@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { DeleteAccountSection } from './DeleteAccountSection';
 
 export const metadata: Metadata = {
-  title: 'Settings — RentGuard NYC',
+  title: 'Settings | RentGuard NYC',
   description: 'Manage your RentGuard account, sign out, or delete your account.',
 };
 

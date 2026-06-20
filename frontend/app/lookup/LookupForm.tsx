@@ -363,7 +363,7 @@ export function LookupForm() {
               color: 'oklch(0.45 0.13 70)',
             }}
           >
-            That listing is behind bot protection — we couldn&apos;t read it.
+            That listing is behind bot protection, so we couldn&apos;t read it.
             Paste the address (and description if you can) and we&apos;ll
             generate a building review.
           </p>

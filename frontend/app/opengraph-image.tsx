@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og';
 
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
-export const alt = 'RentGuard NYC — free building risk lookup';
+export const alt = 'RentGuard NYC: free building risk lookup';
 
 // Default OG card used for every page that doesn't define its own
 // opengraph-image (homepage, marketing, legal). Building pages have their
@@ -66,7 +66,7 @@ export default function Image() {
             color: '#9ca3af',
           }}
         >
-          rentguard.cc — free for NYC renters
+          rentguard.cc, free for NYC renters
         </p>
       </div>
     ),

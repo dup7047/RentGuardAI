@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     : `Public-records risk summary for NYC building BBL ${bbl}. HPD violations, evictions, landlord watchlist.`;
 
   return {
-    title: `${titleCore} — RentGuard NYC`,
+    title: `${titleCore} | RentGuard NYC`,
     description,
     alternates: { canonical: `/building/${bbl}` },
     openGraph: {

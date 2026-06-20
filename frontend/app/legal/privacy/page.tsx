@@ -6,7 +6,7 @@ import { LegalFooter } from '@/components/LegalFooter';
 export const dynamic = 'force-static';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — RentGuard NYC',
+  title: 'Privacy Policy | RentGuard NYC',
   description:
     'How RentGuard NYC collects, uses, retains, and protects account, lookup, saved-building, and affiliate-click information.',
   alternates: { canonical: '/legal/privacy' },

@@ -29,6 +29,14 @@ import {
 const AUTOCOMPLETE_DEBOUNCE_MS = 180;
 const AUTOCOMPLETE_MIN_LEN = 3;
 
+// Shown when the stream itself fails (network drop, retries exhausted). Kept
+// distinct from `invalid_input` so the user isn't told their address is wrong
+// when the real problem is connectivity.
+const NETWORK_FAILURE: LookupResponse = {
+  kind: 'server_error',
+  message: 'We could not reach the report service. Check your connection and try again.',
+};
+
 type LookupSuccess = Extract<LookupResponse, { kind: 'success' }>;
 
 function rememberFreshReport(report: LookupSuccess) {
@@ -79,8 +87,10 @@ export function LookupForm() {
         setSuggestions(list);
         setActiveIndex(-1);
         setShowSuggestions(list.length > 0);
-      } catch (e) {
-        if ((e as Error).name !== 'AbortError') throw e;
+      } catch {
+        // AbortError (stale debounce) or an unexpected throw — either way the
+        // dropdown just stays as-is. Rethrowing here would surface as an
+        // unhandled rejection since we're inside a timer callback.
       }
     }, AUTOCOMPLETE_DEBOUNCE_MS);
     return () => {
@@ -132,7 +142,7 @@ export function LookupForm() {
         (p) => setPhase(p),
       );
     } catch {
-      r = { kind: 'invalid_input', errors: { _: 'network' } };
+      r = NETWORK_FAILURE;
     }
     if (r.kind === 'success') {
       rememberFreshReport(r);
@@ -163,7 +173,7 @@ export function LookupForm() {
         (p) => setPhase(p),
       );
     } catch {
-      r = { kind: 'invalid_input', errors: { _: 'network' } };
+      r = NETWORK_FAILURE;
     }
     if (r.kind === 'success') {
       rememberFreshReport(r);

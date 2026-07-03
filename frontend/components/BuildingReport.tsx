@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { LegalFooter } from './LegalFooter';
@@ -93,6 +93,14 @@ export function BuildingReport({ data: serverData }: { data: SuccessData }) {
   const [isAuthed, setIsAuthed] = useState<boolean>(false);
   const [isSaved, setIsSaved] = useState<boolean | null>(null);
   const [saveInFlight, setSaveInFlight] = useState<boolean>(false);
+  const toastTimerRef = useRef<number | null>(null);
+
+  // Clear any pending toast timer on unmount so it can't fire afterwards.
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     setData(serverData);
@@ -125,18 +133,6 @@ export function BuildingReport({ data: serverData }: { data: SuccessData }) {
     let cancelled = false;
 
     async function refreshSavedState() {
-      const result = await getSavedBuildingStateAction(bbl);
-      if (cancelled) return;
-      if (result.kind === 'ok') {
-        setIsAuthed(true);
-        setIsSaved(result.saved);
-      } else {
-        setIsAuthed(false);
-        setIsSaved(false);
-      }
-    }
-
-    (async () => {
       try {
         const result = await getSavedBuildingStateAction(bbl);
         if (cancelled) return;
@@ -153,7 +149,9 @@ export function BuildingReport({ data: serverData }: { data: SuccessData }) {
           setIsSaved(false);
         }
       }
-    })();
+    }
+
+    void refreshSavedState();
 
     // createClient() throws if Supabase env vars are missing (e.g. in unit
     // tests that don't mock the client). The save flow already degrades to
@@ -206,7 +204,10 @@ export function BuildingReport({ data: serverData }: { data: SuccessData }) {
 
   function showToast(msg: string) {
     setToast(msg);
-    window.setTimeout(() => setToast(null), 2400);
+    // Restart the dismiss timer so a rapid second toast gets its full 2.4s
+    // instead of being cut short by the first toast's timer.
+    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 2400);
   }
 
   async function handleSave() {

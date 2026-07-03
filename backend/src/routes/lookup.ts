@@ -115,21 +115,27 @@ async function timePhase<T>(phase: string, fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Race a promise against a deadline. On timeout, resolves with the fallback
- *  value and `timedOut: true`; the underlying promise keeps running but its
- *  result is discarded. Used to cap dataset fan-out tail latency. */
-function withDeadline<T>(
+/** Race a promise against a deadline. On timeout OR rejection, resolves with
+ *  the fallback value and `degraded: true`; a timed-out promise keeps running
+ *  but its result is discarded. Used to cap dataset fan-out tail latency and
+ *  to make sure a failed dataset is surfaced as partial data rather than
+ *  silently rendering as "no records". Exported for tests. */
+export function withDeadline<T>(
   p: Promise<T>,
   ms: number,
   fallback: T,
-): Promise<{ value: T; timedOut: boolean }> {
+  label?: string,
+): Promise<{ value: T; degraded: boolean }> {
   let to: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<{ value: T; timedOut: boolean }>((resolve) => {
-    to = setTimeout(() => resolve({ value: fallback, timedOut: true }), ms);
+  const timeout = new Promise<{ value: T; degraded: boolean }>((resolve) => {
+    to = setTimeout(() => resolve({ value: fallback, degraded: true }), ms);
   });
   const settled = p
-    .then((value) => ({ value, timedOut: false }))
-    .catch(() => ({ value: fallback, timedOut: false }));
+    .then((value) => ({ value, degraded: false }))
+    .catch((e) => {
+      logger.warn({ err: String(e), label }, 'dataset fetch failed — serving fallback');
+      return { value: fallback, degraded: true };
+    });
   return Promise.race([settled, timeout]).then((r) => {
     if (to) clearTimeout(to);
     return r;
@@ -500,22 +506,27 @@ export async function runLookup(
   const isAddressOnlyInput = !listingUrl && !listingDescription;
   const cachedAiP = isAddressOnlyInput ? findRecentLookup(bbl) : Promise.resolve(null);
   const [hpdR, evicR, bedR, leadR, landlordR, regsR, hpdCR, three11R, cached] = await Promise.all([
-    withDeadline(hpdP, DATASET_DEADLINE_MS, []),
-    withDeadline(getEvictions(bbl, rawData), DATASET_DEADLINE_MS, []),
-    withDeadline(getBedbugReports(bbl, rawData), DATASET_DEADLINE_MS, []),
-    withDeadline(getLeadPaintViolations(bbl, rawData), DATASET_DEADLINE_MS, []),
-    withDeadline(ownerP, DATASET_DEADLINE_MS, {
-      registered_owner_name: null,
-      hpd_corporation_name: null,
-      registration_id: null,
-      head_officer_name: null,
-      head_officer_business_address: null,
-      watchlist_rank: null,
-      last_fetched_at: new Date(0).toISOString(),
-    }),
-    withDeadline(getHpdRegistrations(bbl, rawData), DATASET_DEADLINE_MS, []),
-    withDeadline(getHpdComplaints(bbl), DATASET_DEADLINE_MS, []),
-    withDeadline(get311HousingRequests(bbl), DATASET_DEADLINE_MS, []),
+    withDeadline(hpdP, DATASET_DEADLINE_MS, [], 'hpd'),
+    withDeadline(getEvictions(bbl, rawData), DATASET_DEADLINE_MS, [], 'evictions'),
+    withDeadline(getBedbugReports(bbl, rawData), DATASET_DEADLINE_MS, [], 'bedbug'),
+    withDeadline(getLeadPaintViolations(bbl, rawData), DATASET_DEADLINE_MS, [], 'lead_paint'),
+    withDeadline(
+      ownerP,
+      DATASET_DEADLINE_MS,
+      {
+        registered_owner_name: null,
+        hpd_corporation_name: null,
+        registration_id: null,
+        head_officer_name: null,
+        head_officer_business_address: null,
+        watchlist_rank: null,
+        last_fetched_at: new Date(0).toISOString(),
+      },
+      'landlord',
+    ),
+    withDeadline(getHpdRegistrations(bbl, rawData), DATASET_DEADLINE_MS, [], 'hpd_registrations'),
+    withDeadline(getHpdComplaints(bbl), DATASET_DEADLINE_MS, [], 'hpd_complaints'),
+    withDeadline(get311HousingRequests(bbl), DATASET_DEADLINE_MS, [], 'three11_housing'),
     cachedAiP,
   ]);
   const hpdV = hpdR.value;
@@ -537,20 +548,21 @@ export async function runLookup(
     }),
     DATASET_DEADLINE_MS,
     [],
+    'dob',
   );
   const dob = dobR.value;
   const partial: string[] = [];
-  if (hpdR.timedOut) partial.push('hpd');
-  if (dobR.timedOut) partial.push('dob');
-  if (evicR.timedOut) partial.push('evictions');
-  if (bedR.timedOut) partial.push('bedbug');
-  if (leadR.timedOut) partial.push('lead_paint');
-  if (landlordR.timedOut) partial.push('landlord');
-  if (regsR.timedOut) partial.push('hpd_registrations');
-  if (hpdCR.timedOut) partial.push('hpd_complaints');
-  if (three11R.timedOut) partial.push('three11_housing');
+  if (hpdR.degraded) partial.push('hpd');
+  if (dobR.degraded) partial.push('dob');
+  if (evicR.degraded) partial.push('evictions');
+  if (bedR.degraded) partial.push('bedbug');
+  if (leadR.degraded) partial.push('lead_paint');
+  if (landlordR.degraded) partial.push('landlord');
+  if (regsR.degraded) partial.push('hpd_registrations');
+  if (hpdCR.degraded) partial.push('hpd_complaints');
+  if (three11R.degraded) partial.push('three11_housing');
   if (partial.length > 0) {
-    logger.warn({ partial, bbl }, 'one or more datasets timed out — serving partial');
+    logger.warn({ partial, bbl }, 'one or more datasets timed out or failed — serving partial');
   }
   logger.debug(
     { bbl, hpd_complaints: hpdC.length, three11_housing: three11.length },

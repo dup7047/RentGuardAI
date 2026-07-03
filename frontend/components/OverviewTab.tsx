@@ -168,7 +168,7 @@ export function OverviewTab({
         <div className="ai-block partial-data-notice">
           <div className="ai-tag">✦ PARTIAL DATA NOTICE</div>
           <p>
-            Some public-record sources timed out while we built this report:
+            Some public-record sources were unavailable while we built this report:
             {' '}
             {formatPartialDatasets(partialDatasets)}. The available sections are
             shown below, but you should re-run the lookup before relying on this

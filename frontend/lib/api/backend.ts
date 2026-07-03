@@ -357,8 +357,9 @@ export async function authHeader(): Promise<HeadersInit> {
   // Diagnostic: log whether a token is being sent. Pair with the backend's
   // `jwt verify failed` log in Render — `tokenSent: true` here + that log on
   // the backend = env mismatch. `tokenSent: false` = client-side session
-  // missing despite the user being signed in.
-  if (typeof window !== 'undefined') {
+  // missing despite the user being signed in. Dev-only: in production this
+  // fired a console.warn on every single API request.
+  if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
     console.warn('[authHeader] building request', { tokenSent: Boolean(session) });
   }
   return session ? { Authorization: `Bearer ${session.access_token}` } : {};

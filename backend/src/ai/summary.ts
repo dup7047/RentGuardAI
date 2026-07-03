@@ -113,6 +113,19 @@ export async function generateSummary(
   if (typeof parsed.summary !== 'string') throw new MalformedAIResponse('missing summary');
   if (!Array.isArray(parsed.indicators)) throw new MalformedAIResponse('missing indicators');
 
+  // Indicators are model output that the frontend renders as links — enforce
+  // the shape and require http(s) source_url instead of trusting a cast, so a
+  // malformed entry (or a javascript:/data: URL) never reaches the client.
+  const indicators: SummaryIndicator[] = parsed.indicators.filter(
+    (i): i is SummaryIndicator =>
+      !!i &&
+      typeof i === 'object' &&
+      typeof (i as { key?: unknown }).key === 'string' &&
+      typeof (i as { value?: unknown }).value === 'string' &&
+      typeof (i as { source_url?: unknown }).source_url === 'string' &&
+      /^https?:\/\//i.test((i as { source_url: string }).source_url),
+  );
+
   // Tolerate legacy responses that omit sections (forward-compatible)
   const listing_summary =
     typeof parsed.listing_summary === 'string' ? parsed.listing_summary : '';
@@ -174,7 +187,7 @@ export async function generateSummary(
     summary: parsed.summary,
     score_explanation,
     value_explanation,
-    indicators: parsed.indicators as SummaryIndicator[],
+    indicators,
     questions_to_ask,
     listing_notes: verifiedListingNotes,
     cost_cents,

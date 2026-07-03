@@ -14,6 +14,11 @@
 --   * row visibility remains governed entirely by RLS policies.
 -- It is idempotent and a no-op on databases (like production) that already
 -- carry the legacy default grants.
+--
+-- Deliberately NO `ALTER DEFAULT PRIVILEGES` here: tables created by future
+-- migrations start with no API-role access at all (fail closed) and must add
+-- their own grants alongside their RLS policies, following the existing
+-- convention of pairing every CREATE TABLE with a *_security migration.
 
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 --> statement-breakpoint
@@ -24,14 +29,3 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public
 
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public
   TO anon, authenticated, service_role;
---> statement-breakpoint
-
--- Cover tables/sequences created by FUTURE migrations (which run as the same
--- role executing this one), so a new table can't silently ship without ACLs.
-
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon, authenticated, service_role;
---> statement-breakpoint
-
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT USAGE, SELECT ON SEQUENCES TO anon, authenticated, service_role;

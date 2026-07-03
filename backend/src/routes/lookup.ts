@@ -119,22 +119,24 @@ async function timePhase<T>(phase: string, fn: () => Promise<T>): Promise<T> {
  *  the fallback value and `degraded: true`; a timed-out promise keeps running
  *  but its result is discarded. Used to cap dataset fan-out tail latency and
  *  to make sure a failed dataset is surfaced as partial data rather than
- *  silently rendering as "no records". Exported for tests. */
+ *  silently rendering as "no records". The label is carried into the result
+ *  so callers can derive the `partial` dataset list without repeating the
+ *  label strings. Exported for tests. */
 export function withDeadline<T>(
   p: Promise<T>,
   ms: number,
   fallback: T,
   label?: string,
-): Promise<{ value: T; degraded: boolean }> {
+): Promise<{ value: T; degraded: boolean; label?: string }> {
   let to: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<{ value: T; degraded: boolean }>((resolve) => {
-    to = setTimeout(() => resolve({ value: fallback, degraded: true }), ms);
+  const timeout = new Promise<{ value: T; degraded: boolean; label?: string }>((resolve) => {
+    to = setTimeout(() => resolve({ value: fallback, degraded: true, label }), ms);
   });
   const settled = p
-    .then((value) => ({ value, degraded: false }))
+    .then((value) => ({ value, degraded: false, label }))
     .catch((e) => {
       logger.warn({ err: String(e), label }, 'dataset fetch failed — serving fallback');
-      return { value: fallback, degraded: true };
+      return { value: fallback, degraded: true, label };
     });
   return Promise.race([settled, timeout]).then((r) => {
     if (to) clearTimeout(to);
@@ -152,6 +154,55 @@ export type LookupCtx = {
 
 type LookupStatus = 200 | 400 | 402 | 404;
 export type LookupResult = { status: LookupStatus; body: unknown };
+
+/**
+ * Assemble the `kind: 'success'` response body. Both the cache-hit and
+ * fresh-AI paths return this exact shape — building it in one place keeps
+ * the two from drifting. Array-ish fields tolerate unknown JSONB values
+ * because the cache-hit path reads them straight from persisted columns.
+ */
+function successBody(fields: {
+  bbl: string;
+  address: string;
+  borough: Borough;
+  listing_summary: string | null;
+  summary: string;
+  score_explanation: string | null;
+  score: number;
+  score_band: string;
+  score_factors: unknown;
+  /** AI source links; [] on cache hits (not persisted today — OverviewTab
+   *  falls back to static dataset URLs, same as the SEO archive route). */
+  indicators: unknown[];
+  questions_to_ask: unknown;
+  listing_notes: unknown;
+  scraped_listing: ScrapedListing | null;
+  listing_unavailable: boolean;
+  landlord: unknown;
+  fare_check: unknown;
+  stats: Record<string, number>;
+  value_score: number | null;
+  value_band: string | null;
+  value_confidence: string | null;
+  value_factors: unknown;
+  value_explanation: string | null;
+  partial: string[];
+  lookup_id: string | null;
+  bin: string | null;
+  hpd_building_id: string | null;
+}) {
+  return {
+    kind: 'success' as const,
+    ...fields,
+    score_factors: Array.isArray(fields.score_factors) ? fields.score_factors : [],
+    questions_to_ask: Array.isArray(fields.questions_to_ask) ? fields.questions_to_ask : [],
+    listing_notes: Array.isArray(fields.listing_notes) ? fields.listing_notes : [],
+    value_factors: Array.isArray(fields.value_factors) ? fields.value_factors : [],
+    listing_unavailable: fields.listing_unavailable || undefined,
+    partial: fields.partial.length > 0 ? fields.partial : undefined,
+    building_url: `/building/${fields.bbl}`,
+  };
+}
 
 // ── Phase 8: cache-hit short-circuit ──────────────────────────────────────
 // When an address-only lookup arrives for a BBL we already summarized in the
@@ -551,16 +602,11 @@ export async function runLookup(
     'dob',
   );
   const dob = dobR.value;
-  const partial: string[] = [];
-  if (hpdR.degraded) partial.push('hpd');
-  if (dobR.degraded) partial.push('dob');
-  if (evicR.degraded) partial.push('evictions');
-  if (bedR.degraded) partial.push('bedbug');
-  if (leadR.degraded) partial.push('lead_paint');
-  if (landlordR.degraded) partial.push('landlord');
-  if (regsR.degraded) partial.push('hpd_registrations');
-  if (hpdCR.degraded) partial.push('hpd_complaints');
-  if (three11R.degraded) partial.push('three11_housing');
+  // Each result carries the label passed to withDeadline, so the partial list
+  // stays in sync with the fan-out above by construction.
+  const partial = [hpdR, dobR, evicR, bedR, leadR, landlordR, regsR, hpdCR, three11R]
+    .filter((r) => r.degraded)
+    .map((r) => r.label!);
   if (partial.length > 0) {
     logger.warn({ partial, bbl }, 'one or more datasets timed out or failed — serving partial');
   }
@@ -571,6 +617,14 @@ export async function runLookup(
   const hpdOpen = hpdV.filter((v: { currentstatus?: string }) => v.currentstatus !== 'CLOSE').length;
   const hpdClosed = hpdV.length - hpdOpen;
   const hpdBuildingId = hpdV.find((v) => v.buildingid)?.buildingid ?? regs[0]?.buildingid ?? null;
+  const stats = {
+    hpd_violations_open: hpdOpen,
+    hpd_violations_closed: hpdClosed,
+    dob_complaints: dob.length,
+    evictions: evic.length,
+    bedbug_reports: bed.length,
+    lead_flags: lead.length,
+  };
   if (cached) {
     // Step 6 still emits so the streaming animation runs to completion; the
     // 'complete' event arrives almost immediately after, naturally cutting
@@ -617,8 +671,7 @@ export async function runLookup(
 
     return {
       status: 200,
-      body: {
-        kind: 'success',
+      body: successBody({
         bbl,
         address: canonicalAddress,
         borough,
@@ -627,36 +680,25 @@ export async function runLookup(
         score_explanation: cached.scoreExplanation,
         score: cached.score,
         score_band: cached.scoreBand,
-        score_factors: Array.isArray(cached.scoreFactors) ? cached.scoreFactors : [],
-        // AI-generated source links aren't persisted today. OverviewTab falls
-        // back to static dataset URLs when this is empty — same behavior as
-        // the SEO archive route on cache hit.
+        score_factors: cached.scoreFactors,
         indicators: [],
-        questions_to_ask: Array.isArray(cached.questions) ? cached.questions : [],
-        listing_notes: Array.isArray(cached.listingNotes) ? cached.listingNotes : [],
+        questions_to_ask: cached.questions,
+        listing_notes: cached.listingNotes,
         scraped_listing: null,
-        listing_unavailable: listingUnavailable || undefined,
+        listing_unavailable: listingUnavailable,
         landlord,
         fare_check: null,
-        stats: {
-          hpd_violations_open: hpdOpen,
-          hpd_violations_closed: hpdClosed,
-          dob_complaints: dob.length,
-          evictions: evic.length,
-          bedbug_reports: bed.length,
-          lead_flags: lead.length,
-        },
+        stats,
         value_score: cached.valueScore,
         value_band: cached.valueBand,
         value_confidence: cached.valueConfidence,
-        value_factors: Array.isArray(cached.valueFactors) ? cached.valueFactors : [],
+        value_factors: cached.valueFactors,
         value_explanation: cached.valueExplanation,
-        partial: partial.length > 0 ? partial : undefined,
+        partial,
         lookup_id: persisted[0]?.id ?? null,
-        building_url: `/building/${bbl}`,
         bin,
         hpd_building_id: hpdBuildingId,
-      },
+      }),
     };
   }
 
@@ -719,14 +761,6 @@ export async function runLookup(
 
   // ── 6d. Progressive payload — score + stats are ready before AI starts ─────
   // Streaming clients can render the Overview tab here while OpenAI runs.
-  const stats = {
-    hpd_violations_open: hpdOpen,
-    hpd_violations_closed: hpdClosed,
-    dob_complaints: dob.length,
-    evictions: evic.length,
-    bedbug_reports: bed.length,
-    lead_flags: lead.length,
-  };
   emitData({
     bbl,
     address: canonicalAddress,
@@ -848,8 +882,7 @@ export async function runLookup(
   // ── 10. Respond ──────────────────────────────────────────────────────────────
   return {
     status: 200,
-    body: {
-      kind: 'success',
+    body: successBody({
       bbl,
       address: canonicalAddress,
       borough,
@@ -863,21 +896,20 @@ export async function runLookup(
       questions_to_ask: summary.questions_to_ask,
       listing_notes: summary.listing_notes,
       scraped_listing: scrapedListing,
-      listing_unavailable: listingUnavailable || undefined,
+      listing_unavailable: listingUnavailable,
       landlord,
       fare_check: fareCheck,
       stats,
       value_score: valueScore?.score ?? null,
       value_band: valueScore?.band ?? null,
       value_confidence: valueScore?.confidence ?? null,
-      value_factors: valueScore ? valueScore.factors : [],
+      value_factors: valueScore?.factors ?? null,
       value_explanation: summary.value_explanation || null,
-      partial: partial.length > 0 ? partial : undefined,
+      partial,
       lookup_id: row?.id ?? null,
-      building_url: `/building/${bbl}`,
       bin,
       hpd_building_id: hpdBuildingId,
-    },
+    }),
   };
 }
 

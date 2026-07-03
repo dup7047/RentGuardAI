@@ -117,13 +117,16 @@ export async function generateSummary(
   // the shape and require http(s) source_url instead of trusting a cast, so a
   // malformed entry (or a javascript:/data: URL) never reaches the client.
   const indicators: SummaryIndicator[] = parsed.indicators.filter(
-    (i): i is SummaryIndicator =>
-      !!i &&
-      typeof i === 'object' &&
-      typeof (i as { key?: unknown }).key === 'string' &&
-      typeof (i as { value?: unknown }).value === 'string' &&
-      typeof (i as { source_url?: unknown }).source_url === 'string' &&
-      /^https?:\/\//i.test((i as { source_url: string }).source_url),
+    (i): i is SummaryIndicator => {
+      if (!i || typeof i !== 'object') return false;
+      const o = i as Record<string, unknown>;
+      return (
+        typeof o.key === 'string' &&
+        typeof o.value === 'string' &&
+        typeof o.source_url === 'string' &&
+        /^https?:\/\//i.test(o.source_url)
+      );
+    },
   );
 
   // Tolerate legacy responses that omit sections (forward-compatible)

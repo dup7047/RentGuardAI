@@ -111,6 +111,29 @@ export function LookupForm() {
     return () => document.removeEventListener('mousedown', onDocDown);
   }, [showSuggestions]);
 
+  /** Shared tail of both submit paths: run the streaming lookup, redirect on
+   *  success, otherwise surface the response (and the manual-paste form when
+   *  the listing was blocked). Callers set loading/phase and any state resets
+   *  specific to their entry point before calling. */
+  async function runStreamLookup(request: Parameters<typeof postLookupStream>[0]) {
+    let r: LookupResponse;
+    try {
+      r = await postLookupStream(request, (p) => setPhase(p));
+    } catch {
+      r = NETWORK_FAILURE;
+    }
+    if (r.kind === 'success') {
+      rememberFreshReport(r);
+      router.push(`/building/${r.bbl}?fresh=1`);
+      return;
+    }
+    setLoading(false);
+    setResp(r);
+    if (r.kind === 'listing_blocked') {
+      setShowFallbackPaste(true);
+    }
+  }
+
   async function submit(
     extras: {
       address?: string;
@@ -128,60 +151,27 @@ export function LookupForm() {
     setResp(null);
     setShowFallbackPaste(false);
     setShowSuggestions(false);
-    let r: LookupResponse;
-    try {
-      r = await postLookupStream(
-        {
-          ...(isUrl ? { listingUrl: value } : { address: value }),
-          ...(extras.listingDescription
-            ? { listingDescription: extras.listingDescription }
-            : {}),
-          ...(extras.email ? { email: extras.email } : {}),
-          ...(bblToForward ? { bbl: bblToForward } : {}),
-        },
-        (p) => setPhase(p),
-      );
-    } catch {
-      r = NETWORK_FAILURE;
-    }
-    if (r.kind === 'success') {
-      rememberFreshReport(r);
-      router.push(`/building/${r.bbl}?fresh=1`);
-      return;
-    }
-    setLoading(false);
-    setResp(r);
-    if (r.kind === 'listing_blocked') {
-      setShowFallbackPaste(true);
-    }
+    await runStreamLookup({
+      ...(isUrl ? { listingUrl: value } : { address: value }),
+      ...(extras.listingDescription
+        ? { listingDescription: extras.listingDescription }
+        : {}),
+      ...(extras.email ? { email: extras.email } : {}),
+      ...(bblToForward ? { bbl: bblToForward } : {}),
+    });
   }
 
   async function submitFallback() {
     if (!fallbackAddress.trim()) return;
     setLoading(true);
     setPhase(null);
-    let r: LookupResponse;
-    try {
-      r = await postLookupStream(
-        {
-          listingUrl: input,
-          address: fallbackAddress.trim(),
-          ...(fallbackDescription.trim().length > 0
-            ? { listingDescription: fallbackDescription.trim() }
-            : {}),
-        },
-        (p) => setPhase(p),
-      );
-    } catch {
-      r = NETWORK_FAILURE;
-    }
-    if (r.kind === 'success') {
-      rememberFreshReport(r);
-      router.push(`/building/${r.bbl}?fresh=1`);
-      return;
-    }
-    setLoading(false);
-    setResp(r);
+    await runStreamLookup({
+      listingUrl: input,
+      address: fallbackAddress.trim(),
+      ...(fallbackDescription.trim().length > 0
+        ? { listingDescription: fallbackDescription.trim() }
+        : {}),
+    });
   }
 
   function reset() {

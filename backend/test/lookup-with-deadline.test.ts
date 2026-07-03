@@ -24,17 +24,17 @@ describe('withDeadline', () => {
     expect(r).toEqual({ value: [1, 2], degraded: false });
   });
 
-  it('resolves with the fallback and degraded=true on timeout', async () => {
+  it('resolves with the fallback, degraded=true, and the label on timeout', async () => {
     vi.useFakeTimers();
     const never = new Promise<number[]>(() => {});
-    const p = withDeadline(never, 5_000, []);
+    const p = withDeadline(never, 5_000, [], 'hpd');
     await vi.advanceTimersByTimeAsync(5_000);
-    await expect(p).resolves.toEqual({ value: [], degraded: true });
+    await expect(p).resolves.toEqual({ value: [], degraded: true, label: 'hpd' });
   });
 
-  it('resolves with the fallback and degraded=true when the promise rejects', async () => {
+  it('resolves with the fallback, degraded=true, and the label when the promise rejects', async () => {
     const r = await withDeadline(Promise.reject(new Error('socrata 500')), 1_000, [], 'hpd');
-    expect(r).toEqual({ value: [], degraded: true });
+    expect(r).toEqual({ value: [], degraded: true, label: 'hpd' });
   });
 
   it('logs the dataset label when a promise rejects', async () => {

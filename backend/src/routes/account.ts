@@ -1,22 +1,13 @@
-// /v1/account — account-management endpoints.
+// /v1/account — soft-delete + undo flow.
 //
-// Phase 11.7 ships only the soft-delete + undo flow:
+//   DELETE /v1/account            → set profiles.deletion_requested_at and
+//                                   email a 30-day undo link (purge cron TBD).
+//   POST   /v1/account/undo-delete → verify the JWT, clear the timestamp.
 //
-//   DELETE /v1/account           → mark profiles.deletion_requested_at = NOW(),
-//                                  send a confirmation email with a 30-day
-//                                  undo link. Purge cron lands in 15.1.
-//   POST   /v1/account/undo-delete{token}
-//                                → verify the JWT and clear
-//                                  deletion_requested_at.
-//
-// Stripe subscription cancel is deferred to Phase 5 (when subscriptions
-// actually exist). Auth uses the existing middleware — both routes require
-// a logged-in user, with one exception: the undo route only requires that
-// the JWT in the body is valid for the user it identifies, so a user
-// reading the email on a fresh device can recover without re-signing-in.
-// We still mount it under the authMiddleware'd path so anon abuse hits the
-// shared rate limit. Mismatch between c.get('userId') and the token's sub
-// is rejected.
+// The undo route only requires that the JWT in the body is valid for the
+// user it identifies, so the email link works on a fresh device without
+// re-signing-in; it still sits behind the shared rate limit, and a mismatch
+// between c.get('userId') and the token's sub is rejected.
 
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -127,8 +118,7 @@ accountRoute.delete('/account', async (c) => {
     logger.error({ userId, err: result.error }, 'deletion email send failed');
   }
 
-  // TODO(phase-5): cancel any active Stripe subscription here. Today we
-  // have no Stripe customers in production so the call would be a no-op.
+  // TODO: cancel any active Stripe subscription here once subscriptions exist.
 
   return c.json({ ok: true, deletion_requested_at: new Date().toISOString() });
 });

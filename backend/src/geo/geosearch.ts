@@ -45,6 +45,26 @@ function housenumberDigits(h: string | undefined): string {
   return h.match(/^\d+/)?.[0] ?? '';
 }
 
+function outsideNycResult(rawInput: string): GeocodeResult {
+  const det = tryDetectOutsideNyc(rawInput);
+  return {
+    kind: 'outside_nyc',
+    detected_city: det.city,
+    detected_state: det.state,
+    raw_input: rawInput,
+  };
+}
+
+function matchedResult(bbl: string, feature: GeoFeature, fallbackAddress: string): GeocodeResult {
+  return {
+    kind: 'matched',
+    bbl,
+    address: feature.properties.label ?? fallbackAddress,
+    borough: (feature.properties.borough?.toUpperCase() ?? 'MANHATTAN') as Borough,
+    confidence: feature.properties.confidence ?? 0,
+  };
+}
+
 /**
  * Geocode a user-supplied address string to a BBL using the NYC Planning
  * GeoSearch API. Returns a discriminated union:
@@ -100,15 +120,7 @@ export async function geosearch(input: string): Promise<GeocodeResult> {
   );
   const feats = json.features ?? [];
 
-  if (feats.length === 0) {
-    const det = tryDetectOutsideNyc(trimmed);
-    return {
-      kind: 'outside_nyc',
-      detected_city: det.city,
-      detected_state: det.state,
-      raw_input: trimmed,
-    };
-  }
+  if (feats.length === 0) return outsideNycResult(trimmed);
 
   // Filter to features whose housenumber matches the top result's housenumber
   // (compared by leading digits, so "350" / "350A" / "350B" are siblings but
@@ -137,27 +149,12 @@ export async function geosearch(input: string): Promise<GeocodeResult> {
   }
 
   // No BBL in any result → outside_nyc
-  if (bblCounts.size === 0) {
-    const det = tryDetectOutsideNyc(trimmed);
-    return {
-      kind: 'outside_nyc',
-      detected_city: det.city,
-      detected_state: det.state,
-      raw_input: trimmed,
-    };
-  }
+  if (bblCounts.size === 0) return outsideNycResult(trimmed);
 
   // Single distinct BBL → matched, no question
   if (bblCounts.size === 1) {
     const bbl = bblCounts.keys().next().value as string;
-    const top = bblTopFeature.get(bbl)!;
-    return {
-      kind: 'matched',
-      bbl,
-      address: top.properties.label ?? trimmed,
-      borough: (top.properties.borough?.toUpperCase() ?? 'MANHATTAN') as Borough,
-      confidence: top.properties.confidence ?? 0,
-    };
+    return matchedResult(bbl, bblTopFeature.get(bbl)!, trimmed);
   }
 
   // Multiple distinct BBLs — check if one is dominant (appears strictly more
@@ -166,14 +163,7 @@ export async function geosearch(input: string): Promise<GeocodeResult> {
   const [topBbl, topCount] = sortedBbls[0]!;
   const [, secondCount] = sortedBbls[1] ?? ['', 0];
   if (topCount > secondCount) {
-    const top = bblTopFeature.get(topBbl)!;
-    return {
-      kind: 'matched',
-      bbl: topBbl,
-      address: top.properties.label ?? trimmed,
-      borough: (top.properties.borough?.toUpperCase() ?? 'MANHATTAN') as Borough,
-      confidence: top.properties.confidence ?? 0,
-    };
+    return matchedResult(topBbl, bblTopFeature.get(topBbl)!, trimmed);
   }
 
   // Tie → genuinely ambiguous. Return deduplicated matches.

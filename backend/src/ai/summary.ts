@@ -1,10 +1,7 @@
-// Building lookup AI summary generator.
-// Calls gpt-4o-mini, validates output, logs cost to ai_usage.
-// Does NOT make legal determinations — describes public records only.
-//
-// Note: ai_usage has no anon_token column (schema §1.5 design).
-// For anon lookups both user_id and email are null; cost tracking for
-// anon subjects uses building_lookups.ai_cost_cents via checkCostCap().
+// Building lookup AI summary generator: calls gpt-4o-mini, validates
+// output, logs cost to ai_usage. Describes public records only — never
+// legal determinations. Anon cost tracking rides on
+// building_lookups.ai_cost_cents because ai_usage has no anon_token column.
 
 import { callChat } from './openai-client.js';
 import { SYSTEM_PROMPT, buildUserPrompt, type BuildingPayload } from './prompts/lookup-summary.js';
@@ -46,11 +43,11 @@ export type SummaryQuestion = string;
 export type SummaryListingNote = { snippet: string; note: string };
 
 export type SummaryResult = {
-  /** Phase 4.5: 2-3 sentence narrative of what the listing offers. May be empty for address-only lookups. */
+  /** 2-3 sentence listing narrative. Empty for address-only lookups. */
   listing_summary: string;
-  /** Phase 3.7: ≤220-word renter-facing risk briefing — pattern lede + "At-risk apartments:" bullet list + optional watchlist sentence + closing disclaimer. Contains literal newlines and "- " bullets; render with white-space: pre-line. */
+  /** ≤220-word risk briefing with literal newlines and "- " bullets; render with white-space: pre-line. */
   summary: string;
-  /** Phase 4.5: AI-narrated explanation of the deterministic score. */
+  /** AI-narrated explanation of the deterministic score. */
   score_explanation: string;
   /** Value score explanation narrating the comp data. Empty when no value score was computed. */
   value_explanation: string;
@@ -72,7 +69,7 @@ export async function generateSummary(
   payload: BuildingPayload,
   subject: SummarySubject,
 ): Promise<SummaryResult> {
-  // Phase 3.7b: enforce 24h rolling cost cap before incurring any API cost
+  // Enforce the 24h rolling cost cap before incurring any API cost.
   const cap = await checkCostCap({ type: subject.type, value: subject.value });
   if (!cap.ok) throw new CostCapExceededError(cap.cap_cents, cap.spent_cents);
 
@@ -113,7 +110,23 @@ export async function generateSummary(
   if (typeof parsed.summary !== 'string') throw new MalformedAIResponse('missing summary');
   if (!Array.isArray(parsed.indicators)) throw new MalformedAIResponse('missing indicators');
 
-  // Tolerate legacy responses that omit sections (forward-compatible)
+  // Indicators are model output that the frontend renders as links — enforce
+  // the shape and require http(s) source_url instead of trusting a cast, so a
+  // malformed entry (or a javascript:/data: URL) never reaches the client.
+  const indicators: SummaryIndicator[] = parsed.indicators.filter(
+    (i): i is SummaryIndicator => {
+      if (!i || typeof i !== 'object') return false;
+      const o = i as Record<string, unknown>;
+      return (
+        typeof o.key === 'string' &&
+        typeof o.value === 'string' &&
+        typeof o.source_url === 'string' &&
+        /^https?:\/\//i.test(o.source_url)
+      );
+    },
+  );
+
+  // Tolerate legacy responses that omit newer sections.
   const listing_summary =
     typeof parsed.listing_summary === 'string' ? parsed.listing_summary : '';
   const score_explanation =
@@ -121,10 +134,6 @@ export async function generateSummary(
   const value_explanation =
     typeof parsed.value_explanation === 'string' ? parsed.value_explanation : '';
 
-  // Forward-compatible: accept legacy responses that omit the new sections.
-  // The model SHOULD return both, but tolerate missing fields by defaulting
-  // to empty arrays rather than throwing — older cached prompts or model
-  // glitches shouldn't break the whole lookup.
   const questions_to_ask: SummaryQuestion[] = Array.isArray(parsed.questions_to_ask)
     ? parsed.questions_to_ask.filter((q): q is string => typeof q === 'string' && q.length > 0)
     : [];
@@ -139,10 +148,9 @@ export async function generateSummary(
       )
     : [];
 
-  // If a listingText was supplied, drop notes whose snippet doesn't appear
-  // in it (case-insensitive) — the prompt forbids invented quotes, but we
-  // enforce belt-and-suspenders. Case-insensitive because gpt-4o-mini
-  // normalizes capitalization in quoted snippets ("No broker fee" → "no broker fee").
+  // Drop notes whose snippet doesn't appear in the listing text — the prompt
+  // forbids invented quotes but we enforce it anyway. Case-insensitive
+  // because the model normalizes capitalization in quoted snippets.
   const verifiedListingNotes = payload.listingText
     ? (() => {
         const haystack = payload.listingText!.toLowerCase();
@@ -150,7 +158,6 @@ export async function generateSummary(
       })()
     : [];
 
-  // Pricing: convert token counts to cents
   const inputCents = (res.usage.prompt_tokens * PRICE_INPUT_PER_M) / 10_000;
   const outputCents = (res.usage.completion_tokens * PRICE_OUTPUT_PER_M) / 10_000;
   const cost_cents = Math.max(1, Math.ceil(inputCents + outputCents));
@@ -174,7 +181,7 @@ export async function generateSummary(
     summary: parsed.summary,
     score_explanation,
     value_explanation,
-    indicators: parsed.indicators as SummaryIndicator[],
+    indicators,
     questions_to_ask,
     listing_notes: verifiedListingNotes,
     cost_cents,

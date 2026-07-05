@@ -45,10 +45,9 @@ type SavedBuildingRow = {
   score_band: string | null;
 };
 
-// GET /v1/saved-buildings — list of saved buildings for the current user.
-// Joins `buildings` for address/borough and the latest `building_lookups`
-// row for each BBL (via LATERAL) to surface the most recent score on the
-// dashboard list. Both joins are LEFT — defensively handles missing rows.
+// GET /v1/saved-buildings — joins `buildings` for address/borough and the
+// latest `building_lookups` row (LATERAL) for the most recent score. Both
+// joins LEFT to tolerate missing rows.
 savedBuildingsRoute.get('/saved-buildings', async (c) => {
   const userId = requireAuthedUserId(c);
 
@@ -124,22 +123,17 @@ savedBuildingsRoute.post('/saved-buildings', async (c) => {
   }
   const { bbl } = parsed.data;
 
-  // Self-heal the profiles row before inserting into saved_buildings.
-  // saved_buildings.user_id has a FK to profiles(id), but Supabase signups
-  // only populate auth.users — there's no trigger creating a matching
-  // profiles row. Without this upsert the very first save by a fresh user
-  // fails with `saved_buildings_user_id_fkey` and Render returns a 500.
-  // ON CONFLICT DO NOTHING keeps the call cheap on every subsequent save.
+  // Self-heal the profiles row: Supabase signups only populate auth.users,
+  // so without this upsert a fresh user's first save fails on the
+  // saved_buildings.user_id → profiles(id) FK.
   const userEmail = c.get('userEmail') ?? '';
   await getDb()
     .insert(profiles)
     .values({ id: userId, email: userEmail })
     .onConflictDoNothing({ target: profiles.id });
 
-  // INSERT … ON CONFLICT DO NOTHING RETURNING. When the row already exists
-  // the RETURNING clause is empty, so we follow up with a SELECT to fetch
-  // the original created_at — keeps the response shape uniform regardless
-  // of whether the insert was a fresh save or a no-op.
+  // On conflict RETURNING is empty, so a follow-up SELECT fetches the
+  // original created_at to keep the response shape uniform.
   const inserted = await getDb()
     .insert(savedBuildings)
     .values({ userId, bbl })
@@ -156,8 +150,7 @@ savedBuildingsRoute.post('/saved-buildings', async (c) => {
     createdAt = existing[0]?.createdAt;
   }
   if (!createdAt) {
-    // Defensive — shouldn't happen unless the row was deleted between
-    // INSERT and SELECT. Treat as a fresh save with the current timestamp.
+    // Row deleted between INSERT and SELECT — treat as a fresh save.
     createdAt = new Date();
   }
 

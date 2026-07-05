@@ -1,7 +1,7 @@
 // 24-hour rolling cost caps by subject type.
 // Called by generateSummary() before each AI call.
 // anon_token caps read from building_lookups.ai_cost_cents because
-// ai_usage has no anon_token column (Phase 1.5 schema design).
+// ai_usage has no anon_token column by design.
 
 import { getDb } from '../db/client.js';
 import { aiUsage, buildingLookups } from '../db/schema.js';

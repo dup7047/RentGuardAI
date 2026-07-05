@@ -1,4 +1,4 @@
-// Phase 7: address autocomplete dropdown.
+// Address autocomplete dropdown.
 // Pure presentational — the parent (LookupForm) owns all state and behavior.
 // We render a listbox with one option per suggestion, ARIA-correct so screen
 // readers see the standard combobox pattern.

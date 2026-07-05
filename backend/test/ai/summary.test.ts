@@ -335,6 +335,39 @@ describe('generateSummary', () => {
     expect(result.listing_notes).toEqual([]);
   });
 
+  it('drops malformed indicators and non-http source_url entries', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary:
+                    'Public records summary. Always check the cited records yourself before relying on anything in this summary.',
+                  indicators: [
+                    { key: 'kept', value: '5', source_url: 'https://data.cityofnewyork.us/x' },
+                    { key: 'missing url', value: '1' },
+                    { key: 'js url', value: '2', source_url: 'javascript:alert(1)' },
+                    { key: 'numeric value', value: 3, source_url: 'https://x' },
+                    'not-an-object',
+                    null,
+                  ],
+                }),
+              },
+            },
+          ],
+          usage: { prompt_tokens: 100, completion_tokens: 50 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const result = await generateSummary(BASE_PAYLOAD, SUBJECT);
+    expect(result.indicators).toEqual([
+      { key: 'kept', value: '5', source_url: 'https://data.cityofnewyork.us/x' },
+    ]);
+  });
+
   it('forward-compat: legacy AI response (no new fields) → questions/notes default to []', async () => {
     // Cached/older responses that only return summary+indicators must not crash
     vi.spyOn(global, 'fetch').mockImplementation(async () =>

@@ -16,4 +16,12 @@ describe('drizzle migration journal', () => {
       '0017_value_score_columns',
     );
   });
+
+  it('includes the role-grants migration required by the RLS integration suites', () => {
+    const journal = JSON.parse(readFileSync(JOURNAL_PATH, 'utf8')) as {
+      entries: Array<{ tag: string }>;
+    };
+
+    expect(journal.entries.map((entry) => entry.tag)).toContain('0018_role_grants');
+  });
 });

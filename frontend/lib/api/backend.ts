@@ -46,9 +46,7 @@ export type ScoreFactor = {
   reason: string;
 };
 
-/** Maps the backend's 4-band score onto the design's 3 tone classes
- *  (the prototype CSS only defines `.pill.good`, `.pill.warn`, `.pill.bad`).
- *  `minimal` → good · `moderate`/`elevated` → warn · `high` → bad. */
+/** Maps the 4-band score onto the CSS's 3 tone classes (good/warn/bad). */
 export type ReportTone = 'good' | 'warn' | 'bad';
 export function getReportTone(band: ScoreBand | null | undefined): ReportTone {
   if (band === 'minimal') return 'good';
@@ -132,36 +130,23 @@ export type LookupResponse =
       bbl: string;
       address: string;
       borough: string;
-      /** Phase 4.5: 2-3 sentence narrative of what the listing offers. */
+      /** 2-3 sentence narrative of what the listing offers. */
       listing_summary: string | null;
       summary: string;
-      /** Phase 4.5: AI-narrated explanation of the score. */
+      /** AI-narrated explanation of the score. */
       score_explanation: string | null;
-      /** Phase 4.5: deterministic 0-100 score. */
+      /** Deterministic 0-100 score. */
       score: number | null;
       score_band: ScoreBand | null;
       score_factors: ScoreFactor[];
       indicators: Array<{ key: string; value: string; source_url: string }>;
-      /**
-       * 3–5 specific factual questions the renter should ask the broker /
-       * landlord / HPD before signing. Always non-empty for fresh lookups;
-       * may be [] for older cached entries from before the prompt update.
-       */
+      /** May be [] for cached entries from before the prompt update. */
       questions_to_ask: string[];
-      /**
-       * Verbatim-anchored neutral observations about the listing copy.
-       * Empty when the user did not paste a listing description.
-       */
+      /** Empty when the user did not paste a listing description. */
       listing_notes: Array<{ snippet: string; note: string }>;
-      /**
-       * Phase 4: structured data scraped from the listing URL the user
-       * pasted. Null when the user pasted only an address.
-       */
+      /** Null when the user pasted only an address. */
       scraped_listing: ScrapedListingPublic | null;
-      /**
-       * Apartment Value Score (0-100, higher = better deal). Null for address-only
-       * lookups or when the listing lacks rent / beds.
-       */
+      /** 0-100, higher = better deal. Null without listing rent/beds data. */
       value_score: number | null;
       value_band: ValueBand | null;
       value_confidence: ValueConfidence | null;
@@ -169,12 +154,9 @@ export type LookupResponse =
       /** AI-narrated explanation of the value score citing comp medians. */
       value_explanation: string | null;
       /**
-       * True when the user pasted a listing URL but the scraper was blocked
-       * and we fell back to parsing the address out of the URL slug. The
-       * report still has full public-records coverage but listing-specific
-       * fields (rent, beds, broker fee, listing notes) aren't available.
-       * Frontend should surface this so users know the review is
-       * building-only, not listing-specific.
+       * The scraper was blocked and we fell back to slug-parsing the URL —
+       * public-records coverage is complete but listing-specific fields are
+       * unavailable. Surface so users know the review is building-only.
        */
       listing_unavailable?: boolean;
       landlord: AnyRecord;
@@ -206,7 +188,7 @@ export type LookupResponse =
   | { kind: 'invalid_input'; errors: AnyRecord }
   | { kind: 'server_error'; message: string }
   | { kind: 'not_found' }
-  // Phase 4: listing-fetch error states from the scrape pipeline
+  // Listing-fetch error states from the scrape pipeline
   | { kind: 'listing_blocked'; message: string | null }
   | { kind: 'listing_not_found'; message?: string | null }
   | { kind: 'listing_expired'; message?: string | null }
@@ -221,16 +203,10 @@ const BASE =
   (process.env.NODE_ENV === 'production' ? PROD_BACKEND_URL : DEV_BACKEND_URL);
 
 // ── Retry + cold-start hint ──────────────────────────────────────────────────
-// Render's free tier spins the backend down after ~15 min of idle. First
-// request after spin-down can take 20-30s. Without retry, users hit a 502/503
-// or naked timeout. withRetry handles two things:
-//   1. Exponential backoff for network errors and 5xx (capped at 3 retries).
-//   2. Emits a single 'rentguard:request-slow' on the window when the FIRST
-//      attempt within this call crosses 5s in-flight, and a matching
-//      'rentguard:request-slow-end' when the whole call resolves. The UI
-//      hook (useColdStartHint) counts events as ±1, so emitting more than
-//      once per call would leak a positive counter on retried slow requests.
-// 4xx is never retried — those are client problems, retries won't help.
+// Render's free tier cold-starts in 20-30s, so withRetry backs off on network
+// errors/5xx (never 4xx) and emits ONE 'rentguard:request-slow' +
+// 'rentguard:request-slow-end' pair per call — useColdStartHint counts events
+// as ±1, so a retried slow request must not emit twice.
 
 const RETRY_DELAYS_MS = [1_000, 3_000, 9_000] as const; // total ≤ 13s
 const SLOW_THRESHOLD_MS = 5_000;
@@ -253,9 +229,8 @@ function dispatchSlowEnd(silent: boolean): void {
 }
 
 function isRetryableStatus(status: number): boolean {
-  // 502, 503, 504 = Render proxy / cold-start signals.
-  // 500 is included as well; if the backend is throwing 500s a retry is
-  // cheap and may catch a transient.
+  // 502/503/504 = Render proxy / cold-start; 500 retries are cheap and may
+  // catch a transient.
   return status === 500 || status === 502 || status === 503 || status === 504;
 }
 
@@ -265,13 +240,9 @@ export async function withRetry<T>(
 ): Promise<T> {
   const silent = opts.silent === true;
   let slowTimer: ReturnType<typeof setTimeout> | undefined;
-  // `slowEmitted` gates BOTH the slow dispatch (set inside the timer
-  // callback) and the slow-end dispatch (outer finally). It is set ONCE
-  // per withRetry call and never reset between attempts, so a request
-  // that retries through multiple >5s attempts still produces exactly
-  // one slow + one slow-end pair. Without this guard, attempt 1 firing
-  // slow and attempt 2 firing slow would leak +1 in the consumer's
-  // pending counter.
+  // Set once per call and never reset between attempts, so a request that
+  // retries through multiple >5s attempts still emits exactly one
+  // slow/slow-end pair (see the counter invariant above).
   let slowEmitted = false;
 
   const armSlowTimer = () => {
@@ -335,8 +306,7 @@ export async function fetchWithRetry(
   return withRetry(async () => {
     const res = await fetch(input, init);
     if (!res.ok && isRetryableStatus(res.status)) {
-      // Trigger retry by throwing — the body is preserved on the error for
-      // diagnostics, though most retryable 5xx have empty bodies anyway.
+      // Throwing triggers the retry; keep the body for diagnostics.
       let body: unknown = null;
       try {
         body = await res.clone().json();
@@ -349,16 +319,13 @@ export async function fetchWithRetry(
   }, retry);
 }
 
-// Exported so callers and tests can prove the same auth header is built for
-// every request. Internal callers below still use it via the closure.
 export async function authHeader(): Promise<HeadersInit> {
   const { getCurrentSession } = await import('@/lib/auth/session');
   const session = await getCurrentSession();
-  // Diagnostic: log whether a token is being sent. Pair with the backend's
-  // `jwt verify failed` log in Render — `tokenSent: true` here + that log on
-  // the backend = env mismatch. `tokenSent: false` = client-side session
-  // missing despite the user being signed in.
-  if (typeof window !== 'undefined') {
+  // Dev-only diagnostic: pairs with the backend's `jwt verify failed` log —
+  // tokenSent:true + that log = env mismatch; tokenSent:false = client
+  // session missing despite sign-in.
+  if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
     console.warn('[authHeader] building request', { tokenSent: Boolean(session) });
   }
   return session ? { Authorization: `Bearer ${session.access_token}` } : {};
@@ -382,15 +349,11 @@ export async function postLookup(input: {
 }
 
 /**
- * Phase 6: streaming variant of postLookup. Reads NDJSON phase events from
- * the backend so the Loading interstitial can advance step-by-step in sync
- * with what the backend is actually doing.
- *
- * Each phase line: {"event":"phase","name":"parse"|"geo"|"hpd"|"dob"|"owner"|"ai"}
- * Final line:      {"event":"complete","status":number,"response":<LookupResponse>}
- *
- * Phase events fire `onPhase(name)`. The function resolves with the final
- * response. Throws if the stream ends without a complete event (network drop).
+ * Streaming variant of postLookup — NDJSON, one JSON object per line:
+ *   {"event":"phase","name":"parse"|"geo"|"hpd"|"dob"|"owner"|"ai"}
+ *   {"event":"complete","status":number,"response":<LookupResponse>}
+ * Resolves with the final response; throws if the stream ends without a
+ * complete event (network drop).
  */
 export type LookupPhase = 'parse' | 'geo' | 'hpd' | 'dob' | 'owner' | 'ai';
 
@@ -400,18 +363,15 @@ export async function postLookupStream(
     listingUrl?: string;
     listingDescription?: string;
     email?: string;
-    /** Optional pre-resolved BBL from the autocomplete suggestion the user
-     *  picked. Lets the backend skip the GeoSearch round-trip on the
-     *  type-then-pick flow. Drop when the user edits the input. */
+    /** BBL from the picked autocomplete suggestion — lets the backend skip
+     *  GeoSearch. Drop when the user edits the input. */
     bbl?: string;
   },
   onPhase: (name: LookupPhase) => void,
 ): Promise<LookupResponse> {
   const auth = await authHeader();
-  // Retry only the initial connect; mid-stream failures are not safe to
-  // restart (we'd lose any progressive events already consumed). The retry
-  // helper unwinds via FetchHttpError on 5xx; pre-stream envelope errors
-  // (e.g. validation_failed → 400) flow through unchanged.
+  // Retry only the initial connect — mid-stream failures are not safe to
+  // restart once progressive events have been consumed.
   const res = await fetchWithRetry(`${BASE}/v1/lookup/stream`, {
     method: 'POST',
     credentials: 'include',
@@ -424,8 +384,6 @@ export async function postLookupStream(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
-  // Drain the stream, parsing one JSON object per newline. Multi-line chunks
-  // and lines split across chunks are both handled by the buffer.
   while (true) {
     const { value, done } = await reader.read();
     if (value) buf += decoder.decode(value, { stream: true });
@@ -443,9 +401,7 @@ export async function postLookupStream(
       } else if (msg.event === 'complete') {
         return msg.response;
       }
-      // 'data_ready' is a progressive-payload event for future UI use; the
-      // current loading screen drives off `onPhase` only, so we ignore it
-      // here. Adding an `onDataReady` callback later is forward-compatible.
+      // 'data_ready' (progressive payload) is ignored until the UI needs it.
     }
     if (done) break;
   }
@@ -458,8 +414,7 @@ export async function postAffiliateClick(input: {
   proceeded: boolean;
 }): Promise<void> {
   const auth = await authHeader();
-  // Fire-and-forget telemetry — silent so a slow logging call doesn't flash
-  // the "Warming up…" hint while the user is mid-flow.
+  // Silent so a slow telemetry call doesn't flash the "Warming up…" hint.
   await fetchWithRetry(
     `${BASE}/v1/affiliate/click`,
     {
@@ -485,13 +440,9 @@ export async function getBuildingByBbl(
   bbl: string,
   opts: { noStore?: boolean } = {},
 ): Promise<LookupResponse> {
-  // Default: 1h revalidation gives the backend a chance to surface backfilled
-  // data without thrashing the cache. The page-level `revalidate = 86400` in
-  // app/building/[bbl]/page.tsx is the upper bound.
-  //
-  // When `noStore: true` (e.g. right after a fresh lookup with ?fresh=1),
-  // bypass the data cache entirely so users see their freshly-generated
-  // score / listing_summary / scraped_listing without waiting for revalidation.
+  // 1h revalidation by default (page-level revalidate=86400 is the upper
+  // bound); noStore bypasses the cache right after a fresh lookup so the
+  // user sees their just-generated report.
   const init: RequestInit = {
     credentials: 'include',
     ...(opts.noStore
@@ -524,10 +475,7 @@ export async function getBuildingByBbl(
   }
 }
 
-// ── Saved buildings ────────────────────────────────────────────────────────
-// All four endpoints require an authed user. The backend returns 401 when
-// the Bearer token is missing or invalid; callers should surface that as a
-// "please sign in" UX (the existing SignInModal already handles it).
+// ── Saved buildings — all endpoints require auth; 401 → SignInModal UX ─────
 
 export type SavedBuilding = {
   bbl: string;
@@ -547,9 +495,7 @@ export class SavedBuildingsAuthError extends Error {
 
 async function savedBuildingsFetch(path: string, init: RequestInit): Promise<Response> {
   const auth = await authHeader();
-  // Saved-buildings calls run in the dashboard — silent so the cold-start
-  // hint only fires on the user-initiated lookup flow, not on ambient list
-  // refreshes that happen on page-load.
+  // Silent: the cold-start hint should only fire on user-initiated lookups.
   const res = await fetchWithRetry(
     `${BASE}${path}`,
     {

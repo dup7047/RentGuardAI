@@ -74,7 +74,7 @@ export default function HowWeMakeMoneyPage() {
       <div className="container" style={{ paddingBottom: 40 }}>
         <div className="card panel">
           <h2>Affiliate disclosure</h2>
-          {/* Phase 11.6: this is the long-form transparency language from
+          {/* Long-form transparency language from
               disclaimer.md §4.2. The byte-for-byte source lives in
               docs/legal/disclaimers.md under the affiliateLongForm anchor
               and is regenerated into disclaimers.json by

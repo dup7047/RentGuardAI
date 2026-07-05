@@ -1,5 +1,5 @@
 // POST /v1/affiliate/click — records affiliate modal + click-through events.
-// Used for Phase 4 (lease review) affiliate partnerships.
+// Used for lease-review affiliate partnerships.
 
 import { Hono } from 'hono';
 import { z } from 'zod';

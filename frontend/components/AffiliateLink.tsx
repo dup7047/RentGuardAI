@@ -7,10 +7,10 @@
 // page audit can guarantee byte-for-byte alignment with the attorney-approved
 // disclaimer.
 //
-// Phase 11.6: feature-flagged behind NEXT_PUBLIC_AFFILIATE_ENABLED. When the
+// Feature-flagged behind NEXT_PUBLIC_AFFILIATE_ENABLED. When the
 // flag is off (v7 default), the CTA renders as a non-interactive "Coming
 // soon" pill — keeps the /how-we-make-money page layout intact without
-// actually opening partner traffic. The flag flips on in Phase 14.10.
+// actually opening partner traffic.
 
 import { useEffect, useState } from 'react';
 import { DISCLAIMERS } from '@/lib/legal/disclaimers';

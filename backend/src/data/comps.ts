@@ -45,9 +45,8 @@ function baselineForBoroughBeds(borough: Borough, bedrooms: number): number {
 }
 
 // ── Scraped-listings refinement ──────────────────────────────────────────────
-// Pulls recent ai_scraped_listing snapshots from building_lookups. These are
-// ScrapedListing JSON blobs snapshotted at lookup time (Phase 4.5 follow-up).
-// We filter to the same borough + bedroom count from the last 90 days.
+// Pulls recent ai_scraped_listing snapshots from building_lookups, filtered
+// to the same borough + bedroom count from the last 90 days.
 //
 // Drizzle doesn't have a native median aggregate; we use raw SQL via drizzle's
 // sql template tag so we stay in the existing query infrastructure.

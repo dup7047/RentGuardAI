@@ -27,7 +27,7 @@ const EP = ENDPOINTS.find((e) => e.key === 'hpd_contacts')!;
 /** Fetch contacts for a given HPD registration ID (not BBL). */
 export async function getHpdContacts(registrationId: string): Promise<HpdContact[]> {
   // Contacts are not cached per-BBL because they're keyed by registrationid.
-  // The landlord lookup (Phase 3.4) calls this after fetching a registrationid
+  // The landlord lookup calls this after fetching a registrationid
   // and caches the result at the landlord level.
   return socrataQuery<HpdContact>(EP.resourceId, {
     $where: `registrationid='${registrationId}'`,

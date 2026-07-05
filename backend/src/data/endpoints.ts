@@ -1,7 +1,7 @@
 // Canonical registry of NYC Open Data Socrata endpoints.
 // This is the single source of truth consumed by:
-//   - scripts/verify-data-sources.ts (Phase 0.3 verifier)
-//   - src/data/datasets/* (Phase 3 typed dataset wrappers)
+//   - scripts/verify-data-sources.ts
+//   - src/data/datasets/* (typed dataset wrappers)
 
 import type { DatasetKey } from './types.js';
 

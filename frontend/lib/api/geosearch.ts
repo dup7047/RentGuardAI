@@ -1,4 +1,4 @@
-// Phase 7: address autocomplete client.
+// Address autocomplete client.
 // Hits the NYC Planning Labs Geosearch autocomplete endpoint directly from
 // the browser. The endpoint is open-CORS, requires no auth, and is the
 // same provider the backend uses for /v2/search during full lookups —

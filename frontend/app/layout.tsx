@@ -74,7 +74,7 @@ const siteJsonLd = [
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-// Phase 11.8: Cloudflare Web Analytics. Cookieless, no consent banner
+// Cloudflare Web Analytics. Cookieless, no consent banner
 // needed. Token is set in Vercel project env vars (NEXT_PUBLIC_CF_ANALYTICS_TOKEN);
 // when missing, the script is skipped so dev / preview builds don't ship a
 // broken beacon. Dashboard URL is recorded in docs/runbook/analytics.md.

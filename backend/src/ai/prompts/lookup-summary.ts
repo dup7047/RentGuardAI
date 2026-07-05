@@ -10,17 +10,17 @@
 // user prompt built by buildUserPrompt below.
 //
 // Output shape (validated in summary.ts):
-//   listing_summary    — 2-3 sentence narrative of what the listing offers (Phase 4.5)
+//   listing_summary    — 2-3 sentence narrative of what the listing offers
 //   summary            — ≤220-word renter-facing risk briefing: 1-2 sentence pattern lede,
 //                         then "At-risk apartments:" + 2-5 unit bullets, optional watchlist
 //                         sentence, closing disclaimer. Newlines and "- " bullets are
 //                         literal — frontend renders with white-space: pre-line.
-//   score_explanation  — 1-3 sentences narrating the deterministic score (Phase 4.5)
+//   score_explanation  — 1-3 sentences narrating the deterministic score
 //   indicators         — 3-6 cited counts with source_url
 //   questions_to_ask   — 3-5 concrete factual questions tied to the records
 //   listing_notes      — neutral observations on listing copy (only when provided)
 //
-// Phase 4.5: a deterministic 0-100 score is computed in code (NOT by the AI)
+// A deterministic 0-100 score is computed in code (NOT by the AI)
 // and handed to the AI as input. The AI's job is to NARRATE the score in
 // `score_explanation` referencing the top factors — not to invent its own.
 // The score itself is the recommendation; the AI just explains the math.
@@ -190,13 +190,13 @@ export type BuildingPayload = {
    */
   fareFlag?: FareFlag | null;
   /**
-   * Phase 4: structured listing data scraped from the URL the user pasted.
+   * Structured listing data scraped from the URL the user pasted.
    * Lets the AI question concrete numbers (price, lease term, broker fee,
    * amenities) instead of speculating.
    */
   scrapedListing?: ScrapedListingForPrompt | null;
   /**
-   * Phase 4.5: deterministic score (0-100) computed in src/scoring/score.ts.
+   * Deterministic score (0-100) computed in src/scoring/score.ts.
    * The AI does NOT pick this — it's handed in. The AI's score_explanation
    * narrates these factors but cannot contradict the score.
    */

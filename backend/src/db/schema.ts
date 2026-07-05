@@ -48,8 +48,8 @@ export const profiles = pgTable('profiles', {
   id: uuid('id').primaryKey(),
   email: text('email').notNull(),
   stripeCustomerId: text('stripe_customer_id'),
-  // Phase 8.6 sets this when the user requests deletion; a cron purges
-  // 90 days later (Privacy Policy §6.1).
+  // Set when the user requests deletion; a cron purges 90 days later
+  // (Privacy Policy §6.1).
   deletionRequestedAt: timestamp('deletion_requested_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -76,21 +76,21 @@ export const buildingLookups = pgTable('building_lookups', {
   addressInput: text('address_input').notNull(),
   buildingBbl: text('building_bbl'),
   aiSummary: text('ai_summary'),
-  /** SummaryQuestion[] — 3-5 specific questions tied to records (Phase 3.7 follow-up) */
+  /** SummaryQuestion[] — 3-5 specific questions tied to records */
   aiQuestions: jsonb('ai_questions'),
-  /** SummaryListingNote[] — verbatim-anchored notes on listing copy (Phase 3.7 follow-up) */
+  /** SummaryListingNote[] — verbatim-anchored notes on listing copy */
   aiListingNotes: jsonb('ai_listing_notes'),
-  /** Phase 4.5: 2-3 sentence narrative of what the listing offers */
+  /** 2-3 sentence narrative of what the listing offers */
   aiListingSummary: text('ai_listing_summary'),
-  /** Phase 4.5: AI's explanation of the deterministic score */
+  /** AI's explanation of the deterministic score */
   aiScoreExplanation: text('ai_score_explanation'),
-  /** Phase 4.5: deterministic 0-100 score */
+  /** Deterministic 0-100 score */
   aiScore: integer('ai_score'),
-  /** Phase 4.5: band derived from ai_score */
+  /** Band derived from ai_score */
   aiScoreBand: text('ai_score_band'),
-  /** Phase 4.5: ScoreFactor[] from src/scoring/score.ts */
+  /** ScoreFactor[] from src/scoring/score.ts */
   aiScoreFactors: jsonb('ai_score_factors'),
-  /** Phase 4.5 follow-up: ScrapedListing snapshot so SEO route returns it on cache hits */
+  /** ScrapedListing snapshot so the SEO route can return it on cache hits */
   aiScrapedListing: jsonb('ai_scraped_listing'),
   /** Apartment Value Score — deterministic 0-100 (higher = better deal) */
   aiValueScore: integer('ai_value_score'),
@@ -119,28 +119,26 @@ export const savedBuildings = pgTable('saved_buildings', {
 });
 
 // Public reference cache: one row per NYC building keyed by BBL
-// (Borough/Block/Lot). Hydrated by the Phase 3 NYC Open Data clients;
-// a 24-hour cache window is enforced in code, not the schema.
-// raw_data holds the latest API payload so future fields can be added
-// without requiring a re-fetch.
+// (Borough/Block/Lot). The 24-hour cache window is enforced in code.
+// raw_data holds the latest API payloads so fields can be added without
+// a re-fetch.
 export const buildings = pgTable('buildings', {
   bbl: text('bbl').primaryKey(),
   address: text('address').notNull(),
   borough: text('borough').notNull(),
   lastFetchedAt: timestamp('last_fetched_at', { withTimezone: true }).defaultNow().notNull(),
   rawData: jsonb('raw_data').notNull().default({}),
-  // Phase 3.4: FK to the registered owner in the landlords cache.
+  // FK to the registered owner in the landlords cache.
   registeredOwnerLandlordId: uuid('registered_owner_landlord_id').references(
     () => landlords.id,
     { onDelete: 'set null' },
   ),
 });
 
-// Public reference cache: registered owner per HPD building registration.
-// Phase 3.4 fills this in; Phase 3.5 sets watchlist_rank from the Public
-// Advocate Worst Landlord Watchlist. Match keys (normalized owner name)
-// are derived in code, not stored as a unique index, so name variants
-// can converge as the matching heuristic improves.
+// Public reference cache: registered owner per HPD building registration;
+// watchlist_rank comes from the Public Advocate Worst Landlord Watchlist.
+// Match keys (normalized owner name) are derived in code, not a unique
+// index, so name variants can converge as the heuristic improves.
 export const landlords = pgTable('landlords', {
   id: uuid('id').primaryKey().defaultRandom(),
   registeredOwnerName: text('registered_owner_name').notNull(),
@@ -149,10 +147,9 @@ export const landlords = pgTable('landlords', {
   lastFetchedAt: timestamp('last_fetched_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-// Stripe subscription record: one row per Search Pass subscription.
-// Written by the Stripe webhook handler (Phase 4.5). user_id FK →
-// auth.users is added in the security migration so Drizzle doesn't
-// manage Supabase's auth schema.
+// One row per Search Pass subscription, written by the Stripe webhook
+// handler. user_id FK → auth.users is added in the security migration so
+// Drizzle doesn't manage Supabase's auth schema.
 export const subscriptions = pgTable('subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull(),
@@ -178,8 +175,8 @@ export const affiliateClicks = pgTable('affiliate_clicks', {
   commissionAmountCents: integer('commission_amount_cents'),
 });
 
-// One row per AI model call. Feeds the Phase 3.7b cost-guardrail system
-// and the founder's monthly cost review in Supabase Studio.
+// One row per AI model call. Feeds the cost-guardrail system and the
+// monthly cost review.
 export const aiUsage = pgTable('ai_usage', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id'),
@@ -202,9 +199,8 @@ export const nonNycWaitlist = pgTable('non_nyc_waitlist', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-// Stripe refund record. Populated by the Phase 4.6b refund-eligibility
-// logic. user_id is nulled on account deletion (Privacy Policy §6.1) but
-// the row is retained for 7 years per payment-record retention rules.
+// Stripe refund record. user_id is nulled on account deletion (Privacy
+// Policy §6.1) but the row is kept 7 years per payment-record retention.
 // lease_review_id and subscription_id are nullable so either flow can
 // produce a refund independently.
 export const refunds = pgTable('refunds', {
@@ -219,8 +215,8 @@ export const refunds = pgTable('refunds', {
 });
 
 // One row per lease review attempt. PDF + extracted_text are nullable so
-// the 90-day purge cron (Phase 8.7) can drop them while keeping the
-// structured ai_report for the user's history.
+// the 90-day purge cron can drop them while keeping the structured
+// ai_report for the user's history.
 export const leaseReviews = pgTable('lease_reviews', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id'),
@@ -238,8 +234,8 @@ export const leaseReviews = pgTable('lease_reviews', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-// Phase 4: per-URL cache for scraped NYC listings. Service-role-only.
-// Keyed by canonical URL (tracking params stripped). 7-day TTL on `data`.
+// Per-URL cache for scraped listings. Service-role-only. Keyed by
+// canonical URL (tracking params stripped). 7-day TTL on `data`.
 // `raw_html_gz` is debug-only and dropped after 7d by a future cron.
 export const scrapedListings = pgTable('scraped_listings', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -249,18 +245,15 @@ export const scrapedListings = pgTable('scraped_listings', {
   fetchedAt: timestamp('fetched_at', { withTimezone: true }).defaultNow().notNull(),
   fetchMethod: text('fetch_method').notNull(),
   fetchCostCredits: integer('fetch_cost_credits').default(0),
-  // bytea is stored as Buffer in node-postgres — Drizzle has no first-class
-  // bytea type; we treat it as opaque and access via raw pool.query when needed.
-  // For schema generation purposes, declaring it as text would be wrong; use
-  // a custom column. Until then we omit it from the Drizzle model — cache.ts
-  // uses raw pool.query directly so this is fine.
+  // raw_html_gz (bytea) is intentionally absent — Drizzle lacks a bytea
+  // type, so cache.ts accesses it via raw pool.query.
   data: jsonb('data').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-// Phase 3.7b: rows inserted by aggregate_costs() pg function when a subject
-// exceeds the $5/30-day cumulative threshold. Service-role-only (RLS enabled,
-// no policies). pg_cron fires aggregate_costs() daily at 04:00 UTC on cloud.
+// Rows inserted by the aggregate_costs() pg function when a subject exceeds
+// the $5/30-day threshold. Service-role-only; pg_cron fires it daily at
+// 04:00 UTC on cloud.
 export const costAlerts = pgTable('cost_alerts', {
   id: uuid('id').primaryKey().defaultRandom(),
   subjectType: text('subject_type').notNull(),

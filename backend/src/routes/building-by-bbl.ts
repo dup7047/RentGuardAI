@@ -68,9 +68,8 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
   const [b] = await getDb().select().from(buildings).where(eq(buildings.bbl, bbl)).limit(1);
   if (!b) throw new AppError('not_found', 'No building found for that BBL.');
 
-  // Prefer the most recent AI output already generated for this building.
-  // Also pull the new questions/listing_notes columns (Phase 3.7 follow-up)
-  // so cached pages get the full structured response, not just the summary text.
+  // Prefer the most recent AI output already generated for this building,
+  // including the structured columns, not just the summary text.
   const [latest] = await getDb()
     .select({
       summary: buildingLookups.aiSummary,
@@ -229,7 +228,7 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
     indicators,
     questions_to_ask,
     listing_notes,
-    // Phase 4.5 follow-up: hydrate from the snapshotted column when present
+    // Hydrated from the snapshotted column when present.
     scraped_listing: latest?.scrapedListing ?? null,
     value_score: latest?.valueScore ?? null,
     value_band: latest?.valueBand ?? null,

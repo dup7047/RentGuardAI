@@ -99,10 +99,10 @@ export type DeleteAccountResult =
   | { ok: true; deletion_requested_at: string }
   | { ok: false; reason: 'auth' | 'error' };
 
-// Phase 11.7: marks the authed user for deletion via DELETE /v1/account.
+// Marks the authed user for deletion via DELETE /v1/account.
 // The backend stamps profiles.deletion_requested_at and emails a 30-day
 // undo link; this server action only forwards the call and surfaces the
-// result. The purge cron lands in Phase 15.1.
+// result.
 export async function deleteAccountAction(): Promise<DeleteAccountResult> {
   const token = await getAccessToken();
   if (!token) return { ok: false, reason: 'auth' };
@@ -126,7 +126,7 @@ export async function deleteAccountAction(): Promise<DeleteAccountResult> {
 
 export type UndoDeleteResult = { ok: true } | { ok: false; reason: 'invalid_token' | 'error' };
 
-// Phase 11.7: clears profiles.deletion_requested_at given a valid undo JWT.
+// Clears profiles.deletion_requested_at given a valid undo JWT.
 // Used by /account/undo-delete page (no auth required — possession of the
 // signed token is the authorization).
 export async function undoDeleteAction(token: string): Promise<UndoDeleteResult> {

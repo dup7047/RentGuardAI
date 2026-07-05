@@ -1,17 +1,7 @@
-// 6-step animated loading interstitial. Shown by LookupForm while the
-// /v1/lookup/stream POST is in flight.
-//
-// Phase 6.1: the visible animation is decoupled from the raw backend
-// event stream. We track the parent-supplied `phase` as a TARGET (where
-// the backend says we are), and advance the visible step toward it with
-// a minimum dwell time per step. This way:
-//   - cache-hit lookups (5 events in 100 ms) don't flash through;
-//     each visible step lingers ~700 ms so the user sees progress
-//   - long phases (e.g., scrape, AI) just sit on the active step with
-//     the spinner, exactly as before
-//
-// If `phase` is omitted/undefined, the component falls back to the
-// original self-paced timer (drop-in compatible).
+// 6-step loading interstitial shown while /v1/lookup/stream is in flight.
+// The parent-supplied `phase` is a TARGET; the visible step advances toward
+// it with a minimum dwell so cache-hit lookups (5 events in 100ms) don't
+// flash through. Without `phase`, falls back to a self-paced timer.
 
 'use client';
 
@@ -39,8 +29,7 @@ const MIN_DWELL_MS = 700;
 export function Loading({ phase }: Props = {}) {
   const controlled = phase !== undefined;
 
-  // displayIdx is the step currently visible to the user. It only ever
-  // moves forward, gated by min dwell time.
+  // The visible step — only ever moves forward, gated by min dwell time.
   const [displayIdx, setDisplayIdx] = useState(0);
   const lastAdvanceRef = useRef<number>(Date.now());
 
@@ -52,8 +41,6 @@ export function Loading({ phase }: Props = {}) {
     return i < 0 ? 0 : i;
   }, [controlled, phase]);
 
-  // Controlled mode: advance displayIdx toward targetIdx, one step at a time,
-  // with minimum dwell between transitions.
   useEffect(() => {
     if (!controlled) return;
     if (displayIdx >= targetIdx) return;
@@ -67,7 +54,7 @@ export function Loading({ phase }: Props = {}) {
     return () => clearTimeout(t);
   }, [controlled, displayIdx, targetIdx]);
 
-  // Uncontrolled mode: original self-paced timer.
+  // Uncontrolled: self-paced timer.
   useEffect(() => {
     if (controlled) return;
     if (displayIdx >= STEPS.length) return;
@@ -76,12 +63,9 @@ export function Loading({ phase }: Props = {}) {
     return () => clearTimeout(t);
   }, [controlled, displayIdx]);
 
-  // Cold-start hint — true while at least one in-flight request has crossed
-  // the 5s threshold. Hooked up to fetchWithRetry in lib/api/backend.ts.
   const coldStart = useColdStartHint();
 
-  // Elapsed-seconds counter — shown under the subtitle so impatient users
-  // have a sense of progress on cold starts (Render can take 25–35 s).
+  // Elapsed-seconds counter — gives a sense of progress on 25-35s cold starts.
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const start = Date.now();
@@ -91,14 +75,11 @@ export function Loading({ phase }: Props = {}) {
     return () => clearInterval(t);
   }, []);
 
-  // Overrun (uncontrolled timer reached the end before parent unmounted):
-  // pin the bar at 100 % and keep step 5 active.
+  // Uncontrolled timer finished before the parent unmounted: pin at 100%.
   const overrun = !controlled && displayIdx >= STEPS.length;
   const activeIdx = overrun ? STEPS.length - 1 : displayIdx;
 
-  // Progress percent. In controlled mode, weight the bar so `ai` reads 100 %.
-  // In uncontrolled mode, keep the original formula so the existing visual
-  // is unchanged.
+  // Controlled mode weights the bar so `ai` reads 100%.
   const pct = controlled
     ? Math.min(100, ((activeIdx + 1) / STEPS.length) * 100)
     : overrun

@@ -1,7 +1,6 @@
-// Building risk report — Phase 5 visual rebrand.
-// Layout: breadcrumb → 2-col header (left address card + actions, right
-// gauge + score band) → tabs (only Overview is real) → CTA strip.
-// Used by both /building/[bbl] (ISR) and the post-lookup redirect.
+// Building risk report. Layout: breadcrumb → 2-col header (address card +
+// gauges) → tabs → CTA strip. Used by /building/[bbl] and the post-lookup
+// redirect.
 
 'use client';
 
@@ -87,9 +86,7 @@ export function BuildingReport({ data: serverData }: { data: SuccessData }) {
   const [tab, setTab] = useState<Tab>('overview');
   const [modal, setModal] = useState<null | { kind: 'save' | 'gate'; reason: SignInReason } | { kind: 'share' } | { kind: 'maintenance-info' } | { kind: 'value-info' }>(null);
   const [toast, setToast] = useState<string | null>(null);
-  // Saved-building state. `null` means "haven't checked yet" — render the
-  // default unsaved label until we know. After checking, true/false drive
-  // the button label.
+  // isSaved: null = not checked yet; render the unsaved label until we know.
   const [isAuthed, setIsAuthed] = useState<boolean>(false);
   const [isSaved, setIsSaved] = useState<boolean | null>(null);
   const [saveInFlight, setSaveInFlight] = useState<boolean>(false);
@@ -118,17 +115,11 @@ export function BuildingReport({ data: serverData }: { data: SuccessData }) {
     }
   }, [serverData]);
 
-  // On mount + when bbl changes, ask the server whether this BBL is already
-  // saved. The server action reads the session via @/lib/supabase/server
-  // (raw HTTP cookies) — that's the path that survives Safari's chunked-
-  // cookie parsing bug, which is what was making the browser-client
-  // getSession() in the old flow return null and force the modal open.
-  //
-  // We still subscribe to onAuthStateChange so a sign-in that lands AFTER
-  // mount (e.g. completing the sign-in flow in another tab) re-fetches the
-  // saved-state. Filter to SIGNED_IN / SIGNED_OUT only — INITIAL_SESSION
-  // fires immediately (we already do that work in the explicit call below)
-  // and TOKEN_REFRESHED fires hourly (would silently spam the server action).
+  // Saved-state is fetched via a server action (raw HTTP cookies) because
+  // the browser-client getSession() path breaks on Safari's chunked-cookie
+  // parsing. onAuthStateChange covers sign-ins landing after mount; filtered
+  // to SIGNED_IN/SIGNED_OUT because INITIAL_SESSION duplicates the explicit
+  // call and TOKEN_REFRESHED fires hourly.
   useEffect(() => {
     let cancelled = false;
 
@@ -153,11 +144,8 @@ export function BuildingReport({ data: serverData }: { data: SuccessData }) {
 
     void refreshSavedState();
 
-    // createClient() throws if Supabase env vars are missing (e.g. in unit
-    // tests that don't mock the client). The save flow already degrades to
-    // anon in that case via the server action above; the subscription is
-    // purely additive, so swallow the construction error and skip
-    // subscribing rather than crashing the whole report.
+    // createClient() throws when Supabase env vars are missing (unit tests);
+    // the subscription is additive, so skip it rather than crash the report.
     let unsubscribe: (() => void) | null = null;
     try {
       const supabase = createClient();
@@ -171,8 +159,7 @@ export function BuildingReport({ data: serverData }: { data: SuccessData }) {
       });
       unsubscribe = () => sub.data.subscription.unsubscribe();
     } catch {
-      // No subscription — the explicit getSavedBuildingStateAction above
-      // still runs.
+      // No subscription — the explicit refresh above still runs.
     }
 
     return () => {
@@ -212,10 +199,9 @@ export function BuildingReport({ data: serverData }: { data: SuccessData }) {
 
   async function handleSave() {
     if (saveInFlight) return; // debounce double-clicks
-    // Optimistic toggle. The server action is the source of truth for auth
-    // state — if it returns `unauthorized` we revert and open the modal.
-    // No client-side getSession() check; that path was unreliable on Safari
-    // (see the mount effect's comment).
+    // Optimistic toggle; revert and open the modal if the server action says
+    // unauthorized. No client-side getSession() — unreliable on Safari (see
+    // the mount effect).
     const wasSaved = isSaved === true;
     setIsSaved(!wasSaved);
     setSaveInFlight(true);

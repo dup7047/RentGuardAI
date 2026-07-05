@@ -22,14 +22,9 @@ export async function getCached(bbl: string, key: DatasetKey): Promise<unknown[]
 }
 
 /**
- * Single-fetch variant — returns the entire raw_data row for a BBL with one
- * query so callers can derive multiple dataset slices without re-reading.
- *
- * Pair with `readCachedSlice` to extract individual datasets while honoring
- * the same TTL semantics as `getCached`.
- *
- * Returns null when the row doesn't exist; returns the parsed row otherwise
- * (even if no datasets are cached yet — slice extraction handles that).
+ * Returns the entire raw_data row for a BBL in one query; pair with
+ * `readCachedSlice` to extract per-dataset slices with the same TTL
+ * semantics as `getCached`. Null when the row doesn't exist.
  */
 export async function getCachedBatch(bbl: string): Promise<CachedData | null> {
   const pool = getPool();

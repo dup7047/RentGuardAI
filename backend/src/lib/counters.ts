@@ -1,7 +1,7 @@
 // Lookup usage counters.
 // anon: counted via building_lookups rows (no email).
 // email: counted via email_lookup_counters; resets every 30 days.
-// user_id (logged-in): unlimited (Phase 3 free tier; paid limits in Phase 4).
+// user_id (logged-in): unlimited on the free tier.
 
 import { getDb } from '../db/client.js';
 import { emailLookupCounters, buildingLookups } from '../db/schema.js';

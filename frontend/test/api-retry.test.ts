@@ -1,7 +1,8 @@
-// Phase 11.4: withRetry + fetchWithRetry from lib/api/backend.ts.
+// withRetry + fetchWithRetry from lib/api/backend.ts.
 // Validates exponential backoff and the cold-start event dispatch.
 //
-// Retry delays are 1s, 3s, 9s. Use fake timers to keep the test fast.
+// Retry delays are 1s, 3s, 9s, 15s (~28s total, sized to outlast a Render
+// cold start). Use fake timers to keep the test fast.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -54,6 +55,24 @@ describe('withRetry', () => {
     const fn = vi.fn().mockRejectedValue(new FetchHttpError(400, null));
     await expect(withRetry(fn)).rejects.toBeInstanceOf(FetchHttpError);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps retrying through a ~28s window so cold starts can complete', async () => {
+    // Regression: with only 13s of backoff, the first lookup after a Render
+    // free-tier idle period exhausted retries while the server was still
+    // waking (20-35s) and surfaced a server-error banner.
+    const fn = vi
+      .fn()
+      .mockRejectedValueOnce(new FetchHttpError(503, null))
+      .mockRejectedValueOnce(new FetchHttpError(503, null))
+      .mockRejectedValueOnce(new FetchHttpError(502, null))
+      .mockRejectedValueOnce(new FetchHttpError(502, null))
+      .mockResolvedValueOnce('awake');
+    const p = withRetry(fn);
+    // 1s + 3s + 9s + 15s = 28s of backoff before the 5th attempt.
+    await vi.advanceTimersByTimeAsync(28_000);
+    await expect(p).resolves.toBe('awake');
+    expect(fn).toHaveBeenCalledTimes(5);
   });
 
   it('emits rentguard:request-slow when in-flight crosses 5s', async () => {

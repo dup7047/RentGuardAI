@@ -2,6 +2,7 @@
 // No auth required. Cached in buildings table; regenerates AI summary if missing.
 // Used by the ISR /building/[bbl] Next.js page.
 
+import { createHash } from 'node:crypto';
 import { Hono } from 'hono';
 import { AppError } from '../lib/errors.js';
 import { getDb } from '../db/client.js';
@@ -30,6 +31,19 @@ import {
 const VIOLATIONS_CAP = 100;
 const COMPLAINTS_CAP = 50;
 const EVICTIONS_CAP = 100;
+
+/**
+ * Deterministic per-BBL UUID standing in for an anon token on the SEO
+ * regeneration path. anon_token columns are uuid-typed, so the previous
+ * `seo:<bbl>` string made every cost-cap query throw 22P02 — summary
+ * regeneration never ran and stale SEO pages always served the fallback
+ * text. A stable UUID keeps the per-building daily cap enforceable.
+ * Exported for tests.
+ */
+export function seoAnonToken(bbl: string): string {
+  const h = createHash('sha256').update(`seo:${bbl}`).digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
 
 export const buildingByBblRoute = new Hono();
 
@@ -161,7 +175,7 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
           recentDobComplaints: projectDobComplaints(dob),
           recent311Complaints: project311Complaints(threeoneone),
         },
-        { type: 'anon_token', value: `seo:${bbl}` },
+        { type: 'anon_token', value: seoAnonToken(bbl) },
       );
       summary = r.summary;
       listingSummary = r.listing_summary || null;
@@ -175,13 +189,13 @@ buildingByBblRoute.get('/building/:bbl', async (c) => {
         // of re-running the AI. Score columns are deterministic and prompt-
         // independent, so we carry them over from `latest` when present (a fresh
         // /v1/lookup is responsible for recomputing them, not the SEO route).
-        // anonToken is nullable in the schema; SEO origin has no user identity.
         await getDb()
           .insert(buildingLookups)
           .values({
             userId: null,
             email: null,
-            anonToken: null,
+            // Deterministic SEO token so the per-building daily cap accrues.
+            anonToken: seoAnonToken(bbl),
             addressInput: b.address,
             buildingBbl: bbl,
             aiSummary: r.summary,

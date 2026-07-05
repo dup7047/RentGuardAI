@@ -203,12 +203,16 @@ const BASE =
   (process.env.NODE_ENV === 'production' ? PROD_BACKEND_URL : DEV_BACKEND_URL);
 
 // ── Retry + cold-start hint ──────────────────────────────────────────────────
-// Render's free tier cold-starts in 20-30s, so withRetry backs off on network
+// Render's free tier cold-starts in 20-35s, so withRetry backs off on network
 // errors/5xx (never 4xx) and emits ONE 'rentguard:request-slow' +
 // 'rentguard:request-slow-end' pair per call — useColdStartHint counts events
 // as ±1, so a retried slow request must not emit twice.
 
-const RETRY_DELAYS_MS = [1_000, 3_000, 9_000] as const; // total ≤ 13s
+// ~28s of backoff: the schedule must outlast a Render cold start, otherwise
+// the first lookup after idle exhausts retries while the server is still
+// waking and surfaces a server-error banner. The UI shows the "Warming up…"
+// hint past 5s, so the longer wait is communicated.
+const RETRY_DELAYS_MS = [1_000, 3_000, 9_000, 15_000] as const;
 const SLOW_THRESHOLD_MS = 5_000;
 
 export type RetryOptions = {

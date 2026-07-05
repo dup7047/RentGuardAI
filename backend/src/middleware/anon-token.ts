@@ -9,9 +9,14 @@ import { randomUUID } from 'node:crypto';
 const COOKIE = 'rentguard-anon';
 const TTL_S = 60 * 60 * 24 * 365; // 12 months — matches Privacy Policy §6.1
 
+// The token is compared against uuid-typed columns (building_lookups.anon_token
+// etc.); a non-UUID value makes those queries throw 22P02 and turns every
+// lookup from that browser into a 500. Reject anything else and reissue.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const anonTokenMiddleware = createMiddleware(async (c, next) => {
   let token = getCookie(c, COOKIE);
-  if (!token) {
+  if (!token || !UUID_RE.test(token)) {
     token = randomUUID();
     setCookie(c, COOKIE, token, {
       httpOnly: true,
